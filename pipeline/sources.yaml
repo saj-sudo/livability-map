@@ -1,0 +1,316 @@
+# One entry per dataset (SPEC §6.2, §7, §20.6). The fetch stage refuses any source whose
+# license or (for direct sources) url is still VERIFY. `verified` records how the license and
+# URL were checked: confirmed (first-hand), search (search results / registry probes, SPEC §15),
+# none. Publish (Session 5) refuses sources that are not `confirmed`.
+#
+# access: direct  = fetch downloads url (or url + filename when url ends with /)
+#         manual  = fetch checks the files are present and prints the recipe
+#         fixture = synthetic data (only in pipeline/fixtures/sources.yaml)
+
+# ---------------------------------------------------------------- reference -----------------
+- id: natural_earth_land
+  name: Natural Earth 1:10m land polygons
+  group: reference
+  access: direct
+  url: https://naciscdn.org/naturalearth/10m/physical/ne_10m_land.zip
+  format: shapefile-zip
+  crs: EPSG:4326
+  license: Public domain
+  verified: search
+  vintage: "5.x (current)"
+  attribution: "Made with Natural Earth"
+  processing: "defines the hex grid extent; cells whose centre is at sea are dropped"
+  files: [ne_10m_land.zip]
+
+- id: geoboundaries_adm0
+  name: geoBoundaries CGAZ ADM0 (countries)
+  group: reference
+  access: direct
+  # Git LFS: the /raw/ URL 302s to media.githubusercontent.com; raw.githubusercontent.com returns a pointer (SPEC §15.7)
+  url: https://github.com/wmgeolab/geoBoundaries/raw/v6.0.0/releaseData/CGAZ/geoBoundariesCGAZ_ADM0.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC BY 4.0
+  verified: search
+  vintage: "6.0.0 (2023-09-14)"
+  attribution: "Runfola et al. 2020, geoBoundaries (gbOpen / CGAZ), CC BY 4.0"
+  processing: "country of hex centroid; shapeGroup is ISO3, converted to ISO2 for iso_a2"
+  files: [geoBoundariesCGAZ_ADM0.gpkg]
+
+- id: geoboundaries_adm1
+  name: geoBoundaries CGAZ ADM1 (states / provinces)
+  group: reference
+  access: direct
+  url: https://github.com/wmgeolab/geoBoundaries/raw/v6.0.0/releaseData/CGAZ/geoBoundariesCGAZ_ADM1.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC BY 4.0
+  verified: search
+  vintage: "6.0.0 (2023-09-14); shapeID is only stable within this release"
+  attribution: "Runfola et al. 2020, geoBoundaries (gbOpen / CGAZ), CC BY 4.0"
+  processing: "admin1 of hex centroid"
+  files: [geoBoundariesCGAZ_ADM1.gpkg]
+
+- id: ghsl_pop
+  name: JRC GHSL GHS-POP R2023A, epoch 2025, 30 arc-second WGS84
+  group: reference
+  access: direct
+  url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2023A/GHS_POP_E2025_GLOBE_R2023A_4326_30ss/V1-0/GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.zip
+  format: geotiff-zip
+  crs: EPSG:4326
+  native_res_m: ~1000
+  license: CC BY 4.0
+  verified: search
+  vintage: "R2023A, epoch 2025 (projection)"
+  attribution: "European Commission, Joint Research Centre (JRC), GHSL GHS-POP R2023A"
+  processing: "persons per pixel summed per hex; inhabited = population >= POP_MIN (100)"
+  files: [GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.zip]
+
+# ---------------------------------------------------------------- hazards -------------------
+- id: cckp_hd35
+  name: World Bank CCKP CMIP6, hot days Tmax > 35C (hd35), SSP2-4.5, 2040-2059 ensemble median
+  group: hazard
+  access: direct
+  url: https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hd35/ensemble-all-ssp245/climatology-hd35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc
+  format: netcdf
+  crs: EPSG:4326
+  native_res_deg: 0.25
+  scenario: ssp245
+  horizon: "2040-2059"
+  license: CC BY 4.0
+  verified: search
+  vintage: "CMIP6 x0.25 collection (2024)"
+  attribution: "World Bank Climate Change Knowledge Portal, CMIP6 ensemble"
+  processing: "hd35 sampled at hex centroid (pixel is coarser than the hex); days per year"
+  files: [climatology-hd35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc]
+
+- id: aqueduct_floods_river
+  name: WRI Aqueduct Floods, riverine inundation depth, RCP4.5, 2050, 1-in-100
+  group: hazard
+  access: manual
+  url: https://developers.google.com/earth-engine/datasets/catalog/WRI_Aqueduct_Flood_Hazard_Maps_V2
+  recipe: |
+    Public S3 copies were removed (SPEC §15.2). Export from Google Earth Engine following
+    docs/gee-export.md, then place the five GeoTIFFs under data/raw/aqueduct_floods_river/.
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  scenario: rcp45
+  horizon: "2050"
+  return_period: 100
+  license: CC BY 4.0
+  verified: search
+  vintage: "Aqueduct Floods v2 (2020)"
+  attribution: "World Resources Institute, Aqueduct Floods"
+  processing: "median depth across 5 climate models; fraction of hex pixels with depth >= 0.15 m"
+  files:
+    - inunriver_rcp4p5_00000NorESM1-M_2050_rp00100.tif
+    - inunriver_rcp4p5_0000GFDL-ESM2M_2050_rp00100.tif
+    - inunriver_rcp4p5_0000HadGEM2-ES_2050_rp00100.tif
+    - inunriver_rcp4p5_00IPSL-CM5A-LR_2050_rp00100.tif
+    - inunriver_rcp4p5_MIROC-ESM-CHEM_2050_rp00100.tif
+
+- id: aqueduct_floods_coast
+  name: WRI Aqueduct Floods, coastal inundation depth with subsidence, RCP4.5, 2050, 1-in-100
+  group: hazard
+  access: manual
+  url: https://developers.google.com/earth-engine/datasets/catalog/WRI_Aqueduct_Flood_Hazard_Maps_V2
+  recipe: |
+    Public S3 copies were removed (SPEC §15.2). Export from Google Earth Engine following
+    docs/gee-export.md, then place the GeoTIFF under data/raw/aqueduct_floods_coast/.
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  scenario: rcp45
+  horizon: "2050"
+  return_period: 100
+  license: CC BY 4.0
+  verified: search
+  vintage: "Aqueduct Floods v2 (2020)"
+  attribution: "World Resources Institute, Aqueduct Floods"
+  processing: "fraction of hex pixels with depth >= 0.15 m"
+  files: [inuncoast_rcp4p5_wtsub_2050_rp0100_0.tif]
+
+- id: aqueduct_water_stress
+  name: WRI Aqueduct Water Risk Atlas 4.0, future water stress 2050 business-as-usual
+  group: hazard
+  access: direct
+  url: VERIFY   # download page https://www.wri.org/data/aqueduct-global-maps-40-data; confirm the geopackage link
+  format: geopackage
+  crs: EPSG:4326
+  scenario: bau (SSP3 / RCP7.0)
+  horizon: "2050"
+  license: CC BY 4.0
+  verified: search
+  vintage: "Aqueduct 4.0 (2023)"
+  attribution: "World Resources Institute, Aqueduct 4.0 (Kuzma et al. 2023)"
+  processing: "bau50_ws_x_c at hex centroid; -1 (arid, low water use) stored, not scored"
+  files: [Aqueduct40_waterrisk_download_Y2023M07D05.gpkg]
+
+# ---------------------------------------------------------------- wellbeing -----------------
+- id: gdl_shdi
+  name: Global Data Lab Subnational Human Development Index 8.3
+  group: wellbeing
+  access: manual
+  url: https://globaldatalab.org/shdi/download/shdi/
+  recipe: |
+    Free registration required at https://globaldatalab.org/register/. Download the SHDI CSV
+    (all years, all regions) and place it under data/raw/gdl_shdi/.
+  format: csv
+  license: Free with citation, non-commercial only (https://globaldatalab.org/termsofuse/)
+  license_note: non-commercial only; accepted under SPEC §13.13
+  verified: search
+  vintage: "8.3 (2025-09-16)"
+  attribution: "Smits & Permanyer (2019), Global Data Lab Subnational HDI"
+  processing: "latest year per region; admin1 via GDL-Code polygons; min-max within SHDI"
+  files: [SHDI-SGDI-Total-8.3.csv]
+
+- id: gdl_shdi_regions
+  name: Global Data Lab SHDI region polygons (GDL-Code)
+  group: wellbeing
+  access: manual
+  url: https://globaldatalab.org/shdi/shapefiles/
+  recipe: |
+    Registration as for gdl_shdi. Download the GDL region shapefile zip and place it under
+    data/raw/gdl_shdi_regions/.
+  format: shapefile-zip
+  crs: EPSG:4326
+  license: Free with citation, non-commercial only (https://globaldatalab.org/termsofuse/)
+  license_note: non-commercial only; accepted under SPEC §13.13
+  verified: search
+  vintage: "matches SHDI 8.3"
+  attribution: "Global Data Lab"
+  processing: "polygon of hex centroid -> GDL-Code"
+  files: [GDL-Shapefiles-V6.3.zip]
+
+- id: whr_ladder
+  name: World Happiness Report 2026, national ladder score (Figure 2.1 data)
+  group: wellbeing
+  access: direct
+  url: VERIFY   # copy the xlsx link from https://www.worldhappiness.report/data-sharing/
+  format: xlsx
+  license: Free to download; published aggregates only (Gallup microdata excluded)
+  verified: search
+  vintage: "WHR 2026; ladder is a 2023-2025 rolling average"
+  attribution: "World Happiness Report 2026, Wellbeing Research Centre, University of Oxford"
+  processing: "national fallback where SHDI has no region; min-max across countries"
+  files: [DataForFigure2.1WHR2026.xlsx]
+
+# ---------------------------------------------------------------- life dimensions (§20.6) ---
+- id: wb_gsap
+  name: World Bank Global Subnational Poverty Atlas (GSAP) 2023
+  group: life
+  access: direct
+  url: VERIFY   # https://datacatalog.worldbank.org/search/dataset/0042041
+  format: csv
+  license: CC BY 4.0
+  verified: search
+  vintage: "2023 lineup"
+  attribution: "World Bank, Global Subnational Poverty Atlas"
+  processing: "poverty headcount at admin1 (polygon_centroid)"
+  files: [gsap.csv]
+
+- id: oecd_regional_wellbeing
+  name: OECD Regional Well-Being (TL2) data file
+  group: life
+  access: direct
+  url: https://www.oecdregionalwellbeing.org/assets/downloads/OECD-Regional-Well-Being-Data-File.xlsx
+  format: xlsx
+  license: CC BY 4.0
+  verified: search
+  vintage: "October 2025"
+  attribution: "OECD Regional Well-Being, CC BY 4.0"
+  processing: "housing, health, jobs dimensions at TL2 (polygon_centroid via OECD TL2 boundaries)"
+  files: [OECD-Regional-Well-Being-Data-File.xlsx]
+
+- id: ilostat_youth_unemp
+  name: ILOSTAT youth unemployment rate (15-24), national
+  group: life
+  access: direct
+  url: VERIFY   # https://ilostat.ilo.org/data/bulk/ indicator UNE_DEAP_SEX_AGE_RT
+  format: csv-gz
+  license: CC BY 4.0 (datasets published on/after 2023-05-03)
+  verified: search
+  vintage: "latest year per country"
+  attribution: "ILO, ILOSTAT"
+  processing: "national fallback for jobs (iso_lookup)"
+  files: [UNE_DEAP_SEX_AGE_RT_A.csv.gz]
+
+- id: acs_summary
+  name: US Census ACS 2020-2024 5-year, tract tables B23001 B03002 B19001 B19083 B11009 B25071
+  group: life
+  access: direct
+  url: VERIFY   # Summary File / FTP path; never the API at runtime (500 queries/IP/day)
+  format: csv
+  license: Public domain (US federal)
+  verified: search
+  vintage: "2020-2024 ACS 5-year (released 2026-01-29)"
+  attribution: "US Census Bureau, American Community Survey"
+  processing: "tract values population-weighted into hexes (area_weighted_overlay)"
+  files: [acs5_2024_tracts.parquet]
+
+- id: tiger_tracts
+  name: US Census TIGER/Line 2024 census tract polygons
+  group: life
+  access: direct
+  url: VERIFY
+  format: shapefile-zip
+  crs: EPSG:4269
+  license: Public domain (US federal)
+  verified: search
+  vintage: "2024"
+  attribution: "US Census Bureau, TIGER/Line"
+  processing: "geometry for acs_summary"
+  files: [tl_2024_us_tract.zip]
+
+- id: medsl_county_pres
+  name: MIT Election Data and Science Lab, county presidential returns 2000-2024
+  group: life
+  access: direct
+  url: VERIFY   # https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ
+  format: csv
+  license: VERIFY   # expected CC0; read the license block on the DOI record
+  verified: none
+  vintage: "2024 election"
+  attribution: "MIT Election Data and Science Lab"
+  processing: "two-party margin 2024 -> pol_lean (-100..100) at county (polygon_centroid)"
+  files: [countypres_2000-2024.csv]
+
+- id: epa_sld
+  name: EPA Smart Location Database v3.0 (block group)
+  group: life
+  access: direct
+  url: VERIFY   # https://www.epa.gov/smartgrowth/smart-location-mapping
+  format: geodatabase-zip
+  license: Public domain (US federal)
+  verified: search
+  vintage: "2021 release (2019 block groups)"
+  attribution: "US EPA, Smart Location Database"
+  processing: "transit frequency D4C and walkability, population-weighted into hexes"
+  files: [SmartLocationDatabaseV3.zip]
+
+- id: urban_edu_districts
+  name: Urban Institute Education Data Portal, school district outcomes
+  group: life
+  access: direct
+  url: VERIFY   # https://educationdata.urban.org/documentation/
+  format: csv
+  license: ODC-BY 1.0
+  verified: search
+  vintage: "latest school year"
+  attribution: "Urban Institute, Education Data Portal (ODC-BY)"
+  processing: "district value area-weighted into hexes with NCES district boundaries"
+  files: [districts.csv]
+
+- id: hrsa_ahrf
+  name: HRSA Area Health Resources File (county)
+  group: life
+  access: direct
+  url: VERIFY   # https://data.hrsa.gov/data/download
+  format: csv
+  license: Public domain (US federal)
+  verified: search
+  vintage: "latest release"
+  attribution: "HRSA, Area Health Resources Files"
+  processing: "physicians per 10k residents at county (polygon_centroid)"
+  files: [ahrf_county.csv]

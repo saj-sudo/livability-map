@@ -1,0 +1,3 @@
+# sha256  source_id  filename   (written by `python -m pipeline fetch`, SPEC §11)
+# Empty until the first real-data fetch on a network-open machine. Fixture runs write their own
+# CHECKSUMS under pipeline/fixtures/_run/raw/.

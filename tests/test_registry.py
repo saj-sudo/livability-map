@@ -1,0 +1,41 @@
+from __future__ import annotations
+
+from pipeline.config import RES_TAGS, find_root
+from pipeline.registry import load_dimensions, load_sources
+
+ROOT = find_root()
+
+
+def test_real_sources_load_and_have_required_fields():
+    sources = load_sources(ROOT / "pipeline" / "sources.yaml")
+    assert {"natural_earth_land", "ghsl_pop", "geoboundaries_adm0", "geoboundaries_adm1", "cckp_hd35"} <= set(sources)
+    for s in sources.values():
+        assert s.files, f"{s.id} lists no files"
+        assert s.attribution or s.access == "fixture", f"{s.id} has no attribution"
+        assert s.extra.get("verified") in ("confirmed", "search", "none"), s.id
+
+
+def test_dimensions_reference_known_sources_and_res_tags():
+    sources = load_sources(ROOT / "pipeline" / "sources.yaml")
+    dims = load_dimensions(ROOT / "pipeline" / "dimensions.yaml", sources)
+    assert {"heat", "rflood", "cflood", "wstress", "wb", "jobs", "pol", "race"} <= set(dims)
+    for d in dims.values():
+        for j in d.joiners:
+            assert j.res in RES_TAGS
+            assert j.source in sources
+    assert dims["pol"].kind == "signed"
+    assert dims["race"].kind == "composition"
+    assert dims["heat"].higher_is == "worse"
+
+
+def test_fixture_sources_share_ids_with_real_sources():
+    real = load_sources(ROOT / "pipeline" / "sources.yaml")
+    fix = load_sources(ROOT / "pipeline" / "fixtures" / "sources.yaml")
+    shared = {"natural_earth_land", "ghsl_pop", "geoboundaries_adm0", "geoboundaries_adm1", "cckp_hd35", "gdl_shdi", "whr_ladder"}
+    assert shared <= set(real) and shared <= set(fix)
+
+
+def test_unverified_detection():
+    fix = load_sources(ROOT / "pipeline" / "fixtures" / "sources.yaml")
+    assert fix["unverified_example"].unverified
+    assert not fix["natural_earth_land"].unverified

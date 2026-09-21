@@ -24,3 +24,4 @@ web/out/
 .DS_Store
 .idea/
 .vscode/
+.venv-ci/

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Global climate livability map: projected climate hazard exposure beside present-day wellbeing and life dimensions on H3 hexes. Pipeline package."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 dependencies = [
     "rasterio>=1.4",
     "geopandas>=1.0",
@@ -27,8 +27,18 @@ dev = [
     "ruff>=0.6",
 ]
 
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pipeline*"]
+
+[tool.setuptools.package-data]
+pipeline = ["*.yaml", "fixtures/*.yaml"]
+
 [tool.uv]
-package = false
+package = true
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,27 @@
+# data: raw downloads and derived outputs are never committed (SPEC §11)
+data/raw/*
+!data/raw/CHECKSUMS
+data/interim/
+data/out/
+# fixture-run outputs
+pipeline/fixtures/_run/
+pipeline/fixtures/data/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# node (web/)
+web/node_modules/
+web/.next/
+web/out/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+.venv-ci/

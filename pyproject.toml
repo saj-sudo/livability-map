@@ -1,0 +1,58 @@
+[project]
+name = "livability-map"
+version = "0.1.0"
+description = "Global climate livability map: projected climate hazard exposure beside present-day wellbeing and life dimensions on H3 hexes. Pipeline package."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "rasterio>=1.4",
+    "geopandas>=1.0",
+    "shapely>=2.0",
+    "h3>=4.0",
+    "pyarrow>=17",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "xarray>=2024.1",
+    "netCDF4>=1.6",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "requests>=2.32",
+    "pycountry>=24.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pipeline*"]
+
+[tool.setuptools.package-data]
+pipeline = ["*.yaml", "fixtures/*.yaml"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["data", "web", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"pipeline/__main__.py" = ["B008"]  # typer.Option in defaults is the typer idiom
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::PendingDeprecationWarning:rasterio"]

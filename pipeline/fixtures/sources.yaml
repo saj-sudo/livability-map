@@ -1,0 +1,165 @@
+# Fixture sources (SPEC §11.1). Same ids as pipeline/sources.yaml where a fixture stands in for a
+# real source, so the stages and dimensions registry work unchanged. Paths are relative to the
+# repo root; make_fixtures.py generates them.
+- id: natural_earth_land
+  name: fixture land polygon
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/land.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [land.gpkg]
+- id: geoboundaries_adm0
+  name: fixture countries
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/adm0.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [adm0.gpkg]
+- id: geoboundaries_adm1
+  name: fixture admin1
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/adm1.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [adm1.gpkg]
+- id: ghsl_pop
+  name: fixture population raster
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/pop.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [pop.tif]
+- id: cckp_hd35
+  name: fixture heat NetCDF
+  group: hazard
+  access: fixture
+  url: file://pipeline/fixtures/data/heat.nc
+  format: netcdf
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [heat.nc]
+- id: aqueduct_floods_river
+  name: fixture riverine flood depth
+  group: hazard
+  access: fixture
+  url: file://pipeline/fixtures/data/inunriver.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [inunriver.tif]
+- id: aqueduct_floods_coast
+  name: fixture coastal flood depth
+  group: hazard
+  access: fixture
+  url: file://pipeline/fixtures/data/inuncoast.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [inuncoast.tif]
+- id: aqueduct_water_stress
+  name: fixture water stress polygons
+  group: hazard
+  access: fixture
+  url: file://pipeline/fixtures/data/wstress.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [wstress.gpkg]
+- id: gdl_shdi
+  name: fixture SHDI table
+  group: wellbeing
+  access: fixture
+  url: file://pipeline/fixtures/data/shdi.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [shdi.csv]
+- id: gdl_shdi_regions
+  name: fixture SHDI region polygons
+  group: wellbeing
+  access: fixture
+  url: file://pipeline/fixtures/data/shdi_regions.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [shdi_regions.gpkg]
+- id: whr_ladder
+  name: fixture national ladder table
+  group: wellbeing
+  access: fixture
+  url: file://pipeline/fixtures/data/whr.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [whr.csv]
+- id: fixture_tracts
+  name: fixture tract polygons (US-like detail layer)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/tracts.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [tracts.gpkg]
+- id: fixture_counties
+  name: fixture county polygons with political margin
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: fixture_transit
+  name: fixture transit stops
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/transit_stops.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [transit_stops.gpkg]
+- id: unverified_example
+  name: example of a source whose license is not yet verified (fetch must refuse it)
+  group: life
+  access: direct
+  url: file://pipeline/fixtures/data/whr.csv
+  format: csv
+  license: VERIFY
+  verified: none
+  vintage: VERIFY
+  files: [whr.csv]

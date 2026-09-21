@@ -1,0 +1,147 @@
+# Dimension registry (SPEC §20.2). Everything a person can weight, including hazards and
+# wellbeing so scoring and UI stay uniform. Joiners run in order; the first that yields a value
+# sets {id}_raw and {id}_res. `domain` is the percentile domain (§20.4).
+
+# ---- hazards (group hazard, higher is worse; computed by the hazards stage, not joiners) ----
+- id: heat
+  name: Extreme heat (days > 35C)
+  group: hazard
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [cckp_hd35]
+- id: rflood
+  name: Riverine flood (1-in-100)
+  group: hazard
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [aqueduct_floods_river]
+- id: cflood
+  name: Coastal flood (1-in-100)
+  group: hazard
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [aqueduct_floods_coast]
+- id: wstress
+  name: Water stress (2050)
+  group: hazard
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [aqueduct_water_stress]
+
+# ---- wellbeing ------------------------------------------------------------------------------
+- id: wb
+  name: Wellbeing (Subnational HDI, national happiness fallback)
+  group: wellbeing
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [gdl_shdi, gdl_shdi_regions, whr_ladder]
+  joiners:
+    - {source: gdl_shdi_regions, joiner: polygon_centroid, res: admin1, field: shdi, id_field: GDLCODE, domain: global}
+    - {source: whr_ladder, joiner: iso_lookup, res: national, field: ladder, domain: global}
+  note: "min-max within source, never mixed (SPEC §8.3)"
+
+# ---- life dimensions (§20.6) ----------------------------------------------------------------
+- id: jobs
+  name: Early-career job market
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [global, oecd, us]
+  sources: [acs_summary, oecd_regional_wellbeing, ilostat_youth_unemp]
+  joiners:
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29, weight_field: pop_16_29, domain: us}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_employment_rate, domain: oecd}
+    - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: youth_employment_rate, domain: global}
+  note: "stored as employment rate so higher is better; the UI shows unemployment"
+
+- id: transit
+  name: Public transit access
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [us]
+  sources: [epa_sld]
+  joiners:
+    - {source: epa_sld, joiner: area_weighted_overlay, res: tract, field: D4C, weight_field: TotPop, domain: us}
+  note: "global OSM/Mobility Database layer is v2 (ODbL share-alike)"
+
+- id: school
+  name: Schools
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [us]
+  sources: [urban_edu_districts]
+  joiners:
+    - {source: urban_edu_districts, joiner: area_weighted_overlay, res: tract, field: outcome_index, weight_field: enrollment, domain: us}
+  note: "SHDI education sub-index (attainment) may be added as a global admin1 fallback; it is not school quality"
+
+- id: lgbtq
+  name: LGBTQ+ presence (same-sex couple households) and protection
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [us]
+  sources: [acs_summary]
+  joiners:
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: ss_couples_per_1k, weight_field: households, domain: us}
+  note: "proxy; state policy tallies (MAP) added once permission is granted"
+
+- id: pol
+  name: Political lean
+  group: life
+  kind: signed
+  coverage: [us]
+  sources: [medsl_county_pres]
+  joiners:
+    - {source: medsl_county_pres, joiner: polygon_centroid, res: county, field: margin_2024, domain: us}
+  note: "-100 (all Republican) .. +100 (all Democratic) two-party margin; the person picks a preference"
+
+- id: race
+  name: Racial and ethnic composition
+  group: life
+  kind: composition
+  coverage: [us]
+  sources: [acs_summary]
+  joiners:
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: pct_black, weight_field: pop_total, domain: us}
+  note: "shares w/b/h/a/o from B03002; never scored (invariant 8)"
+
+- id: incmix
+  name: Income mix
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [global, us]
+  sources: [acs_summary, wb_gsap]
+  joiners:
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: income_entropy, weight_field: households, domain: us}
+    - {source: wb_gsap, joiner: polygon_centroid, res: admin1, field: poverty_headcount, domain: global}
+  note: "US: within-area income diversity; global: poverty level. Different constructs, labeled"
+
+- id: house
+  name: Housing cost burden
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [oecd, us]
+  sources: [acs_summary, oecd_regional_wellbeing]
+  joiners:
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: rent_share_income, weight_field: renter_households, domain: us}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: housing_cost_share, domain: oecd}
+
+- id: health
+  name: Healthcare access
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [oecd, us]
+  sources: [hrsa_ahrf, oecd_regional_wellbeing]
+  joiners:
+    - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_physicians_per_1k, domain: oecd}

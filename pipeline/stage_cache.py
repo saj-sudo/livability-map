@@ -46,3 +46,14 @@ def record(output: Path, inputs: list[Path], params: dict[str, Any], extra: dict
     if extra:
         payload.update(extra)
     meta_path(output).write_text(json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8")
+
+
+def read_meta(output: Path) -> dict[str, Any]:
+    """The recorded sidecar (empty dict when missing or unreadable)."""
+    mp = meta_path(output)
+    if not mp.exists():
+        return {}
+    try:
+        return json.loads(mp.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}

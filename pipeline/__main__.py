@@ -103,6 +103,12 @@ def dims(ctx: typer.Context) -> None:
     _run_stage("dims", _settings(ctx))
 
 
+@app.command()
+def score(ctx: typer.Context) -> None:
+    """Exposure, coverage, wellbeing score, bivariate class, per-domain percentiles (SPEC §8.2-8.4)."""
+    _run_stage("score", _settings(ctx))
+
+
 def _planned_command(name: str):
     def cmd(ctx: typer.Context) -> None:
         if not _run_stage(name, _settings(ctx)):
@@ -113,7 +119,7 @@ def _planned_command(name: str):
     return cmd
 
 
-for _name in ("score", "export", "tiles", "publish"):
+for _name in ("export", "tiles", "publish"):
     app.command(name=_name)(_planned_command(_name))
 
 

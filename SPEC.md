@@ -412,6 +412,17 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   admin 5 s / 1.6 GB, hazards 1,256 s / 1.3 GB (six global 1 km rasters in full-width strips),
   dims 378 s / 6.0 GB (the US tract overlay dominates), score 0.5 s, export 1 s. 81,413 land
   hexes, 50,936 inhabited, 7.72 billion people; 88.9% of inhabited hexes have all four hazards.
+- Res-5 global run, 2026-09-22: grid 11 s, pop 214 s, admin 8 s, hazards 1,814 s / 1.7 GB,
+  dims 6,376 s / 7.3 GB for the first ten dimensions (transit 2,553 s, race 1,506 s, school
+  1,080 s: the US tract and block-group overlays), then 917 s / 3.0 GB for the eight added
+  dimensions via `dims --only` (tree cover 564 s, travel time 154 s, PM2.5 156 s). 570,143 land
+  hexes; 93.5% of inhabited hexes have all four hazards. Tiles for both resolutions (18
+  dimensions, 82 attributes): 10,984 tiles, 2.32 million features, 145.7 MB in 932 s on the
+  memory-capped pool; largest tile z3/4/3 at 670 KB gzipped. The first res-5 tile build had
+  died with `BrokenProcessPool` (§15).
+- `dims --only <id> [--only <id> ...]` recomputes the named dimensions and merges them into the
+  existing `dims_r{res}.parquet`; use it to add a layer, and run without it when a prepared
+  layer or the registry changed for a dimension you did not name.
 
 ### 11.1 Fixture world
 

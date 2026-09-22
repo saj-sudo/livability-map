@@ -544,8 +544,10 @@ embeddable iframe.
   sources list matching the manifest. (fixture build in the browser, 2026-09-22)
 - [x] The bivariate legend, the per-layer ramps, the confidence key and the coverage chips are
   present and match what is drawn. (2026-09-22)
-- [ ] Moving a priorities slider or picking a preset recolors the map client-side without a
-  network request, and dimensions missing on a hex drop out of the composite.
+- [x] Moving a priorities slider or picking a preset recolors the map client-side without a
+  network request, and dimensions missing on a hex drop out of the composite. (measured in the
+  browser on the res-4 build, 2026-09-22: a slider change added no tile or data requests;
+  `expressions.test.ts` covers the denominator rule)
 - [x] Reloading a URL restores the same view, preset, weights and toggles. (`url.test.ts` round
   trips; observed in the browser, 2026-09-22)
 - [x] `/methodology` lists every source with license, vintage and processing note, states the

@@ -31,6 +31,8 @@ from ..config import Settings
 from ..joiners import JOINERS
 from ..registry import COMPOSITION_KEYS, Dimension, JoinSpec, Source, load_dimensions, load_sources
 
+OVERLAY_CHUNK = 2000  # hexes per area_weighted_overlay call
+
 
 def _as_wgs84(layer: pd.DataFrame) -> pd.DataFrame:
     if isinstance(layer, gpd.GeoDataFrame):
@@ -65,7 +67,10 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: pd.DataFrame, res: in
     if spec.joiner == "polygon_centroid":
         v = JOINERS["polygon_centroid"](sub, layer, field)
     elif spec.joiner == "area_weighted_overlay":
-        v = JOINERS["area_weighted_overlay"](sub, layer, field, weight_field=spec.weight_field)
+        # chunked so the intersection frame stays bounded (the US tract overlay peaked at 6 GB
+        # for ~7k res-4 hexes; res 5 has four times as many)
+        parts = [JOINERS["area_weighted_overlay"](sub.iloc[i : i + OVERLAY_CHUNK], layer, field, weight_field=spec.weight_field) for i in range(0, len(sub), OVERLAY_CHUNK)]
+        v = pd.concat(parts) if len(parts) > 1 else parts[0]
     else:  # point_density
         v = JOINERS["point_density"](sub, layer, res, per_capita=spec.per_capita)
     out[mask] = pd.to_numeric(v, errors="coerce").to_numpy(dtype="float64")

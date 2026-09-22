@@ -17,6 +17,24 @@ export interface DimInfo {
   scale: "percentile" | "minmax";
   /** false when the manifest shows no hex with a value (e.g. a source still pending) */
   available: boolean;
+  /** how to print the raw value, keyed by resolution tag; "*" is the dimension-level default
+   *  (optional so test fixtures and older callers need not state it) */
+  units?: Record<string, Unit>;
+}
+
+export interface Unit {
+  unit: string;
+  multiply: number;
+  decimals: number;
+}
+
+/** Units per resolution tag from the manifest joiners (first joiner per tag wins, like the
+ *  first-hit-wins join itself), plus the dimension's own unit under "*". */
+export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multiply" | "decimals">): Record<string, Unit> {
+  const out: Record<string, Unit> = {};
+  if (d.unit) out["*"] = { unit: d.unit, multiply: d.multiply ?? 1, decimals: d.decimals ?? 1 };
+  for (const j of d.joiners ?? []) if (j.unit && !(j.res in out)) out[j.res] = { unit: j.unit, multiply: j.multiply ?? 1, decimals: j.decimals ?? 1 };
+  return out;
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
@@ -31,7 +49,7 @@ export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: str
 
 // Fallback registry when the manifest is empty (CI builds without data); ids, kinds and
 // directions mirror pipeline/dimensions.yaml.
-const F = (id: string, name: string, group: DimGroup, kind: DimKind, higher_is: "better" | "worse", chip: string, scale: "percentile" | "minmax" = "percentile"): DimInfo => ({ id, name, group, kind, higher_is, chip, note: "", scale, available: true });
+const F = (id: string, name: string, group: DimGroup, kind: DimKind, higher_is: "better" | "worse", chip: string, scale: "percentile" | "minmax" = "percentile"): DimInfo => ({ id, name, group, kind, higher_is, chip, note: "", scale, available: true, units: {} });
 const FALLBACK: DimInfo[] = [
   F("heat", "Extreme heat", "hazard", "score", "worse", "Global"),
   F("rflood", "Riverine flood", "hazard", "score", "worse", "Global"),
@@ -99,6 +117,7 @@ function fromManifest(d: ManifestDimension): DimInfo {
     note: d.note ?? "",
     scale: d.scale ?? "percentile",
     available: isAvailable(d),
+    units: unitsFrom(d),
   };
 }
 

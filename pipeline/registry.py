@@ -86,9 +86,15 @@ class JoinSpec:
     band: int = 1
     decimate: int = 1
     sample: str = "mean"  # mean | centroid
+    # how to print the raw value this joiner supplies (SPEC §6.3): text after the number,
+    # a factor applied first (100 for shares stored as 0-1) and the decimals shown. Units live
+    # on the joiner because they change with the source (OECD 0-10 score vs ACS share).
+    unit: str = ""
+    multiply: float = 1.0
+    decimals: int = 1
 
     def to_manifest(self) -> dict[str, Any]:
-        d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source}
+        d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source, "unit": self.unit, "multiply": self.multiply, "decimals": self.decimals}
         if self.weight_field:
             d["weight_field"] = self.weight_field
         if self.fields:
@@ -110,6 +116,11 @@ class Dimension:
     joiners: list[JoinSpec] = field(default_factory=list)
     note: str = ""
     scale: str = "percentile"  # percentile (§8.2, §20.4) | minmax within source (§8.3, wellbeing)
+    # dimension-level unit: hazards (computed by the hazards stage, no joiners) and the default
+    # every joiner inherits unless it states its own
+    unit: str = ""
+    multiply: float = 1.0
+    decimals: int = 1
 
     def to_manifest(self) -> dict[str, Any]:
         return {
@@ -123,6 +134,9 @@ class Dimension:
             "scale": self.scale,
             "joiners": [j.to_manifest() for j in self.joiners],
             "note": self.note,
+            "unit": self.unit,
+            "multiply": self.multiply,
+            "decimals": self.decimals,
         }
 
 
@@ -195,6 +209,7 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
         scale = raw.get("scale", "percentile")
         if scale not in SCALES:
             raise ValueError(f"{did}: scale must be one of {SCALES}")
+        unit, multiply, decimals = _unit_fields(did, raw, "", 1.0, 1)
         joiners: list[JoinSpec] = []
         for j in raw.get("joiners") or []:
             if j.get("joiner") not in JOINERS:
@@ -233,6 +248,7 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     band=int(j.get("band", 1)),
                     decimate=int(j.get("decimate", 1)),
                     sample=str(j.get("sample", "mean")),
+                    **dict(zip(("unit", "multiply", "decimals"), _unit_fields(did, j, unit, multiply, decimals), strict=True)),
                 )
             )
         out[did] = Dimension(
@@ -246,8 +262,27 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
             joiners=joiners,
             note=raw.get("note", "") or "",
             scale=scale,
+            unit=unit,
+            multiply=multiply,
+            decimals=decimals,
         )
     return out
+
+
+def _unit_fields(did: str, raw: dict[str, Any], unit: str, multiply: float, decimals: int) -> tuple[str, float, int]:
+    """`unit`, `multiply`, `decimals` from a dimension or joiner mapping, with the given defaults
+    (a joiner inherits its dimension's), validated so a typo shows up at load time."""
+    unit = str(raw.get("unit", unit) or "")
+    try:
+        multiply = float(raw.get("multiply", multiply))
+        decimals = int(raw.get("decimals", decimals))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{did}: multiply must be a number and decimals an integer: {raw}") from exc
+    if multiply <= 0:
+        raise ValueError(f"{did}: multiply must be positive: {raw}")
+    if not 0 <= decimals <= 4:
+        raise ValueError(f"{did}: decimals must be 0-4: {raw}")
+    return unit, multiply, decimals
 
 
 REFERENCE_SOURCE_IDS = ("natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop")

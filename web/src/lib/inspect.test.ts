@@ -3,7 +3,16 @@ import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
 import { describeHex } from "./inspect";
 
-const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile", available: true });
+// units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
+const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
+  care: { hex: { unit: "min to the nearest health facility", multiply: 1, decimals: 0 } },
+  net: { hex: { unit: "Mbps download", multiply: 1, decimals: 0 } },
+  air: { hex: { unit: "µg/m³ PM2.5 (WHO guideline 5)", multiply: 1, decimals: 1 } },
+  trees: { hex: { unit: "% tree cover", multiply: 1, decimals: 0 } },
+  fire: { hex: { unit: "% of the area burns per year (2001-2020)", multiply: 1, decimals: 2 } },
+  transit: { tract: { unit: "transit trips/hour nearby", multiply: 1, decimals: 1 } },
+};
+const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile", available: true, units: UNITS[id] ?? {} });
 const DIMS: DimInfo[] = [
   dim("heat", "score", "hazard", "Extreme heat"),
   dim("rflood", "score", "hazard"),
@@ -110,6 +119,15 @@ describe("hex-level layers in the inspector", () => {
     expect(m.sources.map((s) => s.id)).toContain("acag_pm25");
     // life dimensions without a tag stay "no data"
     expect(m.life.find((r) => r.id === "jobs")!).toMatchObject({ value: null, score: null, res: "none" });
+  });
+
+  it("prints a dimension it has never heard of from the manifest's unit fields", () => {
+    const unknown: DimInfo = { id: "noise", name: "Night noise", group: "env", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile", available: true, units: { "*": { unit: "dB at night", multiply: 1, decimals: 0 }, tract: { unit: "% of homes above 55 dB", multiply: 100, decimals: 0 } } };
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, noise_res: "hex", noise_raw: 47.6, noise_score: 30, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex4", [...DIMS, unknown], MANIFEST);
+    expect(m.env.find((r) => r.id === "noise")!.value).toBe("48 dB at night");
+    const tract = describeHex({ ...props, noise_res: "tract", noise_raw: 0.123 }, "hex4", [...DIMS, unknown], MANIFEST);
+    expect(tract.env.find((r) => r.id === "noise")!.value).toBe("12% of homes above 55 dB");
   });
 
   it("keeps a missing environment layer as no data, never zero", () => {

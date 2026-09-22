@@ -2,7 +2,7 @@
 // their units; anything the manifest adds later falls through to a generic number, with the
 // registry note carrying the meaning. A missing value is null, never "0" (invariant 3).
 
-import type { DimInfo } from "./dims";
+import type { DimInfo, Unit } from "./dims";
 
 const DROUGHT_LABELS: Record<number, string> = { 0: "low", 1: "low to medium", 2: "medium", 3: "medium to high", 4: "high" };
 const WSTRESS_LABELS: Record<number, string> = { [-1]: "arid and low water use (not scored)", 0: "low", 1: "low to medium", 2: "medium to high", 3: "high", 4: "extremely high" };
@@ -13,6 +13,24 @@ export function formatHazardRaw(id: string, v: number | null): string | null {
   if (id === "rflood" || id === "cflood") return `${(100 * v).toFixed(1)}% of area`;
   if (id === "wstress") return WSTRESS_LABELS[v] ?? String(v);
   return formatNumber(v);
+}
+
+/** The unit for a hex's value: the joiner tagged like the hex, else the dimension default, else
+ *  the only unit there is. */
+export function unitFor(d: DimInfo, res: string): Unit | null {
+  const u = d.units ?? {};
+  return u[res] ?? u["*"] ?? Object.values(u)[0] ?? null;
+}
+
+/** `raw` printed from the registry's unit: factor, decimals, then the unit text (no space
+ *  before a leading %, / or °). New dimensions get this for free; the cases below only exist
+ *  where the wording is nicer than "number unit". */
+export function formatWithUnit(d: DimInfo, raw: number, res: string): string | null {
+  const u = unitFor(d, res);
+  if (!u) return null;
+  const v = raw * u.multiply;
+  const text = v.toLocaleString("en-US", { minimumFractionDigits: u.decimals, maximumFractionDigits: u.decimals });
+  return /^[%/°]/.test(u.unit) ? `${text}${u.unit}` : `${text} ${u.unit}`;
 }
 
 /** Plain number: integers as-is, otherwise two decimals, thousands separated. */
@@ -33,12 +51,6 @@ export function formatDimRaw(d: DimInfo, raw: number | null, res: string): strin
       if (oecd) return `${raw.toFixed(1)} / 10 (OECD jobs score)`;
       if (res === "national") return `${raw.toFixed(0)}% of 15-24s employed`;
       return `${(100 * raw).toFixed(0)}% employed`;
-    case "transit":
-      return `${raw.toFixed(1)} transit trips/hour nearby`;
-    case "school":
-      return `${raw.toFixed(0)}% graduate on time`;
-    case "lgbtq":
-      return `${raw.toFixed(1)} same-sex couples per 1,000 households`;
     case "incmix":
       return oecd ? `${(100 * raw).toFixed(0)}% above the $4.20/day line` : `income mix ${raw.toFixed(2)} (0-1)`;
     case "house":
@@ -51,21 +63,12 @@ export function formatDimRaw(d: DimInfo, raw: number | null, res: string): strin
       return `index ${Math.round(raw)} (${res === "national" ? "world" : "US"} = 100)`;
     case "rent":
       return `$${Math.round(raw).toLocaleString("en-US")}/month (2-bedroom FMR)`;
-    // hex-level layers: one unit each, whatever the tag
-    case "care":
-      return `${Math.round(raw)} min to the nearest health facility`;
-    case "air":
-      return `${raw.toFixed(1)} µg/m³ PM2.5 (WHO guideline 5)`;
-    case "trees":
-      return `${Math.round(raw)}% tree cover`;
-    case "net":
-      return `${Math.round(raw)} Mbps download`;
-    case "fire":
-      return `${raw < 1 ? raw.toFixed(2) : raw.toFixed(1)}% of the area burns per year (2001-2020)`;
     case "drought":
       return `drought risk ${Math.round(raw)} of 4 (${DROUGHT_LABELS[Math.round(raw)] ?? "unknown"})`;
     default:
-      return formatNumber(raw);
+      // everything else (transit, school, lgbtq, the hex-level layers, any future dimension)
+      // prints from the manifest's unit fields
+      return formatWithUnit(d, raw, res) ?? formatNumber(raw);
   }
 }
 

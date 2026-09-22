@@ -37,6 +37,10 @@ export interface ManifestJoiner {
   label: string;
   weight_field?: string;
   fields?: Record<string, string>;
+  /** how to print the raw value: text after the number, factor applied first, decimals shown */
+  unit?: string;
+  multiply?: number;
+  decimals?: number;
 }
 
 export interface ManifestDimension {
@@ -54,6 +58,10 @@ export interface ManifestDimension {
   coverage_by_res?: Record<string, Record<string, number>>;
   domains?: Record<string, Record<string, number>>;
   raw?: string;
+  /** dimension-level unit (hazards; the default for joiners without their own) */
+  unit?: string;
+  multiply?: number;
+  decimals?: number;
 }
 
 export interface Manifest {

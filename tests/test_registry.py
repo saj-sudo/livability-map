@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pipeline.config import RES_TAGS, find_root
 from pipeline.registry import load_dimensions, load_sources
 
@@ -66,3 +68,37 @@ def test_every_real_source_referenced_by_a_dimension_has_geometry_or_is_spatial(
             s = sources[j.source]
             if j.joiner in ("polygon_centroid", "area_weighted_overlay"):
                 assert s.crs or s.extra.get("geometry") in sources, f"{j.source} needs polygons"
+
+
+def test_every_dimension_and_joiner_states_its_unit():
+    """SPEC §6.3: the manifest carries how to print a raw value (unit text, multiply, decimals)
+    so the inspector can format a new dimension without code."""
+    sources = load_sources(ROOT / "pipeline" / "sources.yaml")
+    dims = load_dimensions(ROOT / "pipeline" / "dimensions.yaml", sources)
+    for d in dims.values():
+        if not d.joiners:
+            assert d.unit, f"{d.id}: hazards need a dimension-level unit"
+        for j in d.joiners:
+            assert j.unit, f"{d.id}/{j.source}: joiner without a unit"
+            assert 0 <= j.decimals <= 4 and j.multiply > 0
+    assert dims["rflood"].multiply == 100 and dims["rflood"].decimals == 1
+    jobs = {j.res: j for j in dims["jobs"].joiners}
+    assert jobs["tract"].multiply == 100 and "OECD" in jobs["admin1"].unit
+    m = dims["care"].to_manifest()
+    assert m["joiners"][0]["unit"].startswith("min") and m["joiners"][0]["decimals"] == 0
+    assert dims["heat"].to_manifest()["unit"].startswith("days")
+
+
+def test_unit_fields_are_validated(tmp_path):
+    p = tmp_path / "d.yaml"
+    p.write_text("- id: x\n  kind: score\n  unit: things\n  decimals: 9\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="decimals"):
+        load_dimensions(p)
+    p.write_text("- id: x\n  kind: score\n  unit: things\n  joiners:\n    - {source: s, joiner: iso_lookup, res: national, field: f, multiply: 0}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="multiply"):
+        load_dimensions(p)
+    # a joiner inherits the dimension's unit when it states none
+    p.write_text("- id: x\n  kind: score\n  unit: things\n  decimals: 2\n  joiners:\n    - {source: s, joiner: iso_lookup, res: national, field: f}\n", encoding="utf-8")
+    d = load_dimensions(p)["x"]
+    assert d.joiners[0].unit == "things" and d.joiners[0].decimals == 2
+

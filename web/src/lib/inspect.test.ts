@@ -3,7 +3,7 @@ import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
 import { describeHex } from "./inspect";
 
-const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile" });
+const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile", available: true });
 const DIMS: DimInfo[] = [
   dim("heat", "score", "hazard", "Extreme heat"),
   dim("rflood", "score", "hazard"),

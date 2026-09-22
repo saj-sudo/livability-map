@@ -4,6 +4,7 @@
 // the My-priorities controls (SPEC §20.5) and the legend (SPEC §9.3).
 
 import { useEffect, useState } from "react";
+import { useTheme } from "./useTheme";
 import Legend from "./Legend";
 import PrioritiesPanel from "./PrioritiesPanel";
 import { SCENARIO_LABELS, type ClientManifest } from "../lib/clientManifest";
@@ -29,6 +30,7 @@ interface Props {
 
 export default function Panel({ manifest, dims, state, onChange }: Props) {
   const [open, setOpen] = useState(true);
+  const [theme] = useTheme();
   // on a phone the panel would cover the whole map, so start collapsed there (after hydration,
   // because the server render cannot know the viewport)
   useEffect(() => {
@@ -70,7 +72,7 @@ export default function Panel({ manifest, dims, state, onChange }: Props) {
             </label>
           </div>
 
-          <Legend view={state.view} dims={dims} conf={state.conf} />
+          <Legend view={state.view} dims={dims} conf={state.conf} theme={theme} />
           {manifest.fixtures && <p className="text-xs text-amber-700">Synthetic fixture data, not the real world.</p>}
         </div>
       )}

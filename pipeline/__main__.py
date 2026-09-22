@@ -13,6 +13,7 @@ from pathlib import Path
 
 import typer
 
+from . import timing
 from .config import Settings, find_root, parse_bbox
 from .stages import PLANNED, STAGE_ORDER, NotImplementedStage
 
@@ -51,7 +52,8 @@ def _run_stage(name: str, settings: Settings, **kwargs) -> bool:
 
     mod = importlib.import_module(f"pipeline.stages.{name}")
     try:
-        mod.run(settings, **kwargs)
+        with timing.timed(settings, name):  # SPEC §11: wall time and peak RSS per stage
+            mod.run(settings, **kwargs)
     except NotImplementedStage as exc:
         print(f"{name:6s} {exc}")
         return False
@@ -109,6 +111,12 @@ def score(ctx: typer.Context) -> None:
     _run_stage("score", _settings(ctx))
 
 
+@app.command()
+def export(ctx: typer.Context, geojson: bool = typer.Option(False, "--geojson", help="Also write hexes_r{res}.geojsonl for tippecanoe.")) -> None:
+    """Final per-hex parquet and manifest.json (SPEC §6)."""
+    _run_stage("export", _settings(ctx), geojson=geojson)
+
+
 def _planned_command(name: str):
     def cmd(ctx: typer.Context) -> None:
         if not _run_stage(name, _settings(ctx)):
@@ -119,7 +127,7 @@ def _planned_command(name: str):
     return cmd
 
 
-for _name in ("export", "tiles", "publish"):
+for _name in ("tiles", "publish"):
     app.command(name=_name)(_planned_command(_name))
 
 

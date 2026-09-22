@@ -86,7 +86,7 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
     missing = [p for p in inputs if not p.exists()]
     if missing:
         raise FileNotFoundError(_missing_message(source, missing))
-    out = settings.interim_dir / "prep" / f"{source_id}.parquet"
+    out = settings.cache_dir / "prep" / f"{source_id}.parquet"
     params = {"source": source_id, "prep_version": PREP_VERSION}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return _read_cached(out)

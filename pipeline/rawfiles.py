@@ -20,7 +20,7 @@ VECTOR_SUFFIXES = (".shp", ".gpkg", ".geojson", ".fgb")
 
 
 def _unzip_dir(settings: Settings, source: Source) -> Path:
-    return settings.interim_dir / "unzipped" / source.id
+    return settings.cache_dir / "unzipped" / source.id
 
 
 def _pick_member(names: list[str], member: str | None, suffixes: tuple[str, ...], archive: Path) -> str:

@@ -17,8 +17,8 @@ export const PRESETS: Preset[] = [
   {
     id: "early",
     name: "Early career",
-    blurb: "jobs, transit, housing cost, low climate exposure",
-    weights: { jobs: 3, transit: 2, house: 2, heat: 1, rflood: 1, cflood: 1, wstress: 1 },
+    blurb: "jobs, transit, housing cost, cost of living, rent, low climate exposure",
+    weights: { jobs: 3, transit: 2, house: 2, cost: 2, rent: 2, heat: 1, rflood: 1, cflood: 1, wstress: 1 },
   },
   {
     id: "kids",
@@ -36,8 +36,8 @@ export const PRESETS: Preset[] = [
   {
     id: "retiring",
     name: "Retiring",
-    blurb: "healthcare, heat, low exposure, wellbeing",
-    weights: { health: 3, heat: 2, rflood: 1, cflood: 1, wstress: 1, wb: 2 },
+    blurb: "healthcare, heat, low exposure, wellbeing, cost of living",
+    weights: { health: 3, heat: 2, rflood: 1, cflood: 1, wstress: 1, wb: 2, cost: 2 },
   },
   {
     id: "climate",

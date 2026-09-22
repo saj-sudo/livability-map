@@ -17,7 +17,8 @@ export interface DimInfo {
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"] as const;
+// append-only: the position of each id is its slot in the `w=` URL parameter
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -43,6 +44,9 @@ const FALLBACK: DimInfo[] = [
   { id: "incmix", name: "Income mix", group: "life", kind: "score", higher_is: "better", chip: "Global / US", note: "", scale: "percentile" },
   { id: "house", name: "Housing cost burden", group: "life", kind: "score", higher_is: "worse", chip: "OECD / US", note: "", scale: "percentile" },
   { id: "health", name: "Healthcare access", group: "life", kind: "score", higher_is: "better", chip: "OECD / US", note: "", scale: "percentile" },
+  // a higher price level or rent is worse for the person, so both point the other way
+  { id: "cost", name: "Cost of living (price level)", group: "life", kind: "score", higher_is: "worse", chip: "Global / US", note: "", scale: "percentile" },
+  { id: "rent", name: "Housing cost (rent level)", group: "life", kind: "score", higher_is: "worse", chip: "US only", note: "", scale: "percentile" },
 ];
 
 const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US" };

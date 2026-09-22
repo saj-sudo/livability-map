@@ -69,10 +69,17 @@ function fmtRaw(id: string, v: number | null): string | null {
 
 function fmtLife(d: DimInfo, raw: number | null, res: string): string | null {
   // the resolution tag says which source (and unit) produced the value: tract/county = US
-  // layers, admin1 = OECD (0-10 scores) or GSAP (share), national = ILOSTAT (percent)
+  // layers, admin1 = OECD (0-10 scores), GSAP (share) or a BEA state parity, national =
+  // ILOSTAT (percent) or a World Bank price level (world = 100)
   if (raw === null) return null;
   const oecd = res === "admin1";
   switch (d.id) {
+    case "cost":
+      // BEA parities (county = metro area, admin1 = state) are relative to the US average;
+      // the national ICP / WDI value is relative to the world average
+      return `index ${Math.round(raw)} (${res === "national" ? "world" : "US"} = 100)`;
+    case "rent":
+      return `$${Math.round(raw).toLocaleString("en-US")}/month (2-bedroom FMR)`;
     case "jobs":
       if (oecd) return `${raw.toFixed(1)} / 10 (OECD jobs score)`;
       if (res === "national") return `${raw.toFixed(0)}% of 15-24s employed`;

@@ -13,6 +13,8 @@ const DIMS: DimInfo[] = [
   dim("jobs", "score", "life", "Jobs"),
   dim("pol", "signed", "life", "Political lean"),
   dim("race", "composition", "life", "Composition"),
+  dim("cost", "score", "life", "Cost of living"),
+  dim("rent", "score", "life", "Housing cost"),
 ];
 const MANIFEST: ClientManifest = {
   built_at: "2026-09-22T00:00:00Z",
@@ -69,5 +71,19 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(m.bivar).toContain("not classified");
     expect(m.wellbeing.value).toBeNull();
     expect(m.sources.map((s) => s.id)).toContain("medsl_county_pres");
+  });
+
+  it("formats cost of living by its base (US = 100 for BEA tags, world = 100 nationally) and rent as a monthly dollar amount", () => {
+    const us = { h3: "85z", iso_a2: "US", admin1_name: "Arizona", population: 1000, inhabited: true, coverage: 4, cost_res: "county", cost_raw: 112.3, cost_score: 70, rent_res: "county", rent_raw: 1450, rent_score: 55, wb_res: "none", wb_source: "none", bivar: 0 };
+    let m = describeHex(us, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 112 (US = 100)");
+    expect(m.life.find((r) => r.id === "rent")!.value).toBe("$1,450/month (2-bedroom FMR)");
+    // a state-level BEA value carries the admin1 tag and is still on the US = 100 base
+    m = describeHex({ ...us, cost_res: "admin1", cost_raw: 96.6 }, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 97 (US = 100)");
+    // outside the US the national ICP / WDI value is on the world = 100 base and rent is absent
+    m = describeHex({ ...us, iso_a2: "IS", admin1_name: null, cost_res: "national", cost_raw: 143.2, rent_res: "none", rent_raw: undefined }, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 143 (world = 100)");
+    expect(m.life.find((r) => r.id === "rent")!.value).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import pandas as pd
 from .. import stage_cache
 from ..config import Settings
 from ..joiners.polygon_centroid import polygon_centroid
+from ..prep.util import iso3_to_iso2 as _iso3_to_iso2
 from ..registry import load_sources
 
 ADM0_SOURCE = "geoboundaries_adm0"
@@ -22,25 +23,8 @@ ADM1_SOURCE = "geoboundaries_adm1"
 
 
 def iso3_to_iso2(codes: pd.Series, overrides: dict[str, str]) -> pd.Series:
-    try:
-        import pycountry
-    except ImportError:  # pragma: no cover
-        pycountry = None
-    cache: dict[str, str | None] = {}
-
-    def conv(c):
-        if c is None or (isinstance(c, float) and pd.isna(c)):
-            return None
-        if c in cache:
-            return cache[c]
-        val = overrides.get(c)
-        if val is None and pycountry is not None:
-            rec = pycountry.countries.get(alpha_3=c)
-            val = rec.alpha_2 if rec else None
-        cache[c] = val
-        return val
-
-    return codes.map(conv)
+    """ISO3 -> ISO2 (shared with the prep loaders; see pipeline.prep.util)."""
+    return _iso3_to_iso2(codes, overrides)
 
 
 def run(settings: Settings) -> dict[int, int]:

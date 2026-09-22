@@ -117,6 +117,17 @@ def export(ctx: typer.Context, geojson: bool = typer.Option(False, "--geojson", 
     _run_stage("export", _settings(ctx), geojson=geojson)
 
 
+@app.command()
+def tiles(
+    ctx: typer.Context,
+    backend: str = typer.Option("auto", "--backend", help="auto | python | tippecanoe (SPEC §13.18)."),
+    maxzoom: int = typer.Option(7, "--maxzoom", help="Highest zoom built; MapLibre overzooms beyond it."),
+    workers: int = typer.Option(None, "--workers", help="Encoder processes (default: cores - 1; 0 = in-process)."),
+) -> None:
+    """hexes_r{res}.parquet -> hexes.pmtiles (SPEC §9.2)."""
+    _run_stage("tiles", _settings(ctx), backend=backend, maxzoom=maxzoom, workers=workers)
+
+
 def _planned_command(name: str):
     def cmd(ctx: typer.Context) -> None:
         if not _run_stage(name, _settings(ctx)):
@@ -127,7 +138,7 @@ def _planned_command(name: str):
     return cmd
 
 
-for _name in ("tiles", "publish"):
+for _name in ("publish",):
     app.command(name=_name)(_planned_command(_name))
 
 

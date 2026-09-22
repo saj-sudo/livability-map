@@ -9,6 +9,5 @@ class NotImplementedStage(RuntimeError):
 
 # Stages not yet implemented, with the SPEC §16 session that delivers them.
 PLANNED = {
-    "tiles": 5,
     "publish": 5,
 }

@@ -117,6 +117,18 @@ export default function Panel({ manifest, dims, state, onChange, highlight, embe
             <Legend view={state.view} dims={dims} conf={state.conf} theme={theme} highlight={highlight} />
           </div>
           {manifest.fixtures && <p className="text-[12px] text-muted">Synthetic fixture data, not the real world.</p>}
+          {embedded && (
+            <p className="border-t border-rule pt-2 text-[12px] text-muted">
+              <a href="/methodology/" className="underline decoration-rule underline-offset-2 hover:text-ink">
+                Methodology
+              </a>
+              {" and "}
+              <a href="/about/" className="underline decoration-rule underline-offset-2 hover:text-ink">
+                About
+              </a>
+              , including what this map does not do.
+            </p>
+          )}
         </div>
       )}
     </aside>

@@ -80,6 +80,7 @@
   access: direct
   url: https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hd35/ensemble-all-ssp245/climatology-hd35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc
   format: netcdf
+  variable: climatology-hd35-annual-mean   # (time, lat, lon); lon -180..179.75; oceans carry values
   crs: EPSG:4326
   native_res_deg: 0.25
   scenario: ssp245

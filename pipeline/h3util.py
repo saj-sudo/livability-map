@@ -107,6 +107,16 @@ def _iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> 
         if col1 <= col0 or row1 <= row0:
             return
         full = Window(col0, row0, col1 - col0, row1 - row0)
+    if not src.is_tiled:
+        # Striped GeoTIFFs (one row per strip, e.g. the Aqueduct flood rasters) decode a whole
+        # 43,200-pixel strip for any window touching it, so square windows would re-decode each
+        # strip once per column. Read full-width strips of about size*size pixels instead.
+        rows_per = max(1, (size * size) // max(1, int(full.width)))
+        col, width = int(full.col_off), int(full.width)
+        row_end = int(full.row_off + full.height)
+        for row in range(int(full.row_off), row_end, rows_per):
+            yield Window(col, row, width, min(rows_per, row_end - row))
+        return
     for row in range(int(full.row_off), int(full.row_off + full.height), size):
         for col in range(int(full.col_off), int(full.col_off + full.width), size):
             h = min(size, int(full.row_off + full.height) - row)

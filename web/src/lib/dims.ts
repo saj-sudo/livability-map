@@ -18,7 +18,7 @@ export interface DimInfo {
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
 // append-only: the position of each id is its slot in the `w=` URL parameter
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -47,6 +47,13 @@ const FALLBACK: DimInfo[] = [
   // a higher price level or rent is worse for the person, so both point the other way
   { id: "cost", name: "Cost of living (price level)", group: "life", kind: "score", higher_is: "worse", chip: "Global / US", note: "", scale: "percentile" },
   { id: "rent", name: "Housing cost (rent level)", group: "life", kind: "score", higher_is: "worse", chip: "US only", note: "", scale: "percentile" },
+  // hex-level layers (2026-09-22): global rasters and point sets computed per hex
+  { id: "care", name: "Travel time to healthcare", group: "life", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile" },
+  { id: "air", name: "Air quality (fine particulate matter)", group: "env", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile" },
+  { id: "trees", name: "Tree cover", group: "env", kind: "score", higher_is: "better", chip: "Global", note: "", scale: "percentile" },
+  { id: "net", name: "Internet speed", group: "life", kind: "score", higher_is: "better", chip: "Global", note: "", scale: "percentile" },
+  { id: "fire", name: "Wildfire (burned area)", group: "env", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile" },
+  { id: "drought", name: "Drought risk", group: "env", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile" },
 ];
 
 const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US" };
@@ -81,4 +88,9 @@ export function dimensionsFrom(manifest: Manifest): DimInfo[] {
 }
 
 export const lifeDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "life");
+export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env");
 export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");
+
+/** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
+export const RES_LABELS: Record<string, string> = { hex: "this hex", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
+export const resLabel = (tag: string): string => RES_LABELS[tag] ?? tag;

@@ -62,8 +62,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
             <label htmlFor={`w-${d.id}`} className="flex flex-col leading-tight">
               <span>
                 {d.name}
-                {d.higher_is === "worse" && d.group !== "hazard" && <span className="text-[var(--muted)]"> (less is better)</span>}
-                {d.group === "hazard" && <span className="text-[var(--muted)]"> (less is better)</span>}
+                {(d.higher_is === "worse" || d.group === "hazard") && <span className="text-[var(--muted)]"> (less is better)</span>}
               </span>
               {d.chip && <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{d.chip}</span>}
             </label>

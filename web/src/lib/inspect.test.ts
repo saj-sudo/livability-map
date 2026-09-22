@@ -15,6 +15,12 @@ const DIMS: DimInfo[] = [
   dim("race", "composition", "life", "Composition"),
   dim("cost", "score", "life", "Cost of living"),
   dim("rent", "score", "life", "Housing cost"),
+  dim("care", "score", "life", "Travel time to healthcare"),
+  dim("net", "score", "life", "Internet speed"),
+  dim("air", "score", "env", "Air quality"),
+  dim("trees", "score", "env", "Tree cover"),
+  dim("fire", "score", "env", "Wildfire"),
+  dim("drought", "score", "env", "Drought risk"),
 ];
 const MANIFEST: ClientManifest = {
   built_at: "2026-09-22T00:00:00Z",
@@ -28,8 +34,9 @@ const MANIFEST: ClientManifest = {
     { id: "acs_summary", name: "ACS", vintage: "2024", license: "PD", license_note: "", attribution: "Census", processing: "", url: null },
     { id: "medsl_county_pres", name: "MEDSL", vintage: "2024", license: "CC0", license_note: "", attribution: "MIT", processing: "", url: null },
     { id: "ghsl_pop", name: "GHSL", vintage: "2023", license: "CC BY 4.0", license_note: "", attribution: "JRC", processing: "", url: null },
+    { id: "acag_pm25", name: "ACAG PM2.5", vintage: "2024", license: "CC BY 4.0", license_note: "", attribution: "WashU", processing: "", url: null },
   ],
-  dimensionSources: { heat: ["cckp_hd35"], jobs: ["acs_summary"], pol: ["medsl_county_pres"], race: ["acs_summary"] },
+  dimensionSources: { heat: ["cckp_hd35"], jobs: ["acs_summary"], pol: ["medsl_county_pres"], race: ["acs_summary"], air: ["acag_pm25"] },
   notes: {},
 };
 
@@ -85,5 +92,29 @@ describe("describeHex (SPEC §10 inspector)", () => {
     m = describeHex({ ...us, iso_a2: "IS", admin1_name: null, cost_res: "national", cost_raw: 143.2, rent_res: "none", rent_raw: undefined }, "hex5", DIMS, MANIFEST);
     expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 143 (world = 100)");
     expect(m.life.find((r) => r.id === "rent")!.value).toBeNull();
+  });
+});
+
+describe("hex-level layers in the inspector", () => {
+  it("formats the environment rows with their units and the hex / basin tags", () => {
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, care_res: "hex", care_raw: 34.6, care_score: 40, net_res: "hex", net_raw: 118.2, net_score: 80, air_res: "hex", air_raw: 12.34, air_score: 60, trees_res: "hex", trees_raw: 41.2, trees_score: 55, fire_res: "hex", fire_raw: 0.372, fire_score: 70, drought_res: "basin", drought_raw: 3, drought_score: 75, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex5", DIMS, MANIFEST);
+    expect(m.env.map((r) => r.id)).toEqual(["air", "trees", "fire", "drought"]);
+    expect(m.life.map((r) => r.id)).toEqual(["jobs", "pol", "race", "cost", "rent", "care", "net"]);
+    expect(m.env.find((r) => r.id === "air")!.value).toBe("12.3 µg/m³ PM2.5 (WHO guideline 5)");
+    expect(m.env.find((r) => r.id === "trees")!.value).toBe("41% tree cover");
+    expect(m.env.find((r) => r.id === "fire")!.value).toBe("0.37% of the area burns per year (2001-2020)");
+    expect(m.env.find((r) => r.id === "drought")!).toMatchObject({ value: "drought risk 3 of 4 (medium to high)", res: "basin", score: 75 });
+    expect(m.life.find((r) => r.id === "care")!.value).toBe("35 min to the nearest health facility");
+    expect(m.life.find((r) => r.id === "net")!.value).toBe("118 Mbps download");
+    expect(m.sources.map((s) => s.id)).toContain("acag_pm25");
+    // life dimensions without a tag stay "no data"
+    expect(m.life.find((r) => r.id === "jobs")!).toMatchObject({ value: null, score: null, res: "none" });
+  });
+
+  it("keeps a missing environment layer as no data, never zero", () => {
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex4", DIMS, MANIFEST);
+    for (const row of m.env) expect(row).toMatchObject({ value: null, score: null, res: "none" });
   });
 });

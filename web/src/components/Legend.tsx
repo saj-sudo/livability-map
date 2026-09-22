@@ -48,7 +48,7 @@ export default function Legend({ view, dims, conf }: Props) {
       {view !== "bivar" && view !== "priorities" && dim && (
         <div>
           <div className="mb-1">{dim.name}: percentile score</div>
-          <Ramp colors={rampFor(dim)} low={dim.group === "hazard" ? "0 (least hazard)" : "0"} high={dim.group === "hazard" ? "100 (most hazard)" : "100"} />
+          <Ramp colors={rampFor(dim)} low={dim.group === "hazard" ? "0 (least hazard)" : dim.higher_is === "worse" ? "0 (least)" : "0"} high={dim.group === "hazard" ? "100 (most hazard)" : dim.higher_is === "worse" ? "100 (most)" : "100"} />
         </div>
       )}
       {view === "priorities" && (

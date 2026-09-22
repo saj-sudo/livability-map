@@ -38,9 +38,13 @@ export interface HexModel {
   exposure: number | null;
   wellbeing: { value: string | null; score: number | null; source: string; res: string };
   bivar: string;
+  /** present-day environment (group `env`): shown beside the hazards, never part of exposure */
+  env: LifeRow[];
   life: LifeRow[];
   sources: ClientSource[];
 }
+
+const DROUGHT_LABELS: Record<number, string> = { 0: "low", 1: "low to medium", 2: "medium", 3: "medium to high", 4: "high" };
 
 const RACE_LABELS: Record<string, string> = { w: "white", b: "Black", h: "Hispanic or Latino", a: "Asian / Pacific Islander", o: "other" };
 const WSTRESS_LABELS: Record<number, string> = { [-1]: "arid and low water use (not scored)", 0: "low", 1: "low to medium", 2: "medium to high", 3: "high", 4: "extremely high" };
@@ -80,6 +84,19 @@ function fmtLife(d: DimInfo, raw: number | null, res: string): string | null {
       return `index ${Math.round(raw)} (${res === "national" ? "world" : "US"} = 100)`;
     case "rent":
       return `$${Math.round(raw).toLocaleString("en-US")}/month (2-bedroom FMR)`;
+    // hex-level layers: one unit each, whatever the tag
+    case "care":
+      return `${Math.round(raw)} min to the nearest health facility`;
+    case "air":
+      return `${raw.toFixed(1)} µg/m³ PM2.5 (WHO guideline 5)`;
+    case "trees":
+      return `${Math.round(raw)}% tree cover`;
+    case "net":
+      return `${Math.round(raw)} Mbps download`;
+    case "fire":
+      return `${raw < 1 ? raw.toFixed(2) : raw.toFixed(1)}% of the area burns per year (2001-2020)`;
+    case "drought":
+      return `drought risk ${Math.round(raw)} of 4 (${DROUGHT_LABELS[Math.round(raw)] ?? "unknown"})`;
     case "jobs":
       if (oecd) return `${raw.toFixed(1)} / 10 (OECD jobs score)`;
       if (res === "national") return `${raw.toFixed(0)}% of 15-24s employed`;
@@ -123,9 +140,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     res: str(p.wb_res) ?? "none",
   };
   const bivar = num(p.bivar) ?? 0;
-  const life: LifeRow[] = dims
-    .filter((d) => d.group === "life")
-    .map((d) => {
+  const rowFor = (d: DimInfo): LifeRow => {
       const res = str(p[`${d.id}_res`]) ?? "none";
       const row: LifeRow = { id: d.id, name: d.name, kind: d.kind, value: null, score: null, res, chip: d.chip };
       if (res === "none") return row;
@@ -142,12 +157,14 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
         row.value = row.majority ? `largest group: ${row.majority}` : "shares below";
       }
       return row;
-    });
+  };
+  const life: LifeRow[] = dims.filter((d) => d.group === "life").map(rowFor);
+  const env: LifeRow[] = dims.filter((d) => d.group === "env").map(rowFor);
   const usedIds = new Set<string>(["natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop"]);
   for (const h of hazards) if (h.ok) for (const s of manifest.dimensionSources[h.id] ?? []) usedIds.add(s);
   if (wbSource === "shdi") ["gdl_shdi", "gdl_shdi_regions"].forEach((s) => usedIds.add(s));
   if (wbSource === "whr") usedIds.add("whr_ladder");
-  for (const row of life) if (row.res !== "none") for (const s of manifest.dimensionSources[row.id] ?? []) usedIds.add(s);
+  for (const row of [...env, ...life]) if (row.res !== "none") for (const s of manifest.dimensionSources[row.id] ?? []) usedIds.add(s);
   return {
     title: admin1 ?? countryName(iso),
     subtitle: admin1 ? countryName(iso) : "",
@@ -159,6 +176,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     exposure: num(p.exposure),
     wellbeing,
     bivar: BIVAR_WORDS[bivar] ?? BIVAR_WORDS[0],
+    env,
     life,
     sources: manifest.sources.filter((s) => usedIds.has(s.id)),
   };

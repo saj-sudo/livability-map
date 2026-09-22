@@ -36,6 +36,8 @@ export function scoreColor(id: string, ramp: string[]): Expr {
 export function rampFor(dim: DimInfo): string[] {
   if (dim.group === "hazard") return RAMP_HAZARD;
   if (dim.id === "wb") return RAMP_WELLBEING;
+  // present-day environment: "more is worse" layers (PM2.5, fire, drought) read like hazards
+  if (dim.group === "env" && dim.higher_is === "worse") return RAMP_HAZARD;
   return RAMP_GOOD;
 }
 

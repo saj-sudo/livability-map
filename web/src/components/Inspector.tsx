@@ -7,7 +7,8 @@
 import type { SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
-import { describeHex } from "../lib/inspect";
+import { describeHex, type LifeRow } from "../lib/inspect";
+import { resLabel } from "../lib/dims";
 
 interface Props {
   hex: SelectedHex;
@@ -22,6 +23,32 @@ function Badge({ children, tone = "grey" }: { children: React.ReactNode; tone?: 
 }
 
 const NoData = () => <span className="text-[var(--muted)]">no data here</span>;
+
+/** One environment or life dimension: value with unit, score, coverage chip, resolution badge. */
+function DimRow({ row }: { row: LifeRow }) {
+  return (
+    <li className="border-t border-[var(--border)] pt-1">
+      <div className="flex items-center justify-between gap-2">
+        <span>
+          {row.name}
+          {row.chip && <Badge>{row.chip}</Badge>}
+        </span>
+        <Badge tone={row.res === "none" ? "warn" : "grey"}>{resLabel(row.res)}</Badge>
+      </div>
+      <div className="text-[var(--muted)]">
+        {row.value ?? <NoData />}
+        {row.score !== null && ` · ${row.score}/100`}
+      </div>
+      {row.shares && row.res !== "none" && (
+        <div className="mt-1 flex h-2 w-full overflow-hidden rounded" role="img" aria-label={row.shares.map((s) => `${s.label} ${s.pct}%`).join(", ")}>
+          {row.shares.map((s, i) => (
+            <span key={s.key} title={`${s.label} ${s.pct}%`} style={{ width: `${s.pct}%`, background: ["#8c6bb1", "#41ab5d", "#fd8d3c", "#4292c6", "#bdbdbd"][i] }} />
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
 
 export default function Inspector({ hex, manifest, dims, onClose }: Props) {
   const m = describeHex(hex.props, hex.sourceLayer, dims, manifest);
@@ -67,29 +94,22 @@ export default function Inspector({ hex, manifest, dims, onClose }: Props) {
       </p>
       <p className="mt-1 text-xs">Combined: {m.bivar}.</p>
 
+      {m.env.length > 0 && (
+        <>
+          <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Environment today</h3>
+          <p className="text-[10px] text-[var(--muted)]">Observed, not projected; not part of the exposure score.</p>
+          <ul className="mt-1 space-y-1 text-xs">
+            {m.env.map((row) => (
+              <DimRow key={row.id} row={row} />
+            ))}
+          </ul>
+        </>
+      )}
+
       <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Life dimensions</h3>
       <ul className="mt-1 space-y-1 text-xs">
         {m.life.map((row) => (
-          <li key={row.id} className="border-t border-[var(--border)] pt-1">
-            <div className="flex items-center justify-between gap-2">
-              <span>
-                {row.name}
-                {row.chip && <Badge>{row.chip}</Badge>}
-              </span>
-              <Badge tone={row.res === "none" ? "warn" : "grey"}>{row.res}</Badge>
-            </div>
-            <div className="text-[var(--muted)]">
-              {row.value ?? <NoData />}
-              {row.score !== null && ` · ${row.score}/100`}
-            </div>
-            {row.shares && row.res !== "none" && (
-              <div className="mt-1 flex h-2 w-full overflow-hidden rounded" role="img" aria-label={row.shares.map((s) => `${s.label} ${s.pct}%`).join(", ")}>
-                {row.shares.map((s, i) => (
-                  <span key={s.key} title={`${s.label} ${s.pct}%`} style={{ width: `${s.pct}%`, background: ["#8c6bb1", "#41ab5d", "#fd8d3c", "#4292c6", "#bdbdbd"][i] }} />
-                ))}
-              </div>
-            )}
-          </li>
+          <DimRow key={row.id} row={row} />
         ))}
       </ul>
 

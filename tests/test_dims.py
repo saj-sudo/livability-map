@@ -88,3 +88,14 @@ def test_dims_is_idempotent(settings, capsys):
     capsys.readouterr()
     dims.run(settings)
     assert "up to date" in capsys.readouterr().out
+
+
+def test_overlay_chunking_does_not_change_results(settings, monkeypatch):
+    _run_all(settings)
+    full = pd.read_parquet(settings.stage_path("dims", 4))
+    monkeypatch.setattr(dims, "OVERLAY_CHUNK", 7)
+    settings.force = True
+    dims.run(settings)
+    chunked = pd.read_parquet(settings.stage_path("dims", 4))
+    for col in ("jobs_raw", "race_w", "transit_raw", "house_raw"):
+        pd.testing.assert_series_equal(full[col], chunked[col], check_exact=False, rtol=1e-6)

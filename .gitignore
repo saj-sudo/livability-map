@@ -25,3 +25,11 @@ web/out/
 .idea/
 .vscode/
 .venv-ci/
+
+# secrets and local publish targets (Sessions 5-7)
+.env
+web/public/data/
+web/public/maplibre-gl-worker.mjs
+web/.wrangler/
+data/interim/unzipped/
+.playwright-mcp/

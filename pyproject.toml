@@ -19,6 +19,14 @@ dependencies = [
     "typer>=0.12",
     "requests>=2.32",
     "pycountry>=24.6",
+    # Sessions 2-7 (see SPEC §13.18-26): vector I/O, xlsx sources, tiles, R2 upload, .env, RAM reporting
+    "pyogrio>=0.10",
+    "openpyxl>=3.1",
+    "pmtiles>=3.4",
+    "mapbox-vector-tile>=2.1",
+    "boto3>=1.35",
+    "python-dotenv>=1.0",
+    "psutil>=6.0",
 ]
 
 [project.optional-dependencies]

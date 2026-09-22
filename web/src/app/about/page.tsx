@@ -22,7 +22,7 @@ export default function About() {
       </ul>
       <h2 className="text-lg font-semibold">Privacy and licensing</h2>
       <p>
-        No accounts, no trackers, no analytics scripts. The only requests your browser makes are for the tiles and the basemap. All data sources are open-licensed with attribution; Global Data Lab&rsquo;s Subnational HDI is used under its non-commercial terms, so this project is non-commercial for the foreseeable future. Code is MIT.
+        No accounts, no trackers, no analytics scripts. The only requests your browser makes are for the tiles, the basemap and, when you search, a list of place names served from this site (Natural Earth populated places, public domain, and geoBoundaries regions, CC BY 4.0). Fonts are bundled with the site. Two small preferences live in your browser&rsquo;s local storage and nowhere else: the light or dark theme, and whether you have seen the three-step intro. There are no cookies. All data sources are open-licensed with attribution; Global Data Lab&rsquo;s Subnational HDI is used under its non-commercial terms, so this project is non-commercial for the foreseeable future. Code is MIT.
       </p>
       <h2 className="text-lg font-semibold">Prior art</h2>
       <p>

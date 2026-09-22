@@ -22,11 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="flex h-[var(--header-h)] items-center gap-5 border-b border-rule bg-panel-solid px-4">
           <Link href="/" prefetch={false} className="flex shrink-0 items-center gap-2 font-serif text-[19px] font-medium text-ink">
             <HexMark />
-            Livability map
+            <span className="hidden sm:inline">Livability map</span>
+            <span className="sr-only sm:hidden">Livability map</span>
           </Link>
           {/* the map page portals its search box here (components/Search.tsx) */}
           <div id="search-slot" className="min-w-0 flex-1" />
-          <nav className="flex shrink-0 gap-4 text-[13px] text-muted">
+          {/* on a phone the links move to the About page's footer; search needs the room */}
+          <nav className="hidden shrink-0 gap-4 text-[13px] text-muted sm:flex">
             <Link href="/" prefetch={false} className="hover:text-ink">
               Map
             </Link>

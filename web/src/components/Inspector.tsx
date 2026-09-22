@@ -24,6 +24,8 @@ interface Props {
   state: AppState;
   onClose: () => void;
   onCompare?: () => void;
+  /** rendered inside the phone bottom sheet: no floating chrome */
+  embedded?: boolean;
 }
 
 const RES_WORDS: Record<string, string> = { tract: "tract level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
@@ -69,7 +71,7 @@ export function PriorityBars({ bars, hatchColor, barColor, track }: { bars: Bar[
   );
 }
 
-export default function Inspector({ hex, manifest, dims, state, onClose, onCompare }: Props) {
+export default function Inspector({ hex, manifest, dims, state, onClose, onCompare, embedded }: Props) {
   const [theme] = useTheme();
   const pal = paletteFor(theme);
   const picks = useMemo(() => ({ pol: state.pol, race: state.race }), [state.pol, state.race]);
@@ -79,7 +81,7 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
   const track = "color-mix(in srgb, var(--rule) 70%, transparent)";
 
   return (
-    <section className="absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[23rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm" aria-label="Hex details">
+    <section className={embedded ? "text-[13px]" : "absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[23rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"} aria-label="Hex details">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="font-serif text-[19px] leading-tight">{m.title}</h2>

@@ -21,12 +21,13 @@ interface Props {
   onSwap: () => void;
   onRepick: () => void;
   onClose: () => void;
+  embedded?: boolean;
 }
 
 const GROUP_TITLES: Record<RowGroup, string> = { summary: "", priorities: "Your priorities", hazard: "Climate hazards", wellbeing: "Wellbeing", life: "Life dimensions" };
 const GROUPS: RowGroup[] = ["summary", "priorities", "hazard", "wellbeing", "life"];
 
-export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRepick, onClose }: Props) {
+export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRepick, onClose, embedded }: Props) {
   const picks = useMemo(() => ({ pol: state.pol, race: state.race }), [state.pol, state.race]);
   const ma = useMemo(() => describeHex(a.props, a.sourceLayer, dims, manifest), [a, dims, manifest]);
   const mb = useMemo(() => describeHex(b.props, b.sourceLayer, dims, manifest), [b, dims, manifest]);
@@ -40,7 +41,7 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
   );
 
   return (
-    <section className="absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[30rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm" aria-label="Compare two places">
+    <section className={embedded ? "text-[13px]" : "absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[30rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"} aria-label="Compare two places">
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-serif text-[16px]">Side by side</h2>
         <div className="flex gap-1">

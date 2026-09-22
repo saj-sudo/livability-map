@@ -12,12 +12,15 @@ import Inspector from "./Inspector";
 import Intro from "./Intro";
 import Panel from "./Panel";
 import Search from "./Search";
+import Sheet from "./Sheet";
 import Tooltip from "./Tooltip";
+import { PHONE_QUERY, useMediaQuery } from "./useMediaQuery";
 import type { FlyTo, HoveredHex, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
 import { shouldShowIntro } from "../lib/intro";
 import { zoomFor, type Place } from "../lib/search";
+import type { Snap } from "../lib/sheet";
 import { DEFAULT_STATE, parseState, writeUrl, type AppState } from "../lib/url";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center text-muted">Loading map…</div> });
@@ -45,6 +48,10 @@ export default function MapApp({ manifest, dims }: Props) {
   const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const [helpSlot, setHelpSlot] = useState<HTMLElement | null>(null);
   const [intro, setIntro] = useState(false);
+  // phone layout: one bottom sheet with two tabs instead of floating panels
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [snap, setSnap] = useState<Snap>("peek");
+  const [tab, setTab] = useState<"layers" | "place">("layers");
   const urlTimer = useRef<number | null>(null);
 
   // read the URL once on the client after hydration (no useSearchParams: static export). The
@@ -91,6 +98,9 @@ export default function MapApp({ manifest, dims }: Props) {
       if (!hex) {
         setCompare(null);
         setPicking(false);
+      } else {
+        setTab("place");
+        setSnap((s) => (s === "peek" ? "half" : s));
       }
     },
     [picking, selected],
@@ -102,6 +112,27 @@ export default function MapApp({ manifest, dims }: Props) {
 
   const tilesKey = manifest.tiles?.hexes?.key ?? "hexes.pmtiles";
   const tileLayers = manifest.tiles?.hexes?.layers?.map((l) => ({ name: l.name, minzoom: l.minzoom, maxzoom: l.maxzoom }));
+
+  // the inspector or the comparison for the selected hex; floats on desktop, sits in the sheet on a phone
+  const place =
+    selected && compare ? (
+      <ComparePanel
+        a={selected}
+        b={compare}
+        manifest={manifest}
+        dims={dims}
+        state={state}
+        onSwap={() => {
+          setSelected(compare);
+          setCompare(selected);
+        }}
+        onRepick={startPicking}
+        onClose={() => setCompare(null)}
+        embedded={phone}
+      />
+    ) : selected ? (
+      <Inspector hex={selected} manifest={manifest} dims={dims} state={state} onClose={() => setSelected(null)} onCompare={startPicking} embedded={phone} />
+    ) : null;
 
   return (
     <div className="map-shell">
@@ -119,28 +150,30 @@ export default function MapApp({ manifest, dims }: Props) {
         )}
       {intro && <Intro onClose={() => setIntro(false)} />}
       {hover && <Tooltip hover={hover} dims={dims} state={state} />}
-      <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />
+      {!phone && <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />}
       {hint && (
         <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="status">
           {hint}
         </div>
       )}
-      {selected && compare ? (
-        <ComparePanel
-          a={selected}
-          b={compare}
-          manifest={manifest}
-          dims={dims}
-          state={state}
-          onSwap={() => {
-            setSelected(compare);
-            setCompare(selected);
-          }}
-          onRepick={startPicking}
-          onClose={() => setCompare(null)}
-        />
-      ) : (
-        selected && <Inspector hex={selected} manifest={manifest} dims={dims} state={state} onClose={() => setSelected(null)} onCompare={startPicking} />
+      {!phone && place}
+      {phone && (
+        <Sheet
+          snap={snap}
+          onSnap={setSnap}
+          tabs={[
+            { id: "layers", label: "Layers" },
+            { id: "place", label: selected ? "Place" : "Place (tap a hexagon)" },
+          ]}
+          tab={tab}
+          onTab={(id) => setTab(id as "layers" | "place")}
+        >
+          {tab === "layers" ? (
+            <Panel manifest={manifest} dims={dims} state={state} onChange={update} embedded />
+          ) : (
+            (place ?? <p className="py-6 text-center text-[13px] text-muted">Tap a hexagon on the map, or search for a place, to see its values here.</p>)
+          )}
+        </Sheet>
       )}
     </div>
   );

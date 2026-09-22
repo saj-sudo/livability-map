@@ -30,6 +30,8 @@ interface Props {
   onChange: (patch: Partial<AppState>) => void;
   /** bivariate class of the hovered hex, passed through to the legend */
   highlight?: number | null;
+  /** rendered inside the phone bottom sheet: no floating chrome, always open */
+  embedded?: boolean;
 }
 
 /** A 12px key showing what colours the view uses. */
@@ -57,7 +59,7 @@ export function Toggle({ checked, onChange, children }: { checked: boolean; onCh
   );
 }
 
-export default function Panel({ manifest, dims, state, onChange, highlight }: Props) {
+export default function Panel({ manifest, dims, state, onChange, highlight, embedded }: Props) {
   const [open, setOpen] = useState(true);
   const [theme] = useTheme();
   const pal = paletteFor(theme);
@@ -65,18 +67,21 @@ export default function Panel({ manifest, dims, state, onChange, highlight }: Pr
   // because the server render cannot know the viewport)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (window.matchMedia("(max-width: 640px)").matches) setOpen(false);
-  }, []);
+    if (!embedded && window.matchMedia("(max-width: 640px)").matches) setOpen(false);
+  }, [embedded]);
+  const shown = embedded || open;
   return (
-    <aside className="absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm">
-      <button type="button" className="flex w-full items-center justify-between px-3 py-2 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="font-serif text-[16px]">Layers</span>
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className={`text-muted transition-transform ${open ? "" : "-rotate-90"}`}>
-          <path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-      </button>
-      {open && (
-        <div className="space-y-3 px-3 pb-3">
+    <aside className={embedded ? "" : "absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"}>
+      {!embedded && (
+        <button type="button" className="flex w-full items-center justify-between px-3 py-2 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="font-serif text-[16px]">Layers</span>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className={`text-muted transition-transform ${open ? "" : "-rotate-90"}`}>
+            <path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </button>
+      )}
+      {shown && (
+        <div className={embedded ? "space-y-3" : "space-y-3 px-3 pb-3"}>
           <fieldset>
             <legend className="sr-only">Map view</legend>
             <div className="-mx-1 space-y-px">

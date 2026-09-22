@@ -100,9 +100,9 @@ def hazards(ctx: typer.Context) -> None:
 
 
 @app.command()
-def dims(ctx: typer.Context) -> None:
+def dims(ctx: typer.Context, only: list[str] = typer.Option(None, "--only", help="Recompute only these dimension ids and merge them into the existing dims parquet (adding a layer without redoing the tract overlays).")) -> None:
     """Wellbeing and life dimensions via the registry joiners (SPEC §20.2-20.3)."""
-    _run_stage("dims", _settings(ctx))
+    _run_stage("dims", _settings(ctx), only=only or None)
 
 
 @app.command()

@@ -93,6 +93,18 @@ XA hexes `cost_res == national` with `cost_lbl == icp`), web tests updated.
 
 ## Task 2: verify the six extra sources (research only) -> table in this file
 
+Done 2026-09-22 (every URL fetched first-hand; details in SPEC §15 "20.6 extras"):
+
+| Layer | Source used | Size / format | Licence | Note |
+|---|---|---|---|---|
+| Healthcare travel time | MAP WCS GetCoverage, motorized 2020 | 3.03 GB GeoTIFF, 1 km, -9999 | CC BY 4.0 (GEE catalog) | streamed chunked, no Range; walking-only coverage exists |
+| Air quality | ACAG SatPM2.5 V6.GL.03 2024 (`s3://satpmdata`) | 450 MB NetCDF-4, `PM25`, 0.01° | CC BY 4.0 | water masked with negative values; newer than the web page's V6.GL.02.04 |
+| Tree cover | CGLS-LC100 2019 tree-cover fraction (Zenodo 3939050) | 5.65 GB GeoTIFF, 100 m uint8, 255 nodata | CC BY 4.0 | tiled DEFLATE; decimate 10 to 1 km |
+| Internet speed | Ookla 2026 Q2 fixed + mobile parquet | 354 MB + 185 MB | **CC BY-NC-SA 4.0** | ShareAlike labelled on `net_*`; approved by Saj (non-commercial project) |
+| Wildfire | GFED5 burned area `BA.zip` (Zenodo 7668424) | 265 MB, 288 monthly nc, 0.25° | CC BY 4.0 | km2 per cell-month (no units attr); GWIS dropped (no download) |
+| Drought | Aqueduct 4.0 `baseline_annual.drr_cat` | already on disk | CC BY 4.0 | no future-scenario drought exists; JRC GDO SPI-12 (1°) is the fallback |
+
+
 For each: exact URL, size, format, CRS/resolution, key/variable, license text, vintage.
 1. Healthcare travel time: Malaria Atlas Project "accessibility to healthcare 2020" (motorized,
    1 km, CC BY 4.0) — a global GeoTIFF; a walking variant exists too.
@@ -107,6 +119,12 @@ For each: exact URL, size, format, CRS/resolution, key/variable, license text, v
 6. Drought: JRC GDO or a global drought-frequency raster with an open license.
 
 ## Task 3+: implement the extras (one task per source, after Task 2)
+
+Done 2026-09-22 with one deviation: the extras are ordinary dimensions (`care`, `net` in `life`;
+`air`, `trees`, `fire`, `drought` in the new `env` group) joined by `raster_mean` / `point_mean`
+in the `dims` stage. The `hazards` stage was **not** made registry-driven and `exposure` /
+`coverage` still count the four 2050 hazards (SPEC §13.28): mixing observed 2001-2020 burned
+area into a 2050 exposure axis would have broken the map's one-scenario framing.
 
 - Raster sources need a `raster_mean` / `raster_frac` joiner in `pipeline/joiners/` driven by
   `dimensions.yaml` (`joiner: raster_mean`, `source:` a raster source, `res: hex`), using

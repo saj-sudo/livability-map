@@ -72,7 +72,9 @@ dimension, and the map renders low-confidence areas visibly differently.
 1. **Every number on screen is traceable.** The inspector shows source, vintage, scenario and
    processing note for each value. `/methodology` is generated from the pipeline manifest.
 2. **Resolution mismatch is labeled, never smoothed over.** Hazard values are per hex. Every
-   other dimension carries a resolution tag: `admin1`, `county`, `tract`, `national`, or `none`.
+   other dimension carries a resolution tag: `hex` (computed per hex from a raster or point set),
+   `basin` (a hydrological sub-basin polygon at the centroid), `admin1`, `county`, `tract`,
+   `national`, or `none`.
 3. **No data is not zero risk.** Hexes with missing layers render as visibly uncertain, and
    composites exclude missing layers rather than treating them as 0.
 4. **Only open-licensed data with attribution.** Every source's license is in the manifest and on
@@ -118,7 +120,7 @@ CORS). No database in the web app.
   |            -> per-hazard 0-100 percentile score + *_ok flag                                           |
   |  dims      for each dimension in pipeline/dimensions.yaml, run its joiners (§20.3):                    |
   |            polygon_centroid | iso_lookup | area_weighted_overlay | point_density                      |
-  |            -> {id}_raw, {id}_res ('admin1' | 'county' | 'tract' | 'national' | 'none')                |
+  |            -> {id}_raw, {id}_res ('hex' | 'basin' | 'admin1' | 'county' | 'tract' | 'national' | 'none') |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                            |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4)                                                            |
@@ -437,6 +439,21 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     reads `DATAVERSE_GUESTBOOK_*` from `.env` and otherwise prints the manual recipe.
 27. **Prep layer:** format-specific parsing lives in `pipeline/prep/<source>.py`, one loader per
     source, producing the columns `dimensions.yaml` names; joiners stay generic.
+28. **Present-day environment is its own group (`env`), not a hazard.** Air quality, tree cover,
+    wildfire (observed burned area 2001-2020) and drought risk (Aqueduct baseline) are shown
+    beside the four 2050 hazards and can be weighted in My priorities, but `exposure`,
+    `coverage` and the bivariate class stay the four projected hazards so the map's headline
+    axis keeps one scenario and one horizon (2026-09-22).
+29. **Hex-level layers** are joined by two new joiners (`raster_mean`, `point_mean`, §20.3) and
+    carry the resolution tag `hex`; Aqueduct sub-basins sampled at the centroid carry `basin`.
+    Rasters that are not plain GeoTIFFs (the ACAG PM2.5 NetCDF, the GFED5 monthly burned-area
+    files) are built once into `data/interim/prep/<id>.tif` by `pipeline/prep/rasters.py`.
+30. **Non-commercial sources are acceptable** (Saj, 2026-09-22): the project is non-commercial
+    (§13.13), so Ookla's CC BY-NC-SA 4.0 speed tiles are in; the ShareAlike clause is honoured
+    by labelling the derived `net_*` attributes CC BY-NC-SA 4.0 in the registry and manifest.
+    HUD's Fair Market Rents workbook is `access: manual` because huduser.gov answers every
+    non-browser client with an empty 202 (an AWS WAF challenge); the pipeline does not
+    impersonate a browser.
 
 ## 14. VERIFY before code depends on it
 
@@ -490,6 +507,9 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-22 | 14.14 R2 CORS | rules written by `publish --target r2` (`range`, `if-match` allowed; `etag`, `content-length`, `content-range`, `accept-ranges` exposed) and checked with a Range request; not yet exercised against a real bucket (credentials pending). | https://developers.cloudflare.com/r2/buckets/cors/ |
 | 2026-09-22 | 14.15 life dimensions | **confirmed** every endpoint: GSAP xlsx + 2023 gpkg (CC BY 4.0, key `geo_code`, 1,914 regions); OECD RWB xlsx (`Score_Last`, header row 7) and OECD Territorial correspondence TL2024c (header row 3); ILOSTAT via `rplumber.ilo.org` CSV API (CC BY 4.0, 217 countries); ACS 2024 5-year table-based SF (8 tables, tract rows `1400000US`, 85,382 tracts; B11009 has no tract rows, §13.20); cartographic tracts/counties 2025 (`GEOIDFQ` = ACS `GEO_ID`); MEDSL v20.0 CC0 behind a guestbook (§13.26); EPA SLD v3 (553 MB File GDB, layer `EPA_SLD_Database_V3`, 220,739 block groups, D4C present for 101,421); Urban Institute EDFacts 2019 (ODC-BY, negative rates are suppression codes) + NCES EDGE TL25 boundaries (9,313 districts matched); HRSA AHRF 2024-2025 CSV (`md_nf_activ_23`, 3,213 counties). | sources.yaml |
 | 2026-09-22 | 8.5 spot checks (res 4) | Dhaka: 34 hot days, riverine 18.0% of area, coastal 19.9%, water stress 4. Phoenix: 143 hot days, riverine 1.7%, coastal 0, stress 4. Reykjavik (nearest land hex: the city's cell centre is at sea): 0 hot days, riverine 3.1%, coastal 0.1%, stress 0. Niamey: 252 hot days, riverine 8.3%, coastal 0, stress 4. All plausible. | - |
+| 2026-09-22 | 20.6 cost / rent | **confirmed** BEA SARPP.zip / MARPP.zip (LineCode 1 all-items RPP, 2024, US = 100; GeoFIPS quoted and space-padded, four footer lines); Census GENZ2025 CBSA and state cartographic files; World Bank ICP 2021 household price level (source 90, series 9100000, 1,449 records, World = 100) and WDI `PA.NUS.PPPC.RF` (a US = 1 ratio, rescaled onto the ICP base with the median ratio over shared countries); HUD FY26_FMRs.xlsx is 376,572 bytes with a browser but an empty 202 for any other client (§13.30, manual). | sources.yaml |
+| 2026-09-22 | 20.6 extras | **confirmed** MAP motorized travel time (WCS GetCoverage, 43200 x 17400 float32 tiled 512, -9999 nodata, 3,030,408,164 bytes streamed chunked in 8 min; CC BY 4.0 per the GEE catalog entry); ACAG SatPM2.5 V6.GL.03 2024 (`s3://satpmdata`, 450 MB NetCDF-4, `PM25` ug/m3, 0.01°, 60S-70N, lat ascending, water masked with negative values not NaN; CC BY 4.0); CGLS-LC100 tree-cover fraction 2019 (Zenodo 3939050, 5,650,453,608 bytes, uint8 255 nodata, tiled 256 DEFLATE; CC BY 4.0); Ookla 2026 Q2 fixed (353,986,294 B) and mobile (184,560,046 B) parquet, columns `quadkey, tile, tile_x, tile_y, avg_d_kbps, avg_u_kbps, avg_lat_ms, avg_lat_down_ms, avg_lat_up_ms, tests, devices`, **CC BY-NC-SA 4.0** (not BY-NC as first noted); GFED5 BA.zip (Zenodo 7668424, 264,817,204 B, 288 monthly `BA{YYYYMM}.nc` 1997-2020, variables Norm/Peat/Defo/Total/Crop with no units attribute, km2 per the readme, ocean = 0; CC BY 4.0); Aqueduct 4.0 `baseline_annual.drr_cat` (-9999 on 15,899 of 68,506 sub-basins; `future_annual` has no drought field). GWIS country profiles have no documented download and were dropped. | sources.yaml, docs/superpowers/plans/2026-09-22-cost-rent-and-extras.md |
+| 2026-09-22 | 9.2 res-5 tiles | the first res-5 tile build died with `BrokenProcessPool`: every encoder process turned all ~80 attributes of 570,143 hexes into Python objects at start-up (~1.7 GB each, 15 processes). The worker store is now typed numpy arrays with categorical strings, converted per feature, and the pool is capped by free memory (`tiler.default_workers`). | pipeline/tiler.py |
 | 2026-09-20 | 14.15 life dimensions | search. See §20.6 table and notes. | see §20.6 |
 
 ## 16. Phasing and session plan
@@ -634,8 +654,10 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `iso_lookup` | `iso_a2` to a national table | WHR, ILOSTAT, V-Dem |
 | `area_weighted_overlay` | small polygons to hex, weighted by overlap area x polygon population density | ACS tracts, EPA SLD block groups, school districts |
 | `point_density` | points per hex, optionally per 10k residents | transit stops |
+| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
+| `point_mean` | weighted mean of point values inside the hex (tag `hex`) | Ookla speed tiles at their centroids, weighted by tests |
 
-All four are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
+All six are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
 joins agree with `population`.
 
 ### 20.4 Scoring within a coverage domain
@@ -676,6 +698,14 @@ where the hovered or clicked hex has `_res = none`.
 | incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |
 | house | Housing cost burden | OECD Regional Well-Being housing (TL2) | ACS B25071 rent as share of income (tract); HUD FMR (county) | Zillow usable only with on-page attribution; deferred. |
 | health | Healthcare access | OECD Regional Well-Being health (TL2); Eurostat `hlth_rs_prsrg` (NUTS2) | HRSA Area Health Resources File physicians per 10k (county) | All open. |
+| cost | Cost of living (price level) | World Bank ICP 2021 household price level CC BY 4.0 (national, World = 100); WDI GDP price level rescaled to it where ICP has no row | BEA Regional Price Parities 2024, metro area then state (US = 100), public domain | Numbeo (proprietary) |
+| rent | Housing cost (rent level) | OECD / Eurostat rent levels - v2 | HUD Fair Market Rent, 2-bedroom, FY2026 (county / FMR area), public domain, manual download (§13.30) | Zillow ZORI (terms forbid redistribution) |
+| care | Travel time to healthcare | Malaria Atlas Project motorized travel time 2019, 1 km, CC BY 4.0 (`hex`) | same | - |
+| net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
+| air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
+| trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |
+| fire | Wildfire (burned area), group `env` | GFED5 burned area 2001-2020 mean, 0.25°, CC BY 4.0 (`hex`, centroid) | same | GWIS country profiles (no download) |
+| drought | Drought risk, group `env` | Aqueduct 4.0 baseline `drr_cat` 0-4 (Aqueduct 3.0 lineage), CC BY 4.0 (`basin`) | same | JRC GDO SPI-12 kept as a fallback (1°, CC BY 4.0) |
 
 Design rule from this table: three dimensions (lgbtq, pol, race) have no global answer. The UI
 greys them out outside the US instead of substituting a country-level proxy.

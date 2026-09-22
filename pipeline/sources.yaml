@@ -519,7 +519,11 @@
 - id: hud_fmr
   name: HUD Fair Market Rents FY2026 (county / FMR area)
   group: life
-  access: direct
+  access: manual
+  recipe: |
+    huduser.gov answers automated clients with an empty 202 (AWS WAF challenge), so download by hand:
+    open https://www.huduser.gov/portal/datasets/fmr/fmr2026/FY26_FMRs.xlsx in a browser
+    and save it as data/raw/hud_fmr/FY26_FMRs.xlsx (377 KB, public domain).
   # a HEAD request answers 202; GET serves the workbook
   url: https://www.huduser.gov/portal/datasets/fmr/fmr2026/FY26_FMRs.xlsx
   format: xlsx

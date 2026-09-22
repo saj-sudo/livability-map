@@ -102,6 +102,9 @@ def _download(url: str, dest: Path, root: Path) -> None:
             with open(tmp, "wb") as fh:
                 for chunk in resp.iter_content(CHUNK):
                     fh.write(chunk)
+    if tmp.stat().st_size == 0:
+        tmp.unlink()
+        raise RuntimeError("the server answered with an empty body (a bot check such as HUD's 202 challenge?); nothing was saved")
     if is_lfs_pointer(tmp):
         tmp.unlink()
         raise RuntimeError("downloaded a Git LFS pointer instead of the file; use a /raw/ URL that redirects to media.githubusercontent.com")

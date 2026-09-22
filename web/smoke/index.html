@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>livability-map PMTiles smoke test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- SPEC §16 Session 5 gate: a bare MapLibre v6 page that reads hexes.pmtiles by HTTP range
+       requests, no build step. Pinned CDN builds with subresource integrity. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.css"
+        integrity="sha384-Q5Blg3vUVAlUKqIPJYz7wGnz40Vwrx4pVuFVicI73+8c/26Zr5hhckfuIiIUflLE" crossorigin="anonymous" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@6.10.0/dist/maplibre-gl.js"
+          integrity="sha384-E8gMcYTPPaVdSyyziUNzJtosP0xWQkh/NxeEyq1wKz1HnC/oQuf7sp/fj4oYXP4M" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pmtiles@4.5.0/dist/pmtiles.js"
+          integrity="sha384-pbKNZbDshUsLnZMIVsn/t+j3xEY9PGfuX5Z22l5rcy/obXz3EwaMx1F5d9sRsJMn" crossorigin="anonymous"></script>
+  <style>
+    html, body { margin: 0; height: 100%; font: 13px/1.4 system-ui, sans-serif; }
+    #map { position: absolute; inset: 0; }
+    #log { position: absolute; left: 8px; bottom: 8px; max-width: 46em; max-height: 40%; overflow: auto;
+           background: rgba(255,255,255,.92); padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; }
+    #log .err { color: #b00020; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <pre id="log"></pre>
+  <script>
+    // Usage: index.html?url=<absolute or relative URL of hexes.pmtiles>[&lat=&lng=&z=]
+    const params = new URLSearchParams(location.search);
+    const url = new URL(params.get("url") || "../public/data/hexes.pmtiles", location.href).href;
+    const logEl = document.getElementById("log");
+    const log = (msg, cls) => { const s = document.createElement("span"); s.textContent = msg + "\n"; if (cls) s.className = cls; logEl.appendChild(s); };
+    log("pmtiles: " + url);
+
+    const protocol = new pmtiles.Protocol({ metadata: true });
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+    const archive = new pmtiles.PMTiles(url);
+    protocol.add(archive);
+    archive.getHeader().then(h => {
+      log(`header: zoom ${h.minZoom}-${h.maxZoom}, bounds ${h.minLon.toFixed(2)},${h.minLat.toFixed(2)} .. ${h.maxLon.toFixed(2)},${h.maxLat.toFixed(2)}, ${h.numAddressedTiles} tiles, clustered=${h.clustered}`);
+      return archive.getMetadata();
+    }).then(m => {
+      log("layers: " + (m.vector_layers || []).map(l => `${l.id} z${l.minzoom}-${l.maxzoom}`).join(", "));
+    }).catch(e => log("header error: " + e, "err"));
+
+    // SPEC §8.4 bivariate classes 1..9 (1 = low exposure, low wellbeing; 9 = high, high), 0 grey
+    const bivar = ["match", ["coalesce", ["get", "bivar"], 0],
+      1, "#e8e8e8", 2, "#ace4e4", 3, "#5ac8c8", 4, "#dfb0d6", 5, "#a5add3", 6, "#5698b9", 7, "#be64ac", 8, "#8c62aa", 9, "#3b4994", "#d4d4d4"];
+    const map = new maplibregl.Map({
+      container: "map",
+      style: "https://tiles.openfreemap.org/styles/positron",
+      center: [Number(params.get("lng") || 10), Number(params.get("lat") || 20)],
+      zoom: Number(params.get("z") || 2),
+      minZoom: 1,
+    });
+    map.on("error", e => log("map error: " + (e.error && e.error.message || e.error || e), "err"));
+    map.on("load", () => {
+      map.addSource("hexes", { type: "vector", url: "pmtiles://" + url, promoteId: "h3" });
+      for (const layer of ["hex4", "hex5"]) {
+        map.addLayer({ id: layer + "-fill", type: "fill", source: "hexes", "source-layer": layer,
+          filter: ["==", ["get", "inhabited"], true],
+          paint: { "fill-color": bivar, "fill-opacity": 0.8, "fill-outline-color": "rgba(0,0,0,0.1)" } });
+      }
+      map.on("click", e => {
+        const f = map.queryRenderedFeatures(e.point, { layers: ["hex4-fill", "hex5-fill"] })[0];
+        log(f ? JSON.stringify(f.properties) : "no hex here");
+      });
+      map.on("sourcedata", e => { if (e.sourceId === "hexes" && e.isSourceLoaded && !window._loaded) { window._loaded = true; log("hexes source loaded"); } });
+      log("map loaded; click a hex to print its attributes");
+    });
+  </script>
+</body>
+</html>

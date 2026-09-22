@@ -7,7 +7,5 @@ class NotImplementedStage(RuntimeError):
     """Raised by stages that are still planned for a later session (SPEC §16)."""
 
 
-# Stages not yet implemented, with the SPEC §16 session that delivers them.
-PLANNED = {
-    "publish": 5,
-}
+# Stages not yet implemented, with the SPEC §16 session that delivers them (none left).
+PLANNED: dict[str, int] = {}

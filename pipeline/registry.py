@@ -228,3 +228,25 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
             scale=scale,
         )
     return out
+
+
+REFERENCE_SOURCE_IDS = ("natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop")
+
+
+def used_source_ids(sources: dict[str, Source], dims: dict[str, Dimension]) -> set[str]:
+    """Every source id a stage actually reads: the reference layers, every dimension's sources
+    (hazards included) and the geometry / also_needs sources behind them. Registry entries that
+    nothing uses (the fixture world's deliberate `unverified_example`) are not counted."""
+    used = set(REFERENCE_SOURCE_IDS)
+    for d in dims.values():
+        used.update(d.sources)
+        used.update(j.source for j in d.joiners)
+    for sid in list(used):
+        src = sources.get(sid)
+        if src is None:
+            continue
+        for key in ("geometry",):
+            if src.extra.get(key):
+                used.add(src.extra[key])
+        used.update(src.extra.get("also_needs", []) or [])
+    return used

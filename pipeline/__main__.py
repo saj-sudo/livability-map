@@ -128,18 +128,14 @@ def tiles(
     _run_stage("tiles", _settings(ctx), backend=backend, maxzoom=maxzoom, workers=workers)
 
 
-def _planned_command(name: str):
-    def cmd(ctx: typer.Context) -> None:
-        if not _run_stage(name, _settings(ctx)):
-            raise typer.Exit(code=3)
-
-    cmd.__name__ = name
-    cmd.__doc__ = f"{name} stage (planned for Session {PLANNED[name]}, SPEC §16)."
-    return cmd
-
-
-for _name in ("publish",):
-    app.command(name=_name)(_planned_command(_name))
+@app.command()
+def publish(
+    ctx: typer.Context,
+    target: str = typer.Option("auto", "--target", help="auto | local (web/public/data) | r2 (Cloudflare, .env credentials)."),
+    local_dir: Path = typer.Option(None, "--local-dir", help="Override the local target directory."),
+) -> None:
+    """Ship hexes.pmtiles + manifest.json (SPEC §6.3, §13.24)."""
+    _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir)
 
 
 @app.command()

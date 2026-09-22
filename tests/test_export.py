@@ -54,7 +54,7 @@ def test_export_geojsonl_has_tile_attrs_only(settings):
 def test_all_runs_through_export_on_fixtures(settings):
     from pipeline.__main__ import app
 
-    result = CliRunner().invoke(app, ["--fixtures", "--res", "4", "--root", str(settings.root), "all"])
+    result = CliRunner().invoke(app, ["--fixtures", "--res", "4", "--root", str(settings.root), "all", "--stop-at", "publish"])
     assert result.exit_code == 0, result.output
     assert "export res 4" in result.output and "export manifest" in result.output
-    assert "stopped before 'tiles'" in result.output
+    assert "tiles  " in result.output and "stopping before publish" in result.output

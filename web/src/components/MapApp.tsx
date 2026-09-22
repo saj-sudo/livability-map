@@ -45,10 +45,11 @@ export default function MapApp({ manifest, dims }: Props) {
   const update = useCallback((patch: Partial<AppState>) => setState((s) => ({ ...s, ...patch })), []);
 
   const tilesKey = manifest.tiles?.hexes?.key ?? "hexes.pmtiles";
+  const tileLayers = manifest.tiles?.hexes?.layers?.map((l) => ({ name: l.name, minzoom: l.minzoom, maxzoom: l.maxzoom }));
 
   return (
     <div className="map-shell">
-      {ready && <MapView tilesKey={tilesKey} dims={dims} state={state} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
+      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
       <Panel manifest={manifest} dims={dims} state={state} onChange={update} />
       {hint && (
         <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-white/95 px-3 py-1.5 text-sm shadow" role="status">

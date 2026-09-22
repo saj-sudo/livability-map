@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 import { BASEMAP_ATTRIBUTION, BASEMAP_STYLE, INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/config";
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
-import { applyView, buildLayers, fillLayerIds, firstSymbolLayerId, SOURCE_ID, type ViewOptions } from "../lib/style";
+import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, SOURCE_ID, type TileLayer, type ViewOptions } from "../lib/style";
 import type { AppState } from "../lib/url";
 
 export interface SelectedHex {
@@ -22,6 +22,9 @@ export interface SelectedHex {
 let protocolRegistered = false;
 function ensureProtocol() {
   if (protocolRegistered) return;
+  // MapLibre v6 resolves its worker relative to its own module URL, which a bundler rewrites, so
+  // point it at the copy scripts/copy-worker.mjs puts in public/ (SPEC §15.13).
+  maplibregl.setWorkerUrl("/maplibre-gl-worker.mjs");
   const protocol = new Protocol({ metadata: true });
   maplibregl.addProtocol("pmtiles", protocol.tile);
   protocolRegistered = true;
@@ -29,6 +32,7 @@ function ensureProtocol() {
 
 interface Props {
   tilesKey: string;
+  tileLayers?: TileLayer[];
   dims: DimInfo[];
   state: AppState;
   onMove: (lat: number, lng: number, z: number) => void;
@@ -36,7 +40,7 @@ interface Props {
   onHint: (text: string | null) => void;
 }
 
-export default function MapView({ tilesKey, dims, state, onMove, onSelect, onHint }: Props) {
+export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, onMove, onSelect, onHint }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
@@ -65,15 +69,18 @@ export default function MapView({ tilesKey, dims, state, onMove, onSelect, onHin
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: BASEMAP_ATTRIBUTION }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __map?: maplibregl.Map }).__map = map; // browser-console debugging in dev only
+    }
 
     map.on("load", () => {
       map.addImage("hatch", hatchImage(), { pixelRatio: 2 });
       map.addSource(SOURCE_ID, { type: "vector", url: `pmtiles://${tilesUrl(tilesKey)}`, promoteId: "h3" });
       const before = firstSymbolLayerId(map);
       const st = stateRef.current;
-      for (const layer of buildLayers(options(st), st.inh, st.conf)) map.addLayer(layer, before);
+      for (const layer of buildLayers(options(st), st.inh, st.conf, tileLayers)) map.addLayer(layer, before);
       loadedRef.current = true;
-      for (const id of fillLayerIds()) {
+      for (const id of fillLayerIds(tileLayers)) {
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       }
@@ -95,7 +102,7 @@ export default function MapView({ tilesKey, dims, state, onMove, onSelect, onHin
         onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
         return;
       }
-      const f = map.queryRenderedFeatures(e.point, { layers: fillLayerIds().filter((id) => map.getLayer(id)) })[0];
+      const f = map.queryRenderedFeatures(e.point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
       if (selectedRef.current) {
         map.setFeatureState({ source: SOURCE_ID, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
         selectedRef.current = null;
@@ -126,9 +133,9 @@ export default function MapView({ tilesKey, dims, state, onMove, onSelect, onHin
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
-    applyView(map, options(state), state.inh, state.conf);
+    applyView(map, options(state), state.inh, state.conf, tileLayers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.view, state.weights, state.pol, state.race, state.inh, state.conf, dims]);
 
-  return <div ref={container} className="absolute inset-0" role="application" aria-label="Map of climate exposure and wellbeing" />;
+  return <div ref={container} className="h-full w-full" role="application" aria-label="Map of climate exposure and wellbeing" />;
 }

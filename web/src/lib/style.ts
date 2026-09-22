@@ -3,16 +3,24 @@
 // wellbeing fallback, and a selection outline driven by feature-state.
 
 import type { FilterSpecification, LayerSpecification, Map as MapLibreMap } from "maplibre-gl";
-import { HEX_SPLIT_ZOOM, MAP_MIN_ZOOM } from "./config";
 import type { DimInfo } from "./dims";
 import { bivarColor, hatchFilter, inhabitedFilter, nationalFilter, priorityColor, rampFor, scoreColor, type Expr, type Picks, type Weights } from "./expressions";
 import { RAMP_GOOD } from "./palette";
 import type { ViewId } from "./url";
 
 export const SOURCE_ID = "hexes";
-export const SOURCE_LAYERS = ["hex4", "hex5"] as const;
-export type SourceLayer = (typeof SOURCE_LAYERS)[number];
 export type LayerKind = "fill" | "hatch" | "national" | "selected";
+
+/** A source layer in the archive with the zoom range the tiler built it for (manifest.tiles). */
+export interface TileLayer {
+  name: string;
+  minzoom: number;
+  maxzoom: number;
+}
+export const DEFAULT_TILE_LAYERS: TileLayer[] = [
+  { name: "hex4", minzoom: 2, maxzoom: 4 },
+  { name: "hex5", minzoom: 5, maxzoom: 7 },
+];
 
 export interface ViewOptions {
   view: ViewId;
@@ -21,11 +29,13 @@ export interface ViewOptions {
   picks: Picks;
 }
 
-export const layerId = (kind: LayerKind, layer: SourceLayer) => `${kind}-${layer}`;
-export const fillLayerIds = () => SOURCE_LAYERS.map((l) => layerId("fill", l));
+export const layerId = (kind: LayerKind, layer: string) => `${kind}-${layer}`;
+export const fillLayerIds = (layers: TileLayer[]) => layers.map((l) => layerId("fill", l.name));
 
-function zoomRange(layer: SourceLayer): { minzoom: number; maxzoom?: number } {
-  return layer === "hex4" ? { minzoom: MAP_MIN_ZOOM, maxzoom: HEX_SPLIT_ZOOM } : { minzoom: HEX_SPLIT_ZOOM };
+/** MapLibre's layer maxzoom is exclusive; the highest layer gets none so it overzooms. */
+function zoomRange(layer: TileLayer, layers: TileLayer[]): { minzoom: number; maxzoom?: number } {
+  const top = Math.max(...layers.map((l) => l.maxzoom));
+  return layer.maxzoom >= top ? { minzoom: layer.minzoom } : { minzoom: layer.minzoom, maxzoom: layer.maxzoom + 1 };
 }
 
 export function fillColorFor(o: ViewOptions): Expr {
@@ -37,10 +47,11 @@ export function fillColorFor(o: ViewOptions): Expr {
 
 const showsNational = (view: ViewId) => view === "bivar" || view === "wb";
 
-export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: boolean): LayerSpecification[] {
+export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: boolean, tileLayers: TileLayer[] = DEFAULT_TILE_LAYERS): LayerSpecification[] {
   const layers: LayerSpecification[] = [];
-  for (const L of SOURCE_LAYERS) {
-    const zoom = zoomRange(L);
+  for (const tl of tileLayers) {
+    const L = tl.name;
+    const zoom = zoomRange(tl, tileLayers);
     const base = { source: SOURCE_ID, "source-layer": L, ...zoom };
     layers.push({
       id: layerId("fill", L),
@@ -76,9 +87,10 @@ export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: bool
 }
 
 /** Re-style in place after a view, slider or toggle change: no network request (SPEC §20.5). */
-export function applyView(map: MapLibreMap, o: ViewOptions, showUninhabited: boolean, conf: boolean): void {
+export function applyView(map: MapLibreMap, o: ViewOptions, showUninhabited: boolean, conf: boolean, tileLayers: TileLayer[] = DEFAULT_TILE_LAYERS): void {
   const color = fillColorFor(o);
-  for (const L of SOURCE_LAYERS) {
+  for (const tl of tileLayers) {
+    const L = tl.name;
     if (!map.getLayer(layerId("fill", L))) continue;
     map.setPaintProperty(layerId("fill", L), "fill-color", color);
     map.setFilter(layerId("fill", L), inhabitedFilter(showUninhabited));

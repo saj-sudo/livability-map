@@ -33,3 +33,6 @@ web/public/maplibre-gl-worker.mjs
 web/.wrangler/
 data/interim/unzipped/
 .playwright-mcp/
+
+# agent worktrees created by Claude Code (isolation: worktree)
+.claude/worktrees/

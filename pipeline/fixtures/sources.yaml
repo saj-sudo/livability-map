@@ -240,6 +240,18 @@
   verified: confirmed
   vintage: "fixture"
   files: [districts.gpkg]
+- id: dataverse_example
+  name: example of a Dataverse guestbook-gated source (fetch reports missing without .env)
+  group: life
+  access: dataverse
+  url: https://dataverse.invalid/api/access/datafile/1?format=original
+  recipe: |
+    Fill DATAVERSE_GUESTBOOK_* in .env or download the file by hand.
+  format: csv
+  license: CC0 1.0
+  verified: confirmed
+  vintage: "fixture"
+  files: [example.csv]
 - id: unverified_example
   name: example of a source whose license is not yet verified (fetch must refuse it)
   group: life

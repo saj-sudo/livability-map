@@ -1,0 +1,4 @@
+# Manual overrides for the OECD TL2 -> geoBoundaries ADM1 name crosswalk (SPEC §13.21).
+# One row per ADM1 polygon that belongs to a TL2 region; several rows with the same tl2_code
+# are dissolved into one region. Filled after reading data/interim/prep/oecd_tl2_report.json.
+tl2_code,iso3,shape_name

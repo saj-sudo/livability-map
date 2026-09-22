@@ -244,6 +244,7 @@
   sheet: Score_Last
   header_row: 7
   geometry: oecd_tl2_correspondence
+  also_needs: [geoboundaries_adm1]
   license: OECD Terms and Conditions (open; use, adapt and distribute for any purpose with the OECD citation; confirmed 2026-09-22)
   verified: confirmed
   vintage: "2025-11-04 file (2024 or latest available year)"

@@ -40,6 +40,8 @@ def raw_inputs(settings: Settings, source: Source, sources: dict[str, Source]) -
         if geom not in sources:
             raise KeyError(f"{source.id}: geometry source {geom!r} is not in sources.yaml")
         paths += [settings.raw(geom) / f for f in sources[geom].files]
+    for extra_id in source.extra.get("also_needs", []) or []:
+        paths += [settings.raw(extra_id) / f for f in sources[extra_id].files]
     return paths
 
 

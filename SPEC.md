@@ -318,38 +318,78 @@ app reads the PMTiles via HTTP range requests.
 
 ### 9.3 Styling rules (MapLibre style spec, data-driven)
 
-- Default layer: `bivar` classes 1 to 9 with a standard bivariate palette; class 0 neutral grey.
-- Per-hazard and per-dimension layers: `*_score` sequential ramp; `*_ok = false` or `*_res =
-  'none'` in grey.
+- Default layer: `bivar` classes 1 to 9 with a red/blue bivariate palette (Joshua Stevens'
+  scheme: exposure warms from grey to red across the columns, wellbeing cools from grey to teal
+  up the rows, both high is a dark mauve); class 0 neutral grey. The dark theme uses a grid
+  derived in OKLCH so lightness climbs with exposure + wellbeing (`web/scripts/bivar_dark.mjs`).
+  Both grids are checked with the dataviz validator: every row and column lightness-monotone,
+  corner cells separable under protan/deutan simulation. Palettes live in `web/src/lib/palette.ts`,
+  one per theme.
+- Per-hazard and per-dimension layers: `*_score` single-hue sequential ramp (rust for hazards,
+  teal for wellbeing, green for life dimensions, blue-violet for the priorities match);
+  `*_ok = false` or `*_res = 'none'` in grey.
 - Confidence: `coverage < 4` gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
-  a thin dashed outline; `wb_res = 'none'` grey on wellbeing views.
+  a faint dashed outline (it covers whole countries while SHDI is absent, so it must read as a
+  texture, not an error); `wb_res = 'none'` grey on wellbeing views.
+- Hex seams are drawn in the paper tone at low alpha so the mesh recedes; the hovered hex gets a
+  thin ink outline and the selected hex a haloed ink outline, both driven by feature-state.
 - `inhabited = false` hidden by default, toggle to show (§13.8).
 - Legend is a 3x3 bivariate grid with axis labels "more climate exposure" and "higher
-  wellbeing", plus a confidence key and, in the priorities view, a coverage chip per dimension.
+  wellbeing", corner captions in words, and the hovered hex's cell lit, plus a confidence key,
+  a no-data key and, in the priorities view, a coverage chip per dimension. Chips come from the
+  manifest's scoring domains (`domains`), never from the per-resolution coverage counts.
 
 ### 9.4 Basemap
 
-OpenFreeMap (free vector tiles, no key, no signup). Style `positron`. Attribution "OpenFreeMap
-© OpenMapTiles Data from OpenStreetMap". One-person service with no SLA; if it goes away, the
-fallback is a Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
+OpenFreeMap (free vector tiles, no key, no signup). Style `positron` for the light theme and
+`dark` for the dark theme; the theme follows the system preference, can be toggled in the header,
+and is remembered in localStorage only (never a URL parameter, so a shared link never forces a
+theme). A theme change calls `setStyle(url, { transformStyle })` so the hex source and layers
+survive without a tile refetch. Attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
+comes from the style itself. One-person service with no SLA; if it goes away, the fallback is a
+Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
 
 ## 10. Web app surfaces
 
-- `/`: full-screen map. Left panel: view selector (Bivariate | Heat | Riverine flood | Coastal
-  flood | Water stress | Wellbeing | My priorities), preset picker and sliders visible only in
-  My priorities, scenario and horizon as a static label, confidence toggle, inhabited toggle,
-  legend.
-- Inspector (click a hex): country and admin1 name, population, each hazard's raw value and
-  score with its `_ok` state, wellbeing value with `wb_source` and `wb_res` badge, coverage
-  "3 of 4 hazard layers", bivariate class in words, each life dimension's value and resolution
-  badge (or "no data here"), one "Sources" disclosure listing the manifest entries.
+- `/`: full-screen map under a slim header (wordmark, place search, nav, "How to read this map",
+  theme toggle). Left panel: view selector (Bivariate | Heat | Riverine flood | Coastal flood |
+  Water stress | Wellbeing | My priorities), presets as chips and a 0-5 slider with a readout per
+  dimension visible only in My priorities (dimensions grouped by the manifest `group`, so new
+  ones appear without code; a dimension with no hex data in the build is disabled and says so),
+  scenario and horizon as a static line, confidence toggle, inhabited toggle, legend.
+- Place search: an accessible combobox over a bundled gazetteer (`web/public/gazetteer.json`:
+  Natural Earth 1:10m populated places with POP_MAX >= 50k or a capital, plus geoBoundaries ADM1
+  names; built by `web/scripts/build_gazetteer.py`), fetched lazily from the same origin on first
+  focus. Ranking: exact > prefix > word-prefix > substring, cities before regions, then
+  population. Picking a place flies the map (zoom 6 city, 5 region) and selects the hex under the
+  point once the map is idle. No request leaves the origin (invariant 7).
+- Hover (pointer devices only): a small readout beside the pointer with the place, population
+  and one line for the current view (bivariate class in words, a layer's score with its raw
+  value, or the priorities match with how many weighted dimensions are missing here); the legend
+  lights the matching cell. Slim low-zoom tiles carry no names, so the title says to zoom in.
+- Inspector (click a hex): country and admin1 name, population, a one-sentence plain-language
+  summary (what the colour means, hazard layers present, national wellbeing fallback, priorities
+  match with what is missing), the person's weighted priorities as thin bars (a missing
+  dimension is a hatched "no data here" row), each hazard's raw value and score with its `_ok`
+  state, wellbeing value with source and resolution in words, coverage "3 of 4 hazard layers",
+  bivariate class in words, each life dimension's value and resolution (or "no data here"), one
+  "Sources" disclosure listing the manifest entries, and "Compare with another place". The
+  numbers in the bars come from `web/src/lib/chart.ts`, a TypeScript twin of the §20.5
+  expression, tested against the real expression so what is read equals what is drawn.
+- Compare two places: after "Compare with another place", the next click or search landing
+  fills a second slot and a side-by-side table replaces the inspector; a dot marks the better
+  side on a row only when both sides have data and the dimension has a direction. Session-only,
+  not in the URL.
+- First visit: a three-step intro card (what the colours mean, make it yours, every number has a
+  source); dismissal is one localStorage flag, reopenable from the header. No cookies.
+- Phones (under 640px): the panels live in one bottom sheet with Layers and Place tabs and three
+  snaps (peek, half, full); selecting a hex opens Place at half. Methodology and About links sit
+  at the bottom of the Layers tab because the header hides the nav there.
 - URL state: `?lat=&lng=&z=&view=&preset=&w=<csv weights>&conf=&inh=` so any view is
-  shareable. No server state.
+  shareable. No server state. Theme and intro flags are localStorage, not URL.
 - `/methodology`: generated from `manifest.json` at build time.
 - `/about`: what this is and is not (§3 in plain language), including "does not recommend
-  where to live" and the non-commercial statement.
-
-Search by place name is v2.
+  where to live", the non-commercial statement, and what the browser stores and fetches.
 
 ## 11. Pipeline operations
 
@@ -399,7 +439,15 @@ because that would hide exactly the within-region variation the map exists to sh
 7. **PostGIS:** no; geopandas only.
 8. **Hide uninhabited hexes by default:** yes, with toggle.
 9. **POP_MIN / DEPTH_MIN:** 100 people / 0.15 m.
-10. **Visual identity:** new system (CivicRadar not available in the build environment).
+10. **Visual identity:** new system (CivicRadar not available in the build environment). Built in
+    Session 9 (2026-09-22) as "Atlas": a reference-atlas feel rather than a dashboard. Tokens are
+    CSS variables (`--paper`, `--panel`, `--ink`, `--muted`, `--rule`, `--accent`, `--nodata`) in
+    `web/src/app/globals.css`, exposed to Tailwind via `@theme inline`, with a full dark set;
+    Newsreader (serif) for the wordmark, place names, headings and summaries, Source Sans 3 with
+    tabular figures for controls and numbers, both self-hosted from `@fontsource-variable`
+    packages; one 6px radius, hairlines rather than nested cards, no all-caps labels; the
+    bivariate legend is the hero element (§9.3). Motion only answers an action (sheet snap,
+    legend highlight) and respects `prefers-reduced-motion`.
 11. **Flood rasters:** Aqueduct Floods via a one-time Google Earth Engine export on Saj's laptop
     (the public S3 copies are gone, §15.2). Recipe in `docs/gee-export.md`.
 12. **Life-dimension scope:** global core + US detail layers; the UI shows coverage per layer
@@ -491,6 +539,8 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-22 | 14.15 life dimensions | **confirmed** every endpoint: GSAP xlsx + 2023 gpkg (CC BY 4.0, key `geo_code`, 1,914 regions); OECD RWB xlsx (`Score_Last`, header row 7) and OECD Territorial correspondence TL2024c (header row 3); ILOSTAT via `rplumber.ilo.org` CSV API (CC BY 4.0, 217 countries); ACS 2024 5-year table-based SF (8 tables, tract rows `1400000US`, 85,382 tracts; B11009 has no tract rows, §13.20); cartographic tracts/counties 2025 (`GEOIDFQ` = ACS `GEO_ID`); MEDSL v20.0 CC0 behind a guestbook (§13.26); EPA SLD v3 (553 MB File GDB, layer `EPA_SLD_Database_V3`, 220,739 block groups, D4C present for 101,421); Urban Institute EDFacts 2019 (ODC-BY, negative rates are suppression codes) + NCES EDGE TL25 boundaries (9,313 districts matched); HRSA AHRF 2024-2025 CSV (`md_nf_activ_23`, 3,213 counties). | sources.yaml |
 | 2026-09-22 | 8.5 spot checks (res 4) | Dhaka: 34 hot days, riverine 18.0% of area, coastal 19.9%, water stress 4. Phoenix: 143 hot days, riverine 1.7%, coastal 0, stress 4. Reykjavik (nearest land hex: the city's cell centre is at sea): 0 hot days, riverine 3.1%, coastal 0.1%, stress 0. Niamey: 252 hot days, riverine 8.3%, coastal 0, stress 4. All plausible. | - |
 | 2026-09-20 | 14.15 life dimensions | search. See §20.6 table and notes. | see §20.6 |
+| 2026-09-22 | 14.8 Natural Earth populated places | **confirmed** by download through `python -m pipeline fetch --only natural_earth_places`: `ne_10m_populated_places.zip` (2.8 MB, sha256 in `data/raw/CHECKSUMS`), public domain, fields NAME, ISO_A2, POP_MAX, FEATURECLA; used only for the web app's search index (§10), never joined to a hex. | https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip |
+| 2026-09-22 | 14.9 Basemap dark style | **confirmed** in the browser: `https://tiles.openfreemap.org/styles/dark` loads with the same sprite/glyph hosts; `setStyle` with `transformStyle` keeps the hex source and six layers with no PMTiles refetch. | https://tiles.openfreemap.org/styles/dark |
 
 ## 16. Phasing and session plan
 
@@ -520,6 +570,7 @@ embeddable iframe.
 | 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
 | 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
 | 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
+| 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); Session 8 (neighbourhood resolution) is still outlined only, in `docs/superpowers/plans/` on the cost/rent branch |
 
 ## 17. Acceptance criteria (v1)
 
@@ -556,6 +607,11 @@ embeddable iframe.
 - [x] No paid, scrape-restricted or unlicensed data appears anywhere in the repo, tiles or manifest.
   (`sources.yaml` review, `publish` refuses unconfirmed sources, 2026-09-22)
 - [x] `/about` says clearly that the map does not recommend where to live. (2026-09-22)
+- [x] With the site served locally, every request the browser makes goes to the same origin
+  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Search, hover, the
+  inspector bars, compare, the intro and the phone sheet never show a missing value as zero.
+  (Playwright network audit and browser checks on the res-4 build, Session 9, 2026-09-22; the
+  R2 half of the zoom-2 load-time criterion above is still open)
 
 ## 18. Prior art (for the README and /about)
 

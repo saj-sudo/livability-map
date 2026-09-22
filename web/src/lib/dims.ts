@@ -102,5 +102,8 @@ export function dimensionsFrom(manifest: Manifest): DimInfo[] {
   return [...ordered, ...extra.map((id) => byId.get(id)!)];
 }
 
+/** Panel-length name: the registry's trailing parenthetical is a definition, shown as a tooltip instead. */
+export const shortName = (name: string): string => name.replace(/\s*\([^)]*\)\s*$/, "");
+
 export const lifeDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "life");
 export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");

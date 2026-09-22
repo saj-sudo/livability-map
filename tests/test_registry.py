@@ -39,3 +39,30 @@ def test_unverified_detection():
     fix = load_sources(ROOT / "pipeline" / "fixtures" / "sources.yaml")
     assert fix["unverified_example"].unverified
     assert not fix["natural_earth_land"].unverified
+
+
+def test_composition_joiners_carry_component_fields():
+    dims = load_dimensions(ROOT / "pipeline" / "dimensions.yaml", load_sources(ROOT / "pipeline" / "sources.yaml"))
+    assert set(dims["race"].joiners[0].fields) == {"w", "b", "h", "a", "o"}
+    assert dims["wb"].scale == "minmax" and dims["wb"].joiners[0].label == "shdi"
+    assert dims["jobs"].scale == "percentile"
+    assert dims["wb"].to_manifest()["joiners"][1]["label"] == "whr"
+
+
+def test_dimensions_yaml_rejects_composition_without_fields(tmp_path):
+    import pytest
+
+    p = tmp_path / "d.yaml"
+    p.write_text("- id: x\n  kind: composition\n  joiners:\n    - {source: s, joiner: polygon_centroid, res: tract, field: f}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="fields"):
+        load_dimensions(p)
+
+
+def test_every_real_source_referenced_by_a_dimension_has_geometry_or_is_spatial():
+    sources = load_sources(ROOT / "pipeline" / "sources.yaml")
+    dims = load_dimensions(ROOT / "pipeline" / "dimensions.yaml", sources)
+    for d in dims.values():
+        for j in d.joiners:
+            s = sources[j.source]
+            if j.joiner in ("polygon_centroid", "area_weighted_overlay"):
+                assert s.crs or s.extra.get("geometry") in sources, f"{j.source} needs polygons"

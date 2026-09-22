@@ -11,7 +11,7 @@ import yaml
 from .config import RES_TAGS
 
 VERIFY = "VERIFY"
-ACCESS_MODES = ("direct", "manual", "fixture")
+ACCESS_MODES = ("direct", "manual", "dataverse", "fixture")
 GROUPS = ("hazard", "wellbeing", "life", "reference")
 KINDS = ("score", "signed", "composition")
 JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density")
@@ -61,6 +61,10 @@ class Source:
         return d
 
 
+SCALES = ("percentile", "minmax")
+COMPOSITION_KEYS = ("w", "b", "h", "a", "o")  # §6.1: {id}_w/b/h/a/o shares
+
+
 @dataclass
 class JoinSpec:
     source: str
@@ -71,6 +75,18 @@ class JoinSpec:
     id_field: str | None = None
     weight_field: str | None = None
     per_capita: bool = False
+    # composition dims only: component key (w/b/h/a/o) -> source column carrying that share
+    fields: dict[str, str] | None = None
+    # short source label carried on the hex (e.g. wb_source = "shdi" | "whr"); defaults to the source id
+    label: str | None = None
+
+    def to_manifest(self) -> dict[str, Any]:
+        d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source}
+        if self.weight_field:
+            d["weight_field"] = self.weight_field
+        if self.fields:
+            d["fields"] = dict(self.fields)
+        return d
 
 
 @dataclass
@@ -84,6 +100,7 @@ class Dimension:
     sources: list[str] = field(default_factory=list)
     joiners: list[JoinSpec] = field(default_factory=list)
     note: str = ""
+    scale: str = "percentile"  # percentile (§8.2, §20.4) | minmax within source (§8.3, wellbeing)
 
     def to_manifest(self) -> dict[str, Any]:
         return {
@@ -94,6 +111,8 @@ class Dimension:
             "higher_is": self.higher_is,
             "coverage": self.coverage,
             "sources": self.sources,
+            "scale": self.scale,
+            "joiners": [j.to_manifest() for j in self.joiners],
             "note": self.note,
         }
 
@@ -164,6 +183,9 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
         group = raw.get("group", "life")
         if group not in GROUPS:
             raise ValueError(f"{did}: group must be one of {GROUPS}")
+        scale = raw.get("scale", "percentile")
+        if scale not in SCALES:
+            raise ValueError(f"{did}: scale must be one of {SCALES}")
         joiners: list[JoinSpec] = []
         for j in raw.get("joiners") or []:
             if j.get("joiner") not in JOINERS:
@@ -172,16 +194,25 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                 raise ValueError(f"{did}: res must be one of {RES_TAGS}: {j}")
             if sources is not None and j.get("source") not in sources:
                 raise ValueError(f"{did}: joiner references unknown source {j.get('source')}")
+            fields = j.get("fields")
+            if kind == "composition":
+                # every composition joiner must map all five §6.1 component keys to source columns
+                if not isinstance(fields, dict) or set(fields) != set(COMPOSITION_KEYS):
+                    raise ValueError(f"{did}: composition joiners need `fields` with keys {COMPOSITION_KEYS}: {j}")
+            elif fields:
+                raise ValueError(f"{did}: `fields` is only valid for composition dimensions: {j}")
             joiners.append(
                 JoinSpec(
                     source=j["source"],
                     joiner=j["joiner"],
                     res=j["res"],
-                    field=j.get("field", "value"),
+                    field=j.get("field", fields["w"] if fields else "value"),
                     domain=j.get("domain", "global"),
                     id_field=j.get("id_field"),
                     weight_field=j.get("weight_field"),
                     per_capita=bool(j.get("per_capita", False)),
+                    fields=dict(fields) if fields else None,
+                    label=j.get("label"),
                 )
             )
         out[did] = Dimension(
@@ -194,5 +225,6 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
             sources=list(raw.get("sources") or []),
             joiners=joiners,
             note=raw.get("note", "") or "",
+            scale=scale,
         )
     return out

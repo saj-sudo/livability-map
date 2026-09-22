@@ -23,6 +23,14 @@ export interface SelectedHex {
   props: Record<string, unknown>;
 }
 
+/** A request to fly somewhere (from search); `nonce` makes repeated picks of the same place fire. */
+export interface FlyTo {
+  lat: number;
+  lng: number;
+  zoom: number;
+  nonce: number;
+}
+
 let protocolRegistered = false;
 function ensureProtocol() {
   if (protocolRegistered) return;
@@ -39,16 +47,18 @@ interface Props {
   tileLayers?: TileLayer[];
   dims: DimInfo[];
   state: AppState;
+  flyTo?: FlyTo | null;
   onMove: (lat: number, lng: number, z: number) => void;
   onSelect: (hex: SelectedHex | null) => void;
   onHint: (text: string | null) => void;
 }
 
-export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, onMove, onSelect, onHint }: Props) {
+export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHint }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
   const selectedRef = useRef<{ layer: string; id: string } | null>(null);
+  const selectAtRef = useRef<((point: maplibregl.PointLike) => boolean) | null>(null);
   const stateRef = useRef(state);
   const themeRef = useRef<Theme>("light");
   useEffect(() => {
@@ -123,20 +133,16 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
       onMove(c.lat, c.lng, map.getZoom());
     });
 
-    map.on("click", (e) => {
-      if (!loadedRef.current) return;
-      if (map.getZoom() < INSPECT_MIN_ZOOM) {
-        onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
-        return;
-      }
-      const f = map.queryRenderedFeatures(e.point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
+    // select the hex under a screen point (a click, or the target of a search fly-to)
+    const selectAt = (point: maplibregl.PointLike): boolean => {
+      const f = map.queryRenderedFeatures(point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
       if (selectedRef.current) {
         map.setFeatureState({ source: SOURCE_ID, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
         selectedRef.current = null;
       }
       if (!f) {
         onSelect(null);
-        return;
+        return false;
       }
       const h3 = String(f.properties.h3 ?? "");
       const sourceLayer = String(f.sourceLayer ?? "");
@@ -146,6 +152,17 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
       }
       onHint(null);
       onSelect({ sourceLayer, h3, props: f.properties as Record<string, unknown> });
+      return true;
+    };
+    selectAtRef.current = selectAt;
+
+    map.on("click", (e) => {
+      if (!loadedRef.current) return;
+      if (map.getZoom() < INSPECT_MIN_ZOOM) {
+        onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
+        return;
+      }
+      selectAt(e.point);
     });
 
     return () => {
@@ -156,6 +173,23 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // search result: fly there, then select the hex under the point once tiles are in
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !flyTo) return;
+    const target: [number, number] = [flyTo.lng, flyTo.lat];
+    map.flyTo({ center: target, zoom: flyTo.zoom, duration: 1400, essential: true });
+    const onIdle = () => {
+      const hit = selectAtRef.current?.(map.project(target));
+      if (hit === false) onHint("No inhabited hex here; the nearest coloured hexes are the data.");
+    };
+    map.once("idle", onIdle);
+    return () => {
+      map.off("idle", onIdle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flyTo?.nonce]);
 
   // restyle in place on view / weights / picks / toggles (SPEC §20.5: no rebuild, no request)
   useEffect(() => {

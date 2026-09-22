@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { foldKey, parseGazetteer, rankPlaces, zoomFor, type Place } from "./search";
+import { foldKey, parseGazetteer, rankPlaces, zoomFor, type GazetteerFile, type Place } from "./search";
 
 // the compact on-disk form: [name, key, kind, iso2, lat, lng, pop]
-const RAW = {
+const RAW: GazetteerFile = {
   v: 1,
   built: "2026-09-22",
   places: [

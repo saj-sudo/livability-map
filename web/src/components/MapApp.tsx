@@ -1,15 +1,19 @@
 "use client";
 
-// Client shell: owns the URL-backed app state (SPEC §10), the selected hex and the panels.
-// The map itself is loaded without SSR because MapLibre needs the DOM and WebGL2.
+// Client shell: owns the URL-backed app state (SPEC §10), the selected hex, the fly-to
+// request from search, the hover readout and the panels. The map itself is loaded without
+// SSR because MapLibre needs the DOM and WebGL2.
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Inspector from "./Inspector";
 import Panel from "./Panel";
-import type { SelectedHex } from "./MapView";
+import Search from "./Search";
+import type { FlyTo, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
+import { zoomFor, type Place } from "../lib/search";
 import { DEFAULT_STATE, parseState, writeUrl, type AppState } from "../lib/url";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center text-muted">Loading map…</div> });
@@ -19,11 +23,15 @@ interface Props {
   dims: DimInfo[];
 }
 
+const HINT_MS = 4000;
+
 export default function MapApp({ manifest, dims }: Props) {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [ready, setReady] = useState(false);
   const [selected, setSelected] = useState<SelectedHex | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [flyTo, setFlyTo] = useState<FlyTo | null>(null);
+  const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const urlTimer = useRef<number | null>(null);
 
   // read the URL once on the client after hydration (no useSearchParams: static export). The
@@ -32,6 +40,7 @@ export default function MapApp({ manifest, dims }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(parseState(window.location.search));
     setReady(true);
+    setSearchSlot(document.getElementById("search-slot"));
   }, []);
 
   // write the URL on every state change, debounced so map moves do not thrash history
@@ -41,18 +50,27 @@ export default function MapApp({ manifest, dims }: Props) {
     urlTimer.current = window.setTimeout(() => writeUrl(state), 150);
   }, [state, ready]);
 
+  // hints are transient: clear after a few seconds so a stale message never sticks
+  useEffect(() => {
+    if (!hint) return;
+    const t = window.setTimeout(() => setHint(null), HINT_MS);
+    return () => window.clearTimeout(t);
+  }, [hint]);
+
   const onMove = useCallback((lat: number, lng: number, z: number) => setState((s) => ({ ...s, lat, lng, z })), []);
   const update = useCallback((patch: Partial<AppState>) => setState((s) => ({ ...s, ...patch })), []);
+  const onPick = useCallback((p: Place) => setFlyTo({ lat: p.lat, lng: p.lng, zoom: zoomFor(p), nonce: Date.now() }), []);
 
   const tilesKey = manifest.tiles?.hexes?.key ?? "hexes.pmtiles";
   const tileLayers = manifest.tiles?.hexes?.layers?.map((l) => ({ name: l.name, minzoom: l.minzoom, maxzoom: l.maxzoom }));
 
   return (
     <div className="map-shell">
-      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
+      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
+      {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
       <Panel manifest={manifest} dims={dims} state={state} onChange={update} />
       {hint && (
-        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-panel px-3 py-1.5 text-sm shadow" role="status">
+        <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="status">
           {hint}
         </div>
       )}

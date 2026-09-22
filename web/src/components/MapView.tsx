@@ -67,9 +67,12 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
   const selectedRef = useRef<{ layer: string; id: string } | null>(null);
   const selectAtRef = useRef<((point: maplibregl.PointLike) => boolean) | null>(null);
   const stateRef = useRef(state);
+  const cbRef = useRef({ onMove, onSelect, onHover, onHint });
   const themeRef = useRef<Theme>("light");
   useEffect(() => {
-    stateRef.current = state; // handlers registered once read the latest state through the ref
+    // handlers registered once read the latest state and callbacks through refs
+    stateRef.current = state;
+    cbRef.current = { onMove, onSelect, onHover, onHint };
   });
 
   const options = (s: AppState): ViewOptions => ({ view: s.view, dims, weights: s.weights, picks: { pol: s.pol, race: s.race }, theme: themeRef.current });
@@ -127,9 +130,9 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     const clearHover = () => {
       if (hovered) map.setFeatureState({ source: SOURCE_ID, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
       hovered = null;
-      onHover?.(null);
+      cbRef.current.onHover?.(null);
     };
-    if (hoverable && onHover) {
+    if (hoverable) {
       map.on("mousemove", (e) => {
         if (!loadedRef.current || raf) return;
         raf = window.requestAnimationFrame(() => {
@@ -146,7 +149,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
             hovered = { layer: sourceLayer, id: h3 };
             map.setFeatureState({ source: SOURCE_ID, sourceLayer, id: h3 }, { hover: true });
           }
-          onHover({ sourceLayer, h3, props: f.properties as Record<string, unknown>, x: e.point.x, y: e.point.y });
+          cbRef.current.onHover?.({ sourceLayer, h3, props: f.properties as Record<string, unknown>, x: e.point.x, y: e.point.y });
         });
       });
       map.on("mouseout", clearHover);
@@ -166,12 +169,12 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
 
     map.on("error", (e) => {
       const msg = (e as { error?: { message?: string } }).error?.message ?? "";
-      if (msg) onHint(`Map error: ${msg}`);
+      if (msg) cbRef.current.onHint(`Map error: ${msg}`);
     });
 
     map.on("moveend", () => {
       const c = map.getCenter();
-      onMove(c.lat, c.lng, map.getZoom());
+      cbRef.current.onMove(c.lat, c.lng, map.getZoom());
     });
 
     // select the hex under a screen point (a click, or the target of a search fly-to)
@@ -182,7 +185,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
         selectedRef.current = null;
       }
       if (!f) {
-        onSelect(null);
+        cbRef.current.onSelect(null);
         return false;
       }
       const h3 = String(f.properties.h3 ?? "");
@@ -191,8 +194,8 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
         map.setFeatureState({ source: SOURCE_ID, sourceLayer, id: h3 }, { selected: true });
         selectedRef.current = { layer: sourceLayer, id: h3 };
       }
-      onHint(null);
-      onSelect({ sourceLayer, h3, props: f.properties as Record<string, unknown> });
+      cbRef.current.onHint(null);
+      cbRef.current.onSelect({ sourceLayer, h3, props: f.properties as Record<string, unknown> });
       return true;
     };
     selectAtRef.current = selectAt;
@@ -200,7 +203,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     map.on("click", (e) => {
       if (!loadedRef.current) return;
       if (map.getZoom() < INSPECT_MIN_ZOOM) {
-        onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
+        cbRef.current.onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
         return;
       }
       selectAt(e.point);
@@ -223,7 +226,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     map.flyTo({ center: target, zoom: flyTo.zoom, duration: 1400, essential: true });
     const onIdle = () => {
       const hit = selectAtRef.current?.(map.project(target));
-      if (hit === false) onHint("No inhabited hex here; the nearest coloured hexes are the data.");
+      if (hit === false) cbRef.current.onHint("No inhabited hex here; the nearest coloured hexes are the data.");
     };
     map.once("idle", onIdle);
     return () => {

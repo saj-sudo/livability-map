@@ -7,6 +7,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ComparePanel from "./ComparePanel";
 import Inspector from "./Inspector";
 import Panel from "./Panel";
 import Search from "./Search";
@@ -36,6 +37,9 @@ export default function MapApp({ manifest, dims }: Props) {
   const [hint, setHint] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<FlyTo | null>(null);
   const [hover, setHover] = useState<HoveredHex | null>(null);
+  // compare: a second hex chosen after "Compare with another place" (session-only, not in the URL)
+  const [compare, setCompare] = useState<SelectedHex | null>(null);
+  const [picking, setPicking] = useState(false);
   const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const urlTimer = useRef<number | null>(null);
 
@@ -66,12 +70,36 @@ export default function MapApp({ manifest, dims }: Props) {
   const update = useCallback((patch: Partial<AppState>) => setState((s) => ({ ...s, ...patch })), []);
   const onPick = useCallback((p: Place) => setFlyTo({ lat: p.lat, lng: p.lng, zoom: zoomFor(p), nonce: Date.now() }), []);
 
+  // a click (or a search landing) either selects, or fills the second slot while picking
+  const onSelect = useCallback(
+    (hex: SelectedHex | null) => {
+      if (picking && hex) {
+        if (hex.h3 !== selected?.h3) {
+          setCompare(hex);
+          setPicking(false);
+          setHint(null);
+        }
+        return;
+      }
+      setSelected(hex);
+      if (!hex) {
+        setCompare(null);
+        setPicking(false);
+      }
+    },
+    [picking, selected],
+  );
+  const startPicking = useCallback(() => {
+    setPicking(true);
+    setHint("Click or search a second place to compare");
+  }, []);
+
   const tilesKey = manifest.tiles?.hexes?.key ?? "hexes.pmtiles";
   const tileLayers = manifest.tiles?.hexes?.layers?.map((l) => ({ name: l.name, minzoom: l.minzoom, maxzoom: l.maxzoom }));
 
   return (
     <div className="map-shell">
-      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={setSelected} onHover={setHover} onHint={setHint} />}
+      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} />}
       {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
       {hover && <Tooltip hover={hover} dims={dims} state={state} />}
       <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />
@@ -80,7 +108,23 @@ export default function MapApp({ manifest, dims }: Props) {
           {hint}
         </div>
       )}
-      {selected && <Inspector hex={selected} manifest={manifest} dims={dims} state={state} onClose={() => setSelected(null)} />}
+      {selected && compare ? (
+        <ComparePanel
+          a={selected}
+          b={compare}
+          manifest={manifest}
+          dims={dims}
+          state={state}
+          onSwap={() => {
+            setSelected(compare);
+            setCompare(selected);
+          }}
+          onRepick={startPicking}
+          onClose={() => setCompare(null)}
+        />
+      ) : (
+        selected && <Inspector hex={selected} manifest={manifest} dims={dims} state={state} onClose={() => setSelected(null)} onCompare={startPicking} />
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ dependencies = [
     "typer>=0.12",
     "requests>=2.32",
     "pycountry>=24.6",
-    # Sessions 2-7 (see SPEC ง13.18-26): vector I/O, xlsx sources, tiles, R2 upload, .env, RAM reporting
+    # Sessions 2-7 (see SPEC ยง13.18-26): vector I/O, xlsx sources, tiles, R2 upload, .env, RAM reporting
     "pyogrio>=0.10",
     "openpyxl>=3.1",
     "pmtiles>=3.4",

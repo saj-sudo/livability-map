@@ -37,8 +37,12 @@ export interface HexModel {
   hazards: HazardRow[];
   coverage: string;
   exposure: number | null;
+  /** number of hazard layers with data, 0-4 */
+  coverageN: number;
   wellbeing: { value: string | null; score: number | null; source: string; res: string };
   bivar: string;
+  /** bivariate class 1-9, 0 when unclassified */
+  bivarClass: number;
   life: LifeRow[];
   sources: ClientSource[];
 }
@@ -114,8 +118,10 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     hazards,
     coverage: `${coverageN} of 4 hazard layers`,
     exposure: num(p.exposure),
+    coverageN,
     wellbeing,
     bivar: BIVAR_WORDS[bivar] ?? BIVAR_WORDS[0],
+    bivarClass: BIVAR_WORDS[bivar] ? bivar : 0,
     life,
     sources: manifest.sources.filter((s) => usedIds.has(s.id)),
   };

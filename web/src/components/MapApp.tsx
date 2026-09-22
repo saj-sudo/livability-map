@@ -80,7 +80,7 @@ export default function MapApp({ manifest, dims }: Props) {
           {hint}
         </div>
       )}
-      {selected && <Inspector hex={selected} manifest={manifest} dims={dims} onClose={() => setSelected(null)} />}
+      {selected && <Inspector hex={selected} manifest={manifest} dims={dims} state={state} onClose={() => setSelected(null)} />}
     </div>
   );
 }

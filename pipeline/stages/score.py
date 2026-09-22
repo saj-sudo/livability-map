@@ -5,7 +5,7 @@ Reads ``hexes ⨝ pop ⨝ admin ⨝ hazards ⨝ dims`` and writes ``data/interim
 - ``coverage``  count of hazard ``_ok`` flags (0-4); ``exposure`` mean of the available hazard
   scores (null when coverage is 0), §8.4
 - ``wb_value``, ``wb_score`` (min-max within source, §8.3), ``wb_source`` (``shdi`` | ``whr`` |
-  ``none``), ``wb_res``
+  ``none``); ``wb_res`` stays in the dims output
 - ``bivar``  3x3 class 1-9 from terciles of exposure and wellbeing over inhabited hexes, 0 when
   either side is missing (§8.4; numbering in ``scoring.bivariate_class``)
 - ``{id}_score``  for every life dimension of kind ``score``: midrank percentile within the
@@ -107,7 +107,7 @@ def run(settings: Settings) -> dict[int, dict]:
         # wellbeing columns per §6.1 (value / score / source / res)
         result["wb_value"] = df[f"{WB_ID}_raw"].astype("float32")
         result["wb_source"] = df[f"{WB_ID}_lbl"].fillna("none").astype(str)
-        result["wb_res"] = df[f"{WB_ID}_res"].fillna("none").astype(str)
+        # wb_res already comes from the dims stage; not repeated here to keep the merge clean
         result["bivar"] = bivariate_class(result["exposure"].astype("float64"), result["wb_score"].astype("float64"), df["inhabited"])
         result["scenario"] = settings.scenario
         result["horizon"] = settings.horizon

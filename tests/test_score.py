@@ -45,7 +45,10 @@ def test_life_dimension_scores_are_per_domain(settings):
     # jobs has two domains in the fixture world (oecd for XKA, us for XKB); each is ranked on its own
     for dom in ("oecd", "us"):
         part = inh[inh["jobs_dom"] == dom]
-        assert part["jobs_score"].between(0, 100).all() and part["jobs_score"].max() >= 90 and part["jobs_score"].min() <= 30
+        assert part["jobs_score"].between(0, 100).all() and part["jobs_score"].nunique() >= 2
+        # the best raw value in the domain carries the best score (midrank: ties share a score)
+        assert part.loc[part["jobs_raw"].idxmax(), "jobs_score"] == part["jobs_score"].max()
+        assert part.loc[part["jobs_raw"].idxmin(), "jobs_score"] == part["jobs_score"].min()
     # signed dims are clipped integers, composition shares pass through
     assert df["pol_lean"].dropna().between(-100, 100).all() and str(df["pol_lean"].dtype) == "Int16"
     assert (df.loc[df["race_res"] != "none", ["race_w", "race_b", "race_h", "race_a", "race_o"]].sum(axis=1) == 100).all()

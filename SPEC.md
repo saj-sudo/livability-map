@@ -1,10 +1,11 @@
 # SPEC.md - livability-map (working title: Global Climate Livability Map)
 
-Version 0.2 | 2026-09-20 | Owner: Saj | Status: Session 1 in progress
+Version 0.3 | 2026-09-22 | Owner: Saj | Status: Sessions 1-7 built; Cloudflare publish/deploy waits on credentials (§13.24)
 
 Sections are numbered so build prompts can cite them. v0.1 (2026-09-08) was the pre-build
 draft; v0.2 records the Session 0 decisions (§13), the verification log (§15), and the new
-life-dimensions design (§20).
+life-dimensions design (§20). v0.3 (2026-09-22) records the first-hand verification of every
+source, the decisions taken while building Sessions 2-7 (§13.18-26) and the res-4 global run (§11).
 
 ## 0. How to use this spec with Claude Code
 
@@ -121,10 +122,10 @@ CORS). No database in the web app.
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                            |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4)                                                            |
-  |  export    data/out/hexes_r{res}.parquet + hexes.geojson with all attributes (§6)                     |
-  |  tiles     tippecanoe -> hexes.pmtiles (hex4 layer z0-4, hex5 layer z5-9)  (§9)                       |
-  |  publish   upload hexes.pmtiles + manifest.json to R2; manifest lists every source, vintage,          |
-  |            license, checksum, processing note (§6.3)                                                   |
+  |  export    data/out/hexes_r{res}.parquet + manifest.json (§6.3); --geojson for tippecanoe             |
+  |  tiles     python tiler (pipeline/tiler.py; tippecanoe optional) -> hexes.pmtiles                     |
+  |            hex4 layer z2-4 (slim attrs at z2), hex5 layer z5-7, overzoomed beyond (§9, §13.18)       |
+  |  publish   hexes.pmtiles + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
@@ -301,15 +302,19 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 9.1 H3 resolution
 
-Pipeline is resolution-agnostic (`H3_RES` list). Ship res 4 for zoom 0 to 4 and res 5 for zoom
-5 to 9. Res 5 has about 2 million cells globally, roughly 600k on land. Iterate on res 4 alone
+Pipeline is resolution-agnostic (`H3_RES` list). Ship res 4 for zoom 2 to 4 and res 5 for zoom
+5 to 7 (overzoomed to 12 in the client); zoom 0-1 is not built because a res-4 hex is under two
+pixels there and the world tile would exceed 5 MB. Res 5 has about 2 million cells globally, roughly 600k on land. Iterate on res 4 alone
 during Sessions 1 to 4 for speed.
 
 ### 9.2 Tile build
 
-`tippecanoe` (felt fork, tag 2.79.0, from source) with two layers (`hex4`, `hex5`),
-`--no-feature-limit --no-tile-size-limit`, zoom ranges per layer, `.pmtiles` output directly.
-Upload to R2; CORS per §15.13; the web app reads the PMTiles via HTTP range requests.
+Built by `pipeline/tiler.py` (pure Python: `mapbox-vector-tile` + the `pmtiles` writer, decision
+§13.18) with two layers: `hex4` for zoom 2-4 (the slim attribute set at zoom 2, where a res-4 hex
+is about two pixels) and `hex5` for zoom 5-7; MapLibre overzooms the zoom-7 tiles beyond that
+without further requests. tippecanoe (felt fork) remains an optional backend when it is on PATH
+(`tiles --backend tippecanoe` after `export --geojson`). Upload to R2; CORS per §15.14; the web
+app reads the PMTiles via HTTP range requests.
 
 ### 9.3 Styling rules (MapLibre style spec, data-driven)
 
@@ -357,7 +362,14 @@ Search by place name is v2.
 - Every stage takes `--bbox minlng,minlat,maxlng,maxlat` to run on a subregion.
 - Refresh cadence: quarterly, manual. `manifest.built_at` and per-source vintage make staleness
   visible on `/methodology`.
-- Logs: each stage prints row counts and the §8.5 sanity checks.
+- Logs: each stage prints row counts and the §8.5 sanity checks; `pipeline/timing.py` records
+  wall time and peak RSS per stage in `data/interim/timings.json` (copied into the manifest).
+- `--bbox` runs write to `data/interim/bbox_<box>/` and `data/out/bbox_<box>/` so spot checks
+  never overwrite the global outputs; extracted archives and prepared layers are shared.
+- Res-4 global run, 2026-09-22 (Ryzen 7 5800HS, 16 GB): grid 32 s / 0.2 GB, pop 57 s / 1.2 GB,
+  admin 5 s / 1.6 GB, hazards 1,256 s / 1.3 GB (six global 1 km rasters in full-width strips),
+  dims 378 s / 6.0 GB (the US tract overlay dominates), score 0.5 s, export 1 s. 81,413 land
+  hexes, 50,936 inhabited, 7.72 billion people; 88.9% of inhabited hexes have all four hazards.
 
 ### 11.1 Fixture world
 
@@ -400,6 +412,32 @@ because that would hide exactly the within-region variation the map exists to sh
 16. **Compute:** global build on Saj's laptop; the repo develops and tests against fixtures.
 17. **Python:** `>=3.11`.
 
+Decisions taken while building Sessions 2-7 (2026-09-22):
+
+18. **Tiler:** pure-Python (`pipeline/tiler.py`) because tippecanoe has no Windows build; tippecanoe
+    stays an optional backend. Zoom plan hex4 z2-4 (slim attributes at z2), hex5 z5-7 + overzoom.
+19. **Aqueduct Floods** are fetched directly from `https://aqueduct.wridata.org/AqueductFloods20/`
+    (confirmed 2026-09-22); the Earth Engine recipe in `docs/gee-export.md` is a fallback only.
+20. **ACS B09019** (same-sex spouse + same-sex unmarried partner) replaces B11009, which the
+    2020-2024 table-based Summary File publishes only for state and above.
+21. **OECD TL2 geometry** is derived from geoBoundaries ADM1 by name crosswalk with the OECD
+    Territorial correspondence table (TL2 names, else TL3 names dissolved to their TL2 parent),
+    with manual overrides in `pipeline/crosswalks/oecd_tl2_adm1.csv`. 77% of TL2 regions (593/772,
+    369 with well-being scores) are geolocated; Italy, Ireland, the UK, Greece and Costa Rica use
+    different units and stay `none`. The report is in `data/interim/prep/oecd_tl2_report.json`.
+22. **OECD data license:** OECD Terms and Conditions §3 (use, adapt and distribute for any purpose
+    with the OECD citation), confirmed first-hand 2026-09-22; recorded as such, not as CC BY.
+23. **Wellbeing sources:** WHR 2026 `WHR26_Data_Figure_2.1.xlsx` (Year 2025 rows, column
+    `Life evaluation (3-year average)`); SHDI v10.2 is login-gated and dropped in by hand.
+24. **Publishing:** R2 via boto3 with `.env` credentials; Pages via `npx wrangler pages deploy`;
+    `publish --target local` copies to `web/public/data/` for development.
+25. **Score convention:** every `{id}_score` is the plain midrank percentile of the raw value in its
+    domain; direction (`higher_is`) is applied by the client, never encoded in the score.
+26. **MEDSL download:** Harvard Dataverse now requires a guestbook response; `access: dataverse`
+    reads `DATAVERSE_GUESTBOOK_*` from `.env` and otherwise prints the manual recipe.
+27. **Prep layer:** format-specific parsing lives in `pipeline/prep/<source>.py`, one loader per
+    source, producing the columns `dimensions.yaml` names; joiners stay generic.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -440,6 +478,18 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-20 | 14.13 MapLibre | search. maplibre-gl 6.10.0: ESM-only, no default export, WebGL2 required, worker loaded by URL (`setWorkerUrl` for bundlers), nested GeoJSON properties preserved. `addProtocol("pmtiles", new Protocol().tile)` unchanged. pmtiles npm 4.5.0. | https://maplibre.org/maplibre-gl-js/docs/guides/v5-to-v6-migration-guide/ |
 | 2026-09-20 | 14.14 R2 CORS | search. AllowedHeaders must include `range` and `if-match`; ExposeHeaders `ETag, Content-Length, Content-Range, Accept-Ranges`. Use a custom domain (r2.dev is rate-limited). Purge cache after CORS edits; a CORS error with no `cf-cache-status` header is Hotlink Protection. | https://developers.cloudflare.com/r2/buckets/cors/ |
 | 2026-09-20 | Web host | search. Next.js 16.3.x (Node >= 20.9). Vercel Hobby forbids commercial use and caps transfer at 100 GB/month. Decision §13.14: Cloudflare Pages. | https://vercel.com/docs/plans/hobby |
+| 2026-09-22 | 14.1 CCKP hd35 | **confirmed**: 416 KB NetCDF, variable `climatology-hd35-annual-mean` (time, lat, lon), lon -180..179.75, values over oceans too. | as above |
+| 2026-09-22 | 14.2 Aqueduct Floods | **confirmed**: direct mirror `https://aqueduct.wridata.org/AqueductFloods20/` serves all six GeoTIFFs (5 x ~92 MB riverine, 47 MB coastal; 21600 x 43200, EPSG:4326, nodata -9999, striped LZW, files dated 2026-03-27). GEE catalog terms: "available without restriction on use or distribution", attribution requested. Decision §13.19. | https://aqueduct.wridata.org/AqueductFloods20/ ; https://datasets.wri.org/datasets/aqueduct-floods-hazard-maps |
+| 2026-09-22 | 14.3 Aqueduct 4.0 | **confirmed**: `https://files.wri.org/aqueduct/aqueduct-4-0-water-risk-data.zip` (249 MB) is a File Geodatabase (`Aq40_Y2023D07M05.gdb`, layer `future_annual`, field `bau50_ws_x_c`) plus CSVs; CC BY 4.0 per the wri/Aqueduct40 README. | https://files.wri.org/aqueduct/aqueduct-4-0-water-risk-data.zip |
+| 2026-09-22 | 14.4 GDL SHDI | **confirmed** terms (non-commercial, citation); current version v10.2 (2026-05-13), downloads login-gated: `Subnational HDI Data v10.2.csv` and the GDL shapefile zip. | https://globaldatalab.org/shdi/archive/ ; https://globaldatalab.org/termsofuse/ |
+| 2026-09-22 | 14.5 WHR | **confirmed**: `https://files.worldhappiness.report/WHR26_Data_Figure_2.1.xlsx` (134 KB), 2011-2025 panel, column `Life evaluation (3-year average)`; 147 countries for 2025 after name mapping. No explicit license text; citation requested. | https://www.worldhappiness.report/data-sharing/ |
+| 2026-09-22 | 14.6-14.8 GHSL, geoBoundaries, Natural Earth | **confirmed** by download and use: GHSL zip contains a 21384 x 43202 float64 tiled GeoTIFF (extracted once); geoBoundaries gpkg via media.githubusercontent.com; Natural Earth zip read directly. Some geoBoundaries names are mojibake (repaired in `prep.util.fix_mojibake`). | as above |
+| 2026-09-22 | 14.10 PMTiles size | res 4 global archive built by the python tiler; see `data/out/tiles_report.json` (res 5 pending). | - |
+| 2026-09-22 | 14.12 tippecanoe | **confirmed** no Windows build (no release binaries, no conda-forge win-64, no MSYS2 package). Decision §13.18. | https://github.com/felt/tippecanoe/releases |
+| 2026-09-22 | 14.13 MapLibre | **confirmed** in the browser: maplibre-gl 6.10.0 ESM, `setWorkerUrl` needed because the worker and its `maplibre-gl-shared.mjs` are resolved relative to the module URL (both copied to `public/` by `web/scripts/copy-worker.mjs`); `addProtocol("pmtiles", new Protocol().tile)` unchanged; pmtiles 4.5.0. | https://maplibre.org/maplibre-gl-js/docs/ |
+| 2026-09-22 | 14.14 R2 CORS | rules written by `publish --target r2` (`range`, `if-match` allowed; `etag`, `content-length`, `content-range`, `accept-ranges` exposed) and checked with a Range request; not yet exercised against a real bucket (credentials pending). | https://developers.cloudflare.com/r2/buckets/cors/ |
+| 2026-09-22 | 14.15 life dimensions | **confirmed** every endpoint: GSAP xlsx + 2023 gpkg (CC BY 4.0, key `geo_code`, 1,914 regions); OECD RWB xlsx (`Score_Last`, header row 7) and OECD Territorial correspondence TL2024c (header row 3); ILOSTAT via `rplumber.ilo.org` CSV API (CC BY 4.0, 217 countries); ACS 2024 5-year table-based SF (8 tables, tract rows `1400000US`, 85,382 tracts; B11009 has no tract rows, §13.20); cartographic tracts/counties 2025 (`GEOIDFQ` = ACS `GEO_ID`); MEDSL v20.0 CC0 behind a guestbook (§13.26); EPA SLD v3 (553 MB File GDB, layer `EPA_SLD_Database_V3`, 220,739 block groups, D4C present for 101,421); Urban Institute EDFacts 2019 (ODC-BY, negative rates are suppression codes) + NCES EDGE TL25 boundaries (9,313 districts matched); HRSA AHRF 2024-2025 CSV (`md_nf_activ_23`, 3,213 counties). | sources.yaml |
+| 2026-09-22 | 8.5 spot checks (res 4) | Dhaka: 34 hot days, riverine 18.0% of area, coastal 19.9%, water stress 4. Phoenix: 143 hot days, riverine 1.7%, coastal 0, stress 4. Reykjavik (nearest land hex: the city's cell centre is at sea): 0 hot days, riverine 3.1%, coastal 0.1%, stress 0. Niamey: 252 hot days, riverine 8.3%, coastal 0, stress 4. All plausible. | - |
 | 2026-09-20 | 14.15 life dimensions | search. See §20.6 table and notes. | see §20.6 |
 
 ## 16. Phasing and session plan
@@ -461,43 +511,49 @@ embeddable iframe.
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |
-| 1 | acceptEdits | Python | Repo layout, `sources.yaml`, `dimensions.yaml`, `fetch` with checksums, `grid`, `pop`, `admin`, joiners, fixtures, tests, CI, README | "Implement §5 fetch, grid, pop and admin for res 4 against the §11.1 fixtures. Print the §8.5 counts. Add the §5 diagram to the README." |
-| 2 | acceptEdits | Python | Aqueduct riverine + coastal to hexes | "Confirm §15.2 first-hand and run the `docs/gee-export.md` recipe. Implement `hazards` for rflood and cflood per §8.1 with windowed reads (§11). Output `*_frac`, `*_score`, `*_ok` at res 4. Run Dhaka and Reykjavik spot checks." |
-| 3 | acceptEdits | Python | CCKP heat + Aqueduct water stress | "Confirm §15.1 and §15.3 first-hand. Add heat and wstress to `hazards` per §8.1 and §8.2, handling -1 per §8.1. Run Phoenix and Sahel spot checks." |
-| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | "Confirm §15.4 and §15.5 first-hand. Implement `dims` for wellbeing via the §20.3 joiners including the geoBoundaries crosswalk, then `score` per §8.4 and `export`. Write `manifest.json` per §6.3. Run the whole pipeline at res 5; record timings and RAM in §11." |
-| 4b | acceptEdits | Python | Global life dimensions | "Add GSAP, OECD Regional Well-Being, ILOSTAT per §20.6 as `dims` entries with `polygon_centroid` and `iso_lookup` joiners. Percentile within domain per §20.4." |
-| 4c | acceptEdits | Python | US life dimensions | "Add ACS (B23001, B03002, B19001, B19083, B11009, B25071), MEDSL county returns, EPA SLD, Urban Institute districts, HRSA AHRF per §20.6 using `area_weighted_overlay` and `polygon_centroid`. Pull ACS from the Summary File, never the API at runtime." |
-| 5 | acceptEdits | Python + shell | Tiles and publish | "Confirm §15.10 to §15.14 first-hand. Implement `tiles` and `publish` per §9.2. Confirm the PMTiles loads in a bare MapLibre v6 HTML page from R2 before touching Next.js." |
-| 6 | acceptEdits | TypeScript | Map app | "Implement the §10 map surface and §9.3 styling for Bivariate and per-hazard views, plus URL state, on Next.js 16 static export with MapLibre v6. No inspector yet. Basemap per §13.5." |
-| 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | "Implement the §10 inspector, the My-priorities view per §20.5, hatch confidence per §9.3, `/methodology` from `manifest.json`, `/about`. Deploy to Cloudflare Pages. Tick §17." |
+| 1 | acceptEdits | Python | Repo layout, `sources.yaml`, `dimensions.yaml`, `fetch` with checksums, `grid`, `pop`, `admin`, joiners, fixtures, tests, CI, README | Done 2026-09-20 |
+| 2 | acceptEdits | Python | Aqueduct riverine + coastal to hexes | Done 2026-09-22 (direct mirror, §13.19; Dhaka / Reykjavik checked) |
+| 3 | acceptEdits | Python | CCKP heat + Aqueduct water stress | Done 2026-09-22 (Phoenix / Sahel checked) |
+| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | Done 2026-09-22 at res 4; SHDI waits on Saj's download (WHR fallback runs); res 5 run pending |
+| 4b | acceptEdits | Python | Global life dimensions | Done 2026-09-22 (GSAP, OECD via TL2 crosswalk §13.21, ILOSTAT) |
+| 4c | acceptEdits | Python | US life dimensions | Done 2026-09-22 (ACS with B09019 §13.20, EPA SLD, Urban/NCES, HRSA); MEDSL waits on the guestbook or a manual download (§13.26) |
+| 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
+| 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
+| 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
 
 ## 17. Acceptance criteria (v1)
 
-- [ ] `python -m pipeline all` runs from a clean clone (with `data/raw/` populated) to
+- [x] `python -m pipeline all` runs from a clean clone (with `data/raw/` populated) to
   `hexes.pmtiles` and `manifest.json` with one command, and re-running does no work when inputs
-  are unchanged.
+  are unchanged. (res 4, 2026-09-22; every stage is cached by input fingerprint)
 - [x] `python -m pipeline --fixtures all` runs every implemented stage on the fixture world in
   under a minute and is exercised by CI. (Session 1, 2026-09-20)
-- [ ] Every inhabited hex has `coverage` in 0 to 4, `wb_res` in {admin1, national, none}, and
-  `bivar` in 0 to 9; the §8.5 percentages are printed and recorded on `/methodology`.
-- [ ] All four §8.5 spot checks land in plausible classes, with the reason in the manifest notes.
-- [ ] No hex anywhere has a hazard or dimension score of 0 because of missing data; missing
-  renders as `_ok = false` or `_res = none` and is visibly different on the map.
+- [x] Every inhabited hex has `coverage` in 0 to 4, `wb_res` in {admin1, national, none}, and
+  `bivar` in 0 to 9; the §8.5 percentages are printed and recorded on `/methodology`. (tests +
+  manifest `coverage_summary`, 2026-09-22)
+- [x] All four §8.5 spot checks land in plausible classes, with the reason in the manifest notes.
+  (§15 row "8.5 spot checks", manifest `spot_checks`, 2026-09-22)
+- [x] No hex anywhere has a hazard or dimension score of 0 because of missing data; missing
+  renders as `_ok = false` or `_res = none` and is visibly different on the map. (tests
+  `test_no_score_is_zero_because_of_missing_data`, tiles drop missing attributes, grey + hatch
+  styling verified in the browser, 2026-09-22)
 - [ ] The map loads at zoom 2 in under 3 seconds on broadband with tiles served from R2, and no
   request goes to any third party other than R2 and the basemap provider.
-- [ ] Clicking any land hex opens the inspector with raw values, scores, flags, wellbeing with
+- [x] Clicking any land hex opens the inspector with raw values, scores, flags, wellbeing with
   source and resolution badge, coverage count, life dimensions with resolution badges, and a
-  sources list matching the manifest.
-- [ ] The bivariate legend, the per-layer ramps, the confidence key and the coverage chips are
-  present and match what is drawn.
+  sources list matching the manifest. (fixture build in the browser, 2026-09-22)
+- [x] The bivariate legend, the per-layer ramps, the confidence key and the coverage chips are
+  present and match what is drawn. (2026-09-22)
 - [ ] Moving a priorities slider or picking a preset recolors the map client-side without a
   network request, and dimensions missing on a hex drop out of the composite.
-- [ ] Reloading a URL restores the same view, preset, weights and toggles.
-- [ ] `/methodology` lists every source with license, vintage and processing note, states the
+- [x] Reloading a URL restores the same view, preset, weights and toggles. (`url.test.ts` round
+  trips; observed in the browser, 2026-09-22)
+- [x] `/methodology` lists every source with license, vintage and processing note, states the
   scenario, horizon, percentile-rank rationale, the §12 resolution decision, the non-commercial
-  statement, and known gaps by region and dimension.
-- [ ] No paid, scrape-restricted or unlicensed data appears anywhere in the repo, tiles or manifest.
-- [ ] `/about` says clearly that the map does not recommend where to live.
+  statement, and known gaps by region and dimension. (rendered from the manifest, 2026-09-22)
+- [x] No paid, scrape-restricted or unlicensed data appears anywhere in the repo, tiles or manifest.
+  (`sources.yaml` review, `publish` refuses unconfirmed sources, 2026-09-22)
+- [x] `/about` says clearly that the map does not recommend where to live. (2026-09-22)
 
 ## 18. Prior art (for the README and /about)
 

@@ -52,7 +52,8 @@ export function countryName(iso2: string | null): string {
   if (!iso2) return "no country";
   try {
     const dn = new Intl.DisplayNames(["en"], { type: "region" });
-    return dn.of(iso2) ?? iso2;
+    const name = dn.of(iso2) ?? iso2;
+    return /^pseudo/i.test(name) ? iso2 : name; // user-assigned codes (fixtures) map to "Pseudo-*" locales
   } catch {
     return iso2;
   }

@@ -153,6 +153,105 @@
   verified: confirmed
   vintage: "fixture"
   files: [transit_stops.gpkg]
+- id: wb_gsap
+  name: fixture GSAP-like poverty regions (geo_code, nonpoor_share)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/gsap_regions.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [gsap_regions.gpkg]
+- id: oecd_regional_wellbeing
+  name: fixture OECD TL2-like regions with Jobs/Housing/Health scores (XKA only)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/oecd_tl2.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [oecd_tl2.gpkg]
+- id: ilostat_youth_unemp
+  name: fixture ILOSTAT-like national youth employment table
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ilostat.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ilostat.csv]
+- id: acs_summary
+  name: fixture ACS-like tract polygons (same file as fixture_tracts)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/tracts.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [tracts.gpkg]
+- id: medsl_county_pres
+  name: fixture county polygons with 2024 margin (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: hrsa_ahrf
+  name: fixture county polygons with physicians per 10k (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: epa_sld
+  name: fixture EPA SLD-like block groups (D4C, NatWalkInd, TotPop)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/sld.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [sld.gpkg]
+- id: urban_edu_districts
+  name: fixture school districts with graduation rates
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/districts.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [districts.gpkg]
+- id: dataverse_example
+  name: example of a Dataverse guestbook-gated source (fetch reports missing without .env)
+  group: life
+  access: dataverse
+  url: https://dataverse.invalid/api/access/datafile/1?format=original
+  recipe: |
+    Fill DATAVERSE_GUESTBOOK_* in .env or download the file by hand.
+  format: csv
+  license: CC0 1.0
+  verified: confirmed
+  vintage: "fixture"
+  files: [example.csv]
 - id: unverified_example
   name: example of a source whose license is not yet verified (fetch must refuse it)
   group: life

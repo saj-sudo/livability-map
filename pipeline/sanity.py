@@ -52,6 +52,9 @@ def print_counts(df: pd.DataFrame, res: int) -> None:
     if "coverage" in df.columns:
         for k in (4, 0):
             print(f"  inhabited with coverage = {k}: {_pct(int((inh['coverage'] == k).sum()), len(inh))}")
+    for hz in ("heat", "rflood", "cflood", "wstress"):
+        if f"{hz}_ok" in df.columns:
+            print(f"  inhabited with {hz}_ok: {_pct(int(inh[f'{hz}_ok'].sum()), len(inh))}")
     if "wb_res" in df.columns:
         for tag, n in inh["wb_res"].fillna("none").value_counts().items():
             print(f"  inhabited by wb_res {tag:9s}: {_pct(int(n), len(inh))}")
@@ -62,16 +65,43 @@ def print_counts(df: pd.DataFrame, res: int) -> None:
         print(f"  with country: {_pct(int(df['iso_a2'].notna().sum()), total)}; with admin1: {_pct(int(df['admin1_id'].notna().sum()), total)}")
 
 
+def _plain(v):
+    """JSON-friendly scalar: numpy -> python, NaN / NA -> None."""
+    if v is pd.NA:
+        return None
+    if hasattr(v, "item"):
+        v = v.item()
+    if isinstance(v, float) and v != v:
+        return None
+    return v
+
+
+def spot_row(df: pd.DataFrame, res: int, spot: Spot, max_ring: int = 2) -> tuple[str, str, dict] | None:
+    """The hex for a spot check: the cell containing the point, or the nearest land hex within
+    ``max_ring`` rings (coastal places often sit in a cell whose centre is at sea, a known gap of
+    the SPEC §5 grid). Returns (cell, note, attributes) or None when nothing is near."""
+    idx = df if df.index.name == "h3" else df.set_index("h3")
+    cell = h3.latlng_to_cell(spot.lat, spot.lng, res)
+    note = ""
+    if cell not in idx.index:
+        near = [c for k in range(1, max_ring + 1) for c in sorted(h3.grid_ring(cell, k)) if c in idx.index]
+        if not near:
+            return None
+        cell, note = near[0], " (nearest land hex)"
+    row = idx.loc[cell]
+    shown = {k: _plain(row[k]) for k in row.index if k not in ("lat", "lng", "res")}
+    return cell, note, shown
+
+
 def spot_check(df: pd.DataFrame, res: int, spots: list[Spot]) -> None:
     idx = df.set_index("h3")
     for s in spots:
-        cell = h3.latlng_to_cell(s.lat, s.lng, res)
-        if cell not in idx.index:
-            print(f"  spot {s.name:16s} {cell}: not a land hex in this run")
+        found = spot_row(idx, res, s)
+        if found is None:
+            print(f"  spot {s.name:16s} {h3.latlng_to_cell(s.lat, s.lng, res)}: not a land hex in this run")
             continue
-        row = idx.loc[cell]
-        shown = {k: (row[k].item() if hasattr(row[k], "item") else row[k]) for k in row.index if k not in ("lat", "lng", "res")}
-        print(f"  spot {s.name:16s} expect [{s.expect}] -> {shown}")
+        cell, note, shown = found
+        print(f"  spot {s.name:16s}{note} expect [{s.expect}] -> {shown}")
 
 
 def run(settings: Settings, spots: list[Spot] | None = None) -> None:

@@ -56,13 +56,25 @@ class Settings:
     def raw_dir(self) -> Path:
         return self.data_dir / "raw"
 
+    def _bbox_tag(self) -> str:
+        """Directory name for a --bbox run so subregion runs never clobber the global outputs."""
+        assert self.bbox is not None
+        return "bbox_" + "_".join(f"{v:g}" for v in self.bbox).replace("-", "m").replace(".", "p")
+
     @property
     def interim_dir(self) -> Path:
-        return self.data_dir / "interim"
+        base = self.data_dir / "interim"
+        return base / self._bbox_tag() if self.bbox else base
 
     @property
     def out_dir(self) -> Path:
-        return self.data_dir / "out"
+        base = self.data_dir / "out"
+        return base / self._bbox_tag() if self.bbox else base
+
+    @property
+    def cache_dir(self) -> Path:
+        """Shared across global and bbox runs: extracted archives and prepared source layers."""
+        return self.data_dir / "interim"
 
     @property
     def sources_path(self) -> Path:

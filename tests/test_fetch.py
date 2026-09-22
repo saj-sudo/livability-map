@@ -10,7 +10,15 @@ def test_fetch_copies_fixture_sources_and_is_idempotent(settings):
     assert (settings.raw_dir / "CHECKSUMS").exists()
     assert (settings.raw("natural_earth_land") / "land.gpkg").exists()
     second = fetch.run(settings)
-    assert all(r.status in ("cached", "refused") for r in second), [r for r in second if r.status not in ("cached", "refused")]
+    assert all(r.status in ("cached", "refused", "missing") for r in second), [r for r in second if r.status not in ("cached", "refused", "missing")]
+
+
+def test_fetch_dataverse_without_env_is_missing_with_recipe(settings, capsys, monkeypatch):
+    for k in ("NAME", "EMAIL", "INSTITUTION", "POSITION"):
+        monkeypatch.delenv(f"DATAVERSE_GUESTBOOK_{k}", raising=False)
+    results = fetch.run(settings, only=["dataverse_example"])
+    assert len(results) == 1 and results[0].status == "missing" and ".env" in results[0].detail
+    assert "download the file by hand" in capsys.readouterr().out
 
 
 def test_fetch_refuses_unverified_license(settings):

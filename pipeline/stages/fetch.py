@@ -15,6 +15,7 @@ Rules:
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import sys
 from dataclasses import dataclass
@@ -55,7 +56,7 @@ def read_checksums(path: Path) -> dict[tuple[str, str], str]:
     out: dict[tuple[str, str], str] = {}
     if not path.exists():
         return out
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -72,7 +73,7 @@ def write_checksums(path: Path, entries: dict[tuple[str, str], str]) -> None:
     for (sid, fname), digest in sorted(entries.items()):
         lines.append(f"{digest}  {sid}  {fname}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _resolve_file_url(url: str, root: Path) -> Path:
@@ -107,6 +108,28 @@ def _download(url: str, dest: Path, root: Path) -> None:
     tmp.replace(dest)
 
 
+def dataverse_guestbook(root: Path) -> dict[str, str] | None:
+    """Guestbook fields from ``.env`` (SPEC §13.26). None when any is missing: nothing is sent
+    to Dataverse unless Saj filled all four in deliberately."""
+    from dotenv import dotenv_values
+
+    env = {**dotenv_values(root / ".env"), **os.environ}
+    fields = {k: (env.get(f"DATAVERSE_GUESTBOOK_{k.upper()}") or "").strip() for k in ("name", "email", "institution", "position")}
+    return fields if all(fields.values()) else None
+
+
+def dataverse_signed_url(url: str, guest: dict[str, str]) -> str:
+    """POST the guestbook response; Dataverse answers with a short-lived signed download URL."""
+    import requests
+
+    resp = requests.post(url, json={"guestbookResponse": guest}, timeout=60, headers={"User-Agent": "livability-map pipeline"})
+    resp.raise_for_status()
+    signed = (resp.json().get("data") or {}).get("signedUrl")
+    if not signed:
+        raise RuntimeError("Dataverse did not return a signed download URL; the guestbook flow may have changed (SPEC §15 medsl)")
+    return signed
+
+
 def _file_url_for(src: Source, fname: str) -> str:
     """Per-file URL: ``url`` may point at a directory (ends with '/') or a single file."""
     assert src.url
@@ -134,16 +157,23 @@ def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str
             if checksums.get(key) == digest:
                 results.append(FetchResult(src.id, fname, "cached", digest[:12]))
                 continue
-            if src.access == "manual":
+            if src.access in ("manual", "dataverse"):
                 checksums[key] = digest
-                results.append(FetchResult(src.id, fname, "ok", f"present (manual), recorded {digest[:12]}"))
+                results.append(FetchResult(src.id, fname, "ok", f"present ({src.access}), recorded {digest[:12]}"))
                 continue
             # checksum mismatch or unknown: re-download below
         if src.access == "manual":
             results.append(FetchResult(src.id, fname, "missing", f"manual source; expected at {dest}"))
             continue
         try:
-            _download(_file_url_for(src, fname), dest, settings.root)
+            url = _file_url_for(src, fname)
+            if src.access == "dataverse":
+                guest = dataverse_guestbook(settings.root)
+                if guest is None:
+                    results.append(FetchResult(src.id, fname, "missing", f"Dataverse guestbook fields are not set in .env; download by hand to {dest}"))
+                    continue
+                url = dataverse_signed_url(url, guest)
+            _download(url, dest, settings.root)
         except Exception as exc:  # noqa: BLE001 - report and continue with other sources
             results.append(FetchResult(src.id, fname, "error", str(exc)))
             continue

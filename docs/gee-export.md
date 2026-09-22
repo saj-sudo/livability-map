@@ -1,4 +1,8 @@
-# Aqueduct Floods: one-time Google Earth Engine export (SPEC §13.11, §15.2)
+# Aqueduct Floods: Google Earth Engine export (fallback only)
+
+**Superseded 2026-09-22 (SPEC §13.19).** WRI now serves the rasters directly from
+`https://aqueduct.wridata.org/AqueductFloods20/` and `pipeline/sources.yaml` fetches them as
+`access: direct`. Keep this recipe only in case that mirror disappears again.
 
 WRI removed the public S3 copies of the Aqueduct Floods hazard rasters. The dataset survives on
 Google Earth Engine as `WRI/Aqueduct_Flood_Hazard_Maps/V2` (CC BY 4.0). The `fetch` stage

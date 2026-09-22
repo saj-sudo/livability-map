@@ -13,8 +13,9 @@ from pathlib import Path
 
 import typer
 
+from . import timing
 from .config import Settings, find_root, parse_bbox
-from .stages import PLANNED, STAGE_ORDER
+from .stages import PLANNED, STAGE_ORDER, NotImplementedStage
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help=__doc__)
 
@@ -49,12 +50,11 @@ def _run_stage(name: str, settings: Settings, **kwargs) -> bool:
     """Run one stage. Returns False if the stage is still planned."""
     import importlib
 
-    from .stages.hazards import NotImplementedStage as _NI  # same class shape in every stub
-
     mod = importlib.import_module(f"pipeline.stages.{name}")
     try:
-        mod.run(settings, **kwargs)
-    except _NI as exc:
+        with timing.timed(settings, name):  # SPEC §11: wall time and peak RSS per stage
+            mod.run(settings, **kwargs)
+    except NotImplementedStage as exc:
         print(f"{name:6s} {exc}")
         return False
     except RuntimeError as exc:
@@ -93,18 +93,49 @@ def admin(ctx: typer.Context) -> None:
     _run_stage("admin", _settings(ctx))
 
 
-def _planned_command(name: str):
-    def cmd(ctx: typer.Context) -> None:
-        if not _run_stage(name, _settings(ctx)):
-            raise typer.Exit(code=3)
-
-    cmd.__name__ = name
-    cmd.__doc__ = f"{name} stage (planned for Session {PLANNED[name]}, SPEC §16)."
-    return cmd
+@app.command()
+def hazards(ctx: typer.Context) -> None:
+    """Heat, riverine and coastal flood, water stress per hex with scores (SPEC §8.1-8.2)."""
+    _run_stage("hazards", _settings(ctx))
 
 
-for _name in ("hazards", "dims", "score", "export", "tiles", "publish"):
-    app.command(name=_name)(_planned_command(_name))
+@app.command()
+def dims(ctx: typer.Context) -> None:
+    """Wellbeing and life dimensions via the registry joiners (SPEC §20.2-20.3)."""
+    _run_stage("dims", _settings(ctx))
+
+
+@app.command()
+def score(ctx: typer.Context) -> None:
+    """Exposure, coverage, wellbeing score, bivariate class, per-domain percentiles (SPEC §8.2-8.4)."""
+    _run_stage("score", _settings(ctx))
+
+
+@app.command()
+def export(ctx: typer.Context, geojson: bool = typer.Option(False, "--geojson", help="Also write hexes_r{res}.geojsonl for tippecanoe.")) -> None:
+    """Final per-hex parquet and manifest.json (SPEC §6)."""
+    _run_stage("export", _settings(ctx), geojson=geojson)
+
+
+@app.command()
+def tiles(
+    ctx: typer.Context,
+    backend: str = typer.Option("auto", "--backend", help="auto | python | tippecanoe (SPEC §13.18)."),
+    maxzoom: int = typer.Option(7, "--maxzoom", help="Highest zoom built; MapLibre overzooms beyond it."),
+    workers: int = typer.Option(None, "--workers", help="Encoder processes (default: cores - 1; 0 = in-process)."),
+) -> None:
+    """hexes_r{res}.parquet -> hexes.pmtiles (SPEC §9.2)."""
+    _run_stage("tiles", _settings(ctx), backend=backend, maxzoom=maxzoom, workers=workers)
+
+
+@app.command()
+def publish(
+    ctx: typer.Context,
+    target: str = typer.Option("auto", "--target", help="auto | local (web/public/data) | r2 (Cloudflare, .env credentials)."),
+    local_dir: Path = typer.Option(None, "--local-dir", help="Override the local target directory."),
+) -> None:
+    """Ship hexes.pmtiles + manifest.json (SPEC §6.3, §13.24)."""
+    _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir)
 
 
 @app.command()

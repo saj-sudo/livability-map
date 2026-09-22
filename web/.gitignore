@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+public/data/
+public/maplibre-gl-worker.mjs
+public/maplibre-gl-shared.mjs
+*.tsbuildinfo
+next-env.d.ts
+.wrangler/

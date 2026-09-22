@@ -1,0 +1,36 @@
+{
+  "name": "livability-map-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Map app for livability-map (SPEC §10): Next.js static export, MapLibre GL JS + PMTiles",
+  "scripts": {
+    "predev": "node scripts/copy-worker.mjs",
+    "dev": "next dev",
+    "prebuild": "node scripts/copy-worker.mjs",
+    "build": "next build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "serve": "serve out -l 3000",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.10.0",
+    "next": "16.3.5",
+    "pmtiles": "4.5.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@maplibre/maplibre-gl-style-spec": "^23.0.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "serve": "^14",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

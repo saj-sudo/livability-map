@@ -11,8 +11,10 @@ section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, 
 §16 session plan, §20 life dimensions). Read it before changing anything structural, and update the
 §5 ASCII diagram (mirrored in `README.md`) in the same change when the pipeline shape changes.
 
-Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScript, Sessions 6-7,
-not started). Status: Session 1 done (fetch, grid, pop, admin, joiners, fixtures, tests).
+Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScript, Sessions 6-7).
+Status (2026-09-22): every stage and the map app are built and run end to end on real data at
+H3 res 4; res 5, the R2/Pages publish (needs `.env` credentials) and two manual downloads (GDL
+SHDI, MEDSL county returns) are outstanding. SPEC §13.18-27 records the decisions taken.
 
 ## Commands
 
@@ -25,7 +27,15 @@ uv run pytest                                    # all tests (fixtures only, ~3 
 uv run pytest tests/test_joiners.py -k overlay   # one test
 uv run ruff check .                              # lint (line length 100, E501 ignored)
 uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also happens lazily)
+uv run python -m pipeline --res 4 all            # real data: fetch -> ... -> tiles -> publish (~35 min, 6 GB RAM)
+uv run python -m pipeline --res 4 --bbox 89.5,23,91.5,25 hazards   # subregion run (own interim/out dirs)
+uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
+cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```
+
+On this laptop `uv` lives in `~/.local/bin` (Git Bash: `export PATH="$HOME/.local/bin:$PATH"`)
+and every script that writes repo files must use UTF-8 explicitly (`PYTHONUTF8=1`); the pipeline
+code does.
 
 CLI options (`--fixtures`, `--res`, `--bbox minlng,minlat,maxlng,maxlat`, `--force`) are typer
 callback options and must precede the stage name. `all` runs stages in order and stops cleanly
@@ -49,10 +59,25 @@ stage. Paths depend on `fixtures`: real runs use `data/{raw,interim,out}` and
 `dimensions.yaml` work unchanged in both modes.
 
 **Stage contract.** Each `pipeline/stages/<name>.py` exposes `run(settings)`. Stages write one
-parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`, ...)
-keyed on `h3`, and `sanity.load_merged` joins whatever exists. Idempotency is via
-`stage_cache.is_fresh/record` (a `.meta.json` sidecar fingerprinting inputs + params); `--force`
-bypasses it. Planned stages raise `NotImplementedStage` with the target session.
+parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`,
+`hazards_r{res}`, `dims_r{res}`, `score_r{res}`) keyed on `h3`, and `sanity.load_merged` joins
+whatever exists. Idempotency is via `stage_cache.is_fresh/record` (a `.meta.json` sidecar
+fingerprinting inputs + params); `--force` bypasses it, and a code change needs `--force` too.
+`--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
+archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
+
+**Prep layer.** `pipeline/prep/<source>.py` turns one raw source into the joinable table whose
+columns `dimensions.yaml` names (`LOADERS` in `prep/__init__.py`, cached as (Geo)Parquet under
+`interim/prep/`, `PREP_VERSION` invalidates). Fixture sources pass through unchanged, so fixture
+files carry the final column names. A missing real download is skipped with its recipe printed
+and the next joiner (e.g. WHR for SHDI) takes over.
+
+**Scores, export, tiles, publish.** `scoring.py` (midrank percentile per domain, min-max within
+source, bivariate class); `hazards` scores itself, `score` does composites and life dims;
+`export` writes `data/out/hexes_r{res}.parquet` + `manifest.json` (`manifest.py`, §6.3);
+`tiles` uses `tiler.py` (pure Python, hex4 z2-4 slim at z2, hex5 z5-7; tippecanoe optional);
+`publish` targets `local` (web/public/data) or `r2` (boto3, `.env`) and refuses sources whose
+`verified` is not `confirmed` (only sources actually used count).
 
 **Registries.** `pipeline/registry.py` loads `sources.yaml` (one entry per dataset; `access` is
 `direct | manual | fixture`; `verified` is `confirmed | search | none`) and `dimensions.yaml`
@@ -73,11 +98,20 @@ EPSG:4326.
 `admin` already uses `polygon_centroid`; the `dims` stage (Session 4) will drive them from
 `dimensions.yaml`.
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`): a 4°x4° synthetic region (countries
-XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`, five admin1 regions, four
-towns, a zero-population desert, a coast, an island), plus heat/flood/water-stress inputs and
-tabular wellbeing and US-like tract/county/transit layers. Regeneration is content-deterministic;
-bump `VERSION` when the world changes. Tests get a temp run dir from `tests/conftest.py`.
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 4): a 4°x4° synthetic region
+(countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`, five admin1
+regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress
+inputs, tabular wellbeing, and stand-ins for every life-dimension source (GSAP, OECD TL2,
+ILOSTAT, ACS-like tracts, SLD block groups, districts, counties). Regeneration is
+content-deterministic; bump `VERSION` when the world changes. Tests get a temp run dir from
+`tests/conftest.py`.
+
+**Web** (`web/`, Next.js 16 static export): `src/lib/` holds pure, vitest-covered logic (URL
+state, MapLibre expressions incl. the §20.5 composite, layer stack, inspector model); components
+are thin. `page.tsx` reads `public/data/manifest.json` at build time. MapLibre v6 needs
+`setWorkerUrl("/maplibre-gl-worker.mjs")`; `scripts/copy-worker.mjs` copies the worker and its
+shared chunk into `public/` before dev/build. The map container needs an explicit size (MapLibre's
+CSS overrides `position`).
 
 ## Rules that are easy to break
 
@@ -88,8 +122,10 @@ bump `VERSION` when the world changes. Tests get a temp run dir from `tests/conf
 - Never percentile a US-only value against the world; scoring domains are per joiner (§20.4).
 - No paid or non-redistributable data (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo,
   SEDA without permission). SHDI is non-commercial only and the project is non-commercial (§13.13).
-- `data/raw/`, `data/interim/`, `data/out/`, and `pipeline/fixtures/{data,_run}/` are gitignored;
-  only `data/raw/CHECKSUMS` is committed. GitHub Actions runs lint, tests and the fixture pipeline
-  only; never data pulls.
+- `data/raw/`, `data/interim/`, `data/out/`, `pipeline/fixtures/{data,_run}/`, `web/public/data/`
+  and `.env` are gitignored; only `data/raw/CHECKSUMS` is committed. GitHub Actions runs lint,
+  tests, the fixture pipeline and the web build only; never data pulls.
+- Bash on this laptop truncates commands beyond ~8k characters and `pytest | tail` hides pytest's
+  exit code: write long files with the Write tool and check pytest's status before committing.
 - Never hand-write this file from scratch; regenerate with `/init` and edit, and update it at the
   end of every session along with the §17 checkboxes in `SPEC.md`.

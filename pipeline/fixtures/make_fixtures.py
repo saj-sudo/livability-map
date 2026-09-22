@@ -7,7 +7,9 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - a 0.25 degree heat NetCDF (hd35), 0.01 degree riverine and coastal flood GeoTIFFs,
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
-- US-like detail layers: tracts, counties, transit stops (for joiner tests)
+- global life-dimension stand-ins: GSAP regions (all five admin1), OECD TL2 (XKA only), ILOSTAT
+- US-like detail layers over XKB: tracts (ACS-like fields), counties (margin, physicians),
+  block groups (EPA SLD-like), school districts, transit stops (for joiner and dims tests)
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -32,7 +34,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 3  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 4  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -226,14 +228,29 @@ def us_like_layers(land, rng: np.random.Generator):
                 continue
             cx, cy = x + 0.1, y + 0.1
             near_cedar = np.exp(-((cx - 13.0) ** 2 + (cy - 42.5) ** 2) / (2 * 0.3**2))
+            # racial shares (ACS B03002-like) that always sum to exactly 100
+            pct_black = round(10 + 45 * max(0.0, 1 - abs(cy - 41.0) / 0.6), 1)
+            pct_hisp = round(5 + 15 * near_cedar, 1)
+            pct_asian = round(3 + 7 * near_cedar, 1)
+            pct_other = 4.0
+            pct_white = round(100 - pct_black - pct_hisp - pct_asian - pct_other, 1)
+            geoid = f"XKB{i:02d}{j:02d}"
             cells.append(
                 {
-                    "GEOID": f"XKB{i:02d}{j:02d}",
+                    "GEOID": geoid,
+                    "GEOIDFQ": f"1400000US{geoid}",
                     "pop_total": float(round(200 + 20000 * near_cedar)),
                     "households": float(round(80 + 8000 * near_cedar)),
                     "emp_rate_16_29": float(round(0.55 + 0.35 * near_cedar, 3)),
                     "pop_16_29": float(round(40 + 5000 * near_cedar)),
-                    "pct_black": float(round(10 + 60 * max(0.0, 1 - abs(cy - 41.0) / 0.6), 1)),
+                    "ss_couples_per_1k": float(round(2 + 20 * near_cedar, 2)),
+                    "pct_white": float(pct_white),
+                    "pct_black": float(pct_black),
+                    "pct_hisp": float(pct_hisp),
+                    "pct_asian": float(pct_asian),
+                    "pct_other": float(pct_other),
+                    "income_entropy": float(round(0.6 + 0.35 * near_cedar, 3)),
+                    "gini": float(round(0.4 + 0.1 * near_cedar, 3)),
                     "rent_share_income": float(round(0.22 + 0.2 * near_cedar, 3)),
                     "renter_households": float(round(30 + 5000 * near_cedar)),
                     "geometry": g,
@@ -245,6 +262,7 @@ def us_like_layers(land, rng: np.random.Generator):
             "GEOID": ["XKB001", "XKB002", "XKB003", "XKB004"],
             "name": ["Cedar Co", "North Co", "Desert Co", "Coast Co"],
             "margin_2024": [35.0, -20.0, -60.0, 5.0],
+            "physicians_per_10k": [35.0, 18.0, 5.0, 12.0],
         },
         geometry=[
             box(12.0, 41.5, 14.0, 43.0).intersection(land),
@@ -261,6 +279,69 @@ def us_like_layers(land, rng: np.random.Generator):
         stops += [Point(float(px), float(py)) for px, py in pts]
     transit = gpd.GeoDataFrame({"stop_id": [f"S{i:03d}" for i in range(len(stops))]}, geometry=stops, crs=4326)
     return tracts, counties, transit
+
+
+def us_like_detail_layers(land):
+    """EPA SLD-like block groups (0.1 degree) and school districts (0.5 degree) over XKB."""
+    bgs = []
+    for i, x in enumerate(np.arange(12.6, 14.0, 0.1)):
+        for j, y in enumerate(np.arange(40.0, 44.0, 0.1)):
+            g = box(x, y, x + 0.1, y + 0.1).intersection(land)
+            if g.is_empty:
+                continue
+            near_cedar = np.exp(-((x + 0.05 - 13.0) ** 2 + (y + 0.05 - 42.5) ** 2) / (2 * 0.3**2))
+            bgs.append(
+                {
+                    "GEOID20": f"XKB{i:03d}{j:03d}",
+                    "D4C": -99999.0 if (i, j) == (0, 0) else float(round(60 * near_cedar, 2)),  # SLD sentinel once
+                    "NatWalkInd": float(round(4 + 12 * near_cedar, 2)),
+                    "TotPop": float(round(50 + 5000 * near_cedar)),
+                    "geometry": g,
+                }
+            )
+    sld = gpd.GeoDataFrame(bgs, geometry="geometry", crs=4326)
+    districts = []
+    k = 0
+    for x in np.arange(12.0, 14.0, 0.5):
+        for y in np.arange(40.0, 44.0, 0.5):
+            g = box(x, y, x + 0.5, y + 0.5).intersection(land)
+            if g.is_empty:
+                continue
+            k += 1
+            near_cedar = np.exp(-((x + 0.25 - 13.0) ** 2 + (y + 0.25 - 42.5) ** 2) / (2 * 0.5**2))
+            districts.append(
+                {
+                    "LEAID": f"XKB{k:04d}",
+                    "grad_rate_midpt": float(round(70 + 25 * near_cedar, 1)),
+                    "cohort_num": float(round(50 + 400 * near_cedar)),
+                    "geometry": g,
+                }
+            )
+    return sld, gpd.GeoDataFrame(districts, geometry="geometry", crs=4326)
+
+
+def global_life_layers(adm1: gpd.GeoDataFrame):
+    """GSAP-like poverty regions (all five admin1), OECD TL2-like regions (XKA only), ILOSTAT-like table."""
+    gsap = adm1[["shapeGroup", "shapeName", "geometry"]].copy()
+    gsap["geo_code"] = [f"{g}_2023_ADM1_{i + 1}" for i, g in enumerate(gsap["shapeGroup"])]
+    gsap["nonpoor_share"] = [0.95, 0.85, 0.70, 0.55, 0.40]
+    gsap = gpd.GeoDataFrame(gsap[["geo_code", "nonpoor_share", "geometry"]], geometry="geometry", crs=4326)
+    xka = adm1[adm1["shapeGroup"] == "XKA"].copy()
+    oecd = gpd.GeoDataFrame(
+        {
+            "Code": ["XA1", "XA2"],
+            "Region": list(xka["shapeName"]),
+            "jobs_score": [8.0, 6.5],
+            "housing_burden": [3.0, 4.5],
+            "health_score": [7.5, 6.0],
+        },
+        geometry=list(xka.geometry),
+        crs=4326,
+    )
+    ilostat = pd.DataFrame(
+        {"iso_a2": ["XA", "XB"], "iso_a3": ["XKA", "XKB"], "youth_employment_rate": [85.0, 78.0], "year": [2024, 2024]}
+    )
+    return gsap, oecd, ilostat
 
 
 def _content_digest(path: Path) -> str:
@@ -300,9 +381,16 @@ def build(out: Path) -> dict[str, str]:
     tracts.to_file(out / "tracts.gpkg", driver="GPKG")
     counties.to_file(out / "counties.gpkg", driver="GPKG")
     transit.to_file(out / "transit_stops.gpkg", driver="GPKG")
+    sld, districts = us_like_detail_layers(land_gdf.geometry.iloc[0])
+    sld.to_file(out / "sld.gpkg", driver="GPKG")
+    districts.to_file(out / "districts.gpkg", driver="GPKG")
+    gsap, oecd, ilostat = global_life_layers(adm1)
+    gsap.to_file(out / "gsap_regions.gpkg", driver="GPKG")
+    oecd.to_file(out / "oecd_tl2.gpkg", driver="GPKG")
+    ilostat.to_csv(out / "ilostat.csv", index=False)
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
-    (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2))
+    (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")
     return digests
 
 
@@ -310,7 +398,7 @@ def ensure(out: Path) -> Path:
     marker = out / "fixtures.json"
     if marker.exists():
         try:
-            if json.loads(marker.read_text()).get("version") == VERSION:
+            if json.loads(marker.read_text(encoding="utf-8")).get("version") == VERSION:
                 return out
         except json.JSONDecodeError:
             pass

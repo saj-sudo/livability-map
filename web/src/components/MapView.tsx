@@ -23,6 +23,12 @@ export interface SelectedHex {
   props: Record<string, unknown>;
 }
 
+/** The hex under the pointer with the pointer's position inside the map container. */
+export interface HoveredHex extends SelectedHex {
+  x: number;
+  y: number;
+}
+
 /** A request to fly somewhere (from search); `nonce` makes repeated picks of the same place fire. */
 export interface FlyTo {
   lat: number;
@@ -50,10 +56,11 @@ interface Props {
   flyTo?: FlyTo | null;
   onMove: (lat: number, lng: number, z: number) => void;
   onSelect: (hex: SelectedHex | null) => void;
+  onHover?: (hex: HoveredHex | null) => void;
   onHint: (text: string | null) => void;
 }
 
-export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHint }: Props) {
+export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
@@ -111,6 +118,40 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       }
     });
+
+    // hover readout: feature-state on the hex under the pointer, one query per frame at most;
+    // pointer devices only (a touch device selects on tap instead)
+    const hoverable = typeof window.matchMedia === "function" && !window.matchMedia("(hover: none)").matches;
+    let hovered: { layer: string; id: string } | null = null;
+    let raf = 0;
+    const clearHover = () => {
+      if (hovered) map.setFeatureState({ source: SOURCE_ID, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
+      hovered = null;
+      onHover?.(null);
+    };
+    if (hoverable && onHover) {
+      map.on("mousemove", (e) => {
+        if (!loadedRef.current || raf) return;
+        raf = window.requestAnimationFrame(() => {
+          raf = 0;
+          const f = map.queryRenderedFeatures(e.point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
+          if (!f) {
+            if (hovered) clearHover();
+            return;
+          }
+          const h3 = String(f.properties.h3 ?? "");
+          const sourceLayer = String(f.sourceLayer ?? "");
+          if (!hovered || hovered.id !== h3) {
+            if (hovered) map.setFeatureState({ source: SOURCE_ID, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
+            hovered = { layer: sourceLayer, id: h3 };
+            map.setFeatureState({ source: SOURCE_ID, sourceLayer, id: h3 }, { hover: true });
+          }
+          onHover({ sourceLayer, h3, props: f.properties as Record<string, unknown>, x: e.point.x, y: e.point.y });
+        });
+      });
+      map.on("mouseout", clearHover);
+      map.on("dragstart", clearHover);
+    }
 
     // theme change: swap the basemap, carry the hex stack over, recolour with the new palette
     const onTheme = (e: Event) => {

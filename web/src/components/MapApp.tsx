@@ -10,7 +10,8 @@ import { createPortal } from "react-dom";
 import Inspector from "./Inspector";
 import Panel from "./Panel";
 import Search from "./Search";
-import type { FlyTo, SelectedHex } from "./MapView";
+import Tooltip from "./Tooltip";
+import type { FlyTo, HoveredHex, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
 import { zoomFor, type Place } from "../lib/search";
@@ -25,12 +26,16 @@ interface Props {
 
 const HINT_MS = 4000;
 
+/** bivariate class of the hovered hex for the legend (0 = no data) */
+const hoverBivar = (h: HoveredHex): number => (typeof h.props.bivar === "number" ? h.props.bivar : 0);
+
 export default function MapApp({ manifest, dims }: Props) {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [ready, setReady] = useState(false);
   const [selected, setSelected] = useState<SelectedHex | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<FlyTo | null>(null);
+  const [hover, setHover] = useState<HoveredHex | null>(null);
   const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const urlTimer = useRef<number | null>(null);
 
@@ -66,9 +71,10 @@ export default function MapApp({ manifest, dims }: Props) {
 
   return (
     <div className="map-shell">
-      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
+      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={setSelected} onHover={setHover} onHint={setHint} />}
       {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
-      <Panel manifest={manifest} dims={dims} state={state} onChange={update} />
+      {hover && <Tooltip hover={hover} dims={dims} state={state} />}
+      <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />
       {hint && (
         <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="status">
           {hint}

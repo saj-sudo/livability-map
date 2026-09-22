@@ -2,9 +2,9 @@ import { createExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 import type { DimInfo } from "./dims";
 import { bivarColor, compositeExpression, hatchFilter, inhabitedFilter, priorityColor, scoreColor } from "./expressions";
-import { GREY, RAMP_HAZARD } from "./palette";
+import { GREY, PALETTES, RAMP_HAZARD } from "./palette";
 
-const dim = (id: string, kind: DimInfo["kind"] = "score", higher_is: DimInfo["higher_is"] = "better", group: DimInfo["group"] = "life"): DimInfo => ({ id, name: id, group, kind, higher_is, chip: "", note: "", scale: "percentile" });
+const dim = (id: string, kind: DimInfo["kind"] = "score", higher_is: DimInfo["higher_is"] = "better", group: DimInfo["group"] = "life"): DimInfo => ({ id, name: id, group, kind, higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "score", "worse", "hazard"), dim("jobs"), dim("pol", "signed"), dim("race", "composition")];
 
 // colour expressions are compiled against the fill-color spec so string stops coerce to colours,
@@ -54,7 +54,7 @@ describe("layer expressions (SPEC §9.3)", () => {
     const grey = evaluate(["to-color", GREY], {}, FILL_COLOR);
     expect(evaluate(bivarColor(), { bivar: 0 }, FILL_COLOR)).toEqual(grey);
     expect(evaluate(bivarColor(), {}, FILL_COLOR)).toEqual(grey);
-    expect(evaluate(bivarColor(), { bivar: 9 }, FILL_COLOR)).toEqual(evaluate(["to-color", "#3b4994"], {}, FILL_COLOR));
+    expect(evaluate(bivarColor(), { bivar: 9 }, FILL_COLOR)).toEqual(evaluate(["to-color", PALETTES.light.bivar[9]], {}, FILL_COLOR));
   });
 
   it("score ramp greys missing data and reads flags", () => {

@@ -1,20 +1,21 @@
 // MapLibre style expressions (SPEC §9.3, §20.5). Pure functions so they can be unit-tested with
 // the style-spec's createExpression. Every `get` of a possibly-missing attribute is guarded with
 // `has`/`coalesce`: an arithmetic on null throws at evaluation time and the whole paint
-// property silently falls back to its default.
+// property silently falls back to its default. Colours come from the palette of the current
+// theme (PALETTES.light when none is given).
 
 import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
 import type { DimInfo } from "./dims";
-import { BIVAR, GREY, RAMP_GOOD, RAMP_HAZARD, RAMP_PRIORITY, RAMP_WELLBEING } from "./palette";
+import { PALETTES, type Palette } from "./palette";
 import type { PolPick, RacePick } from "../presets";
 
 export type Expr = ExpressionSpecification;
 
 /** Default bivariate view: classes 1-9, class 0 / missing grey (§8.4, §9.3). */
-export function bivarColor(): Expr {
+export function bivarColor(pal: Palette = PALETTES.light): Expr {
   const stops: (number | string)[] = [];
-  for (let k = 1; k <= 9; k++) stops.push(k, BIVAR[k]);
-  return ["match", ["coalesce", ["get", "bivar"], 0], ...stops, GREY] as unknown as Expr;
+  for (let k = 1; k <= 9; k++) stops.push(k, pal.bivar[k]);
+  return ["match", ["coalesce", ["get", "bivar"], 0], ...stops, pal.grey] as unknown as Expr;
 }
 
 /** A hazard or dimension has data on a hex exactly when its score attribute is present
@@ -29,14 +30,14 @@ export function missingExpr(id: string): Expr {
 }
 
 /** Sequential ramp on {id}_score; grey when the hex has no data. */
-export function scoreColor(id: string, ramp: string[]): Expr {
-  return ["case", missingExpr(id), GREY, ["interpolate", ["linear"], ["get", `${id}_score`], 0, ramp[0], 50, ramp[1], 100, ramp[2]]] as unknown as Expr;
+export function scoreColor(id: string, ramp: string[], grey: string = PALETTES.light.grey): Expr {
+  return ["case", missingExpr(id), grey, ["interpolate", ["linear"], ["get", `${id}_score`], 0, ramp[0], 50, ramp[1], 100, ramp[2]]] as unknown as Expr;
 }
 
-export function rampFor(dim: DimInfo): string[] {
-  if (dim.group === "hazard") return RAMP_HAZARD;
-  if (dim.id === "wb") return RAMP_WELLBEING;
-  return RAMP_GOOD;
+export function rampFor(dim: DimInfo, pal: Palette = PALETTES.light): string[] {
+  if (dim.group === "hazard") return pal.rampHazard;
+  if (dim.group === "wellbeing") return pal.rampWellbeing;
+  return pal.rampGood;
 }
 
 export const inhabitedFilter = (showUninhabited: boolean): FilterSpecification =>
@@ -56,9 +57,12 @@ export interface Picks {
 export type Weights = Record<string, number>;
 
 /** The attribute whose presence means "this hex has the dimension". */
+export function hasAttr(d: DimInfo): string {
+  return d.kind === "score" ? `${d.id}_score` : d.kind === "signed" ? `${d.id}_lean` : `${d.id}_w`;
+}
+
 export function hasExpr(d: DimInfo): Expr {
-  const attr = d.kind === "score" ? `${d.id}_score` : d.kind === "signed" ? `${d.id}_lean` : `${d.id}_w`;
-  return ["has", attr] as unknown as Expr;
+  return ["has", hasAttr(d)] as unknown as Expr;
 }
 
 /** 0..100 "how well this hex matches what the person wants" (§20.5). */
@@ -92,6 +96,7 @@ export function compositeExpression(dims: DimInfo[], weights: Weights, p: Picks)
   return ["let", "num", num, "den", den, ["case", ["<=", ["var", "den"], 0], -1, ["/", ["var", "num"], ["var", "den"]]]] as unknown as Expr;
 }
 
-export function priorityColor(dims: DimInfo[], weights: Weights, p: Picks): Expr {
-  return ["let", "c", compositeExpression(dims, weights, p), ["case", ["<", ["var", "c"], 0], GREY, ["interpolate", ["linear"], ["var", "c"], 0, RAMP_PRIORITY[0], 50, RAMP_PRIORITY[1], 100, RAMP_PRIORITY[2]]]] as unknown as Expr;
+export function priorityColor(dims: DimInfo[], weights: Weights, p: Picks, pal: Palette = PALETTES.light): Expr {
+  const r = pal.rampPriority;
+  return ["let", "c", compositeExpression(dims, weights, p), ["case", ["<", ["var", "c"], 0], pal.grey, ["interpolate", ["linear"], ["var", "c"], 0, r[0], 50, r[1], 100, r[2]]]] as unknown as Expr;
 }

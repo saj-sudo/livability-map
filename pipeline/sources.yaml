@@ -28,6 +28,20 @@
   processing: "defines the hex grid extent; cells whose centre is at sea are dropped"
   files: [ne_10m_land.zip]
 
+- id: natural_earth_places
+  name: Natural Earth 1:10m populated places
+  group: reference
+  access: direct
+  url: https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip
+  format: shapefile-zip
+  crs: EPSG:4326
+  license: Public domain
+  verified: confirmed
+  vintage: "5.x (current)"
+  attribution: "Made with Natural Earth"
+  processing: "city names and points for the web app's place search only (web/scripts/build_gazetteer.py -> web/public/gazetteer.json); not joined to any hex"
+  files: [ne_10m_populated_places.zip]
+
 - id: geoboundaries_adm0
   name: geoBoundaries CGAZ ADM0 (countries)
   group: reference

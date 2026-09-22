@@ -107,11 +107,21 @@ content-deterministic; bump `VERSION` when the world changes. Tests get a temp r
 `tests/conftest.py`.
 
 **Web** (`web/`, Next.js 16 static export): `src/lib/` holds pure, vitest-covered logic (URL
-state, MapLibre expressions incl. the §20.5 composite, layer stack, inspector model); components
-are thin. `page.tsx` reads `public/data/manifest.json` at build time. MapLibre v6 needs
-`setWorkerUrl("/maplibre-gl-worker.mjs")`; `scripts/copy-worker.mjs` copies the worker and its
-shared chunk into `public/` before dev/build. The map container needs an explicit size (MapLibre's
-CSS overrides `position`).
+state, MapLibre expressions incl. the §20.5 composite, layer stack, palette per theme, inspector
+model, `chart.ts` as the TypeScript twin of the match expression, tooltip, summary, compare,
+search ranking, sheet snaps, theme and intro flags); components are thin. `page.tsx` reads
+`public/data/manifest.json` at build time. MapLibre v6 needs `setWorkerUrl("/maplibre-gl-worker.mjs")`;
+`scripts/copy-worker.mjs` copies the worker and its shared chunk into `public/` before dev/build.
+The map container needs an explicit size (MapLibre's CSS overrides `position`). Design tokens are
+CSS variables in `globals.css` exposed to Tailwind via `@theme inline`; `data-theme` on `<html>`
+(set before paint by `THEME_BOOT_SCRIPT`, remembered in localStorage) swaps them, and the map swaps
+its OpenFreeMap style with `setStyle(url, { transformStyle })` so the hex source and layers survive
+(the hatch image is re-added on `styleimagemissing`). Fonts come from `@fontsource-variable`
+packages, so no request leaves the origin. `MapView` registers map handlers once and reads state
+and callbacks through refs. Place search reads `public/gazetteer.json` (committed; rebuild with
+`uv run python web/scripts/build_gazetteer.py` after `python -m pipeline fetch --only
+natural_earth_places`). Below 640px the panels live in a bottom sheet. Playwright screenshots go
+under `.playwright-mcp/` (ignored).
 
 ## Rules that are easy to break
 

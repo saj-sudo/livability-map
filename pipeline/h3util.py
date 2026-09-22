@@ -12,6 +12,7 @@ Coarse rasters (pixel wider than the hex, e.g. 0.25 degree CCKP at res 5) should
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -138,60 +139,41 @@ def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int) -
     return cells, idx
 
 
-def aggregate_raster(
-    path: Path,
-    res: int,
-    agg: str,
-    threshold: float | None = None,
-    bbox: BBox | None = None,
-    window_size: int = 2048,
-    band: int = 1,
-    nodata: float | None = None,
-) -> pd.DataFrame:
-    """Aggregate a WGS84 raster to H3 cells.
+def _mask_valid(arr: np.ndarray, nodata: float | None) -> np.ndarray:
+    """Pixels that carry a value: finite and not the nodata sentinel."""
+    valid = np.isfinite(arr)
+    if nodata is not None:
+        valid &= arr != nodata
+    return valid
 
-    Returns a DataFrame with columns ``h3, value, n_pixels, n_valid`` (and ``n_above`` for
-    frac_above). ``value`` is the sum, mean, or fraction of valid pixels >= threshold.
-    Cells with no valid pixel get value NaN (never 0), per invariant 3.
-    """
-    if agg not in AGGS:
-        raise ValueError(f"agg must be one of {AGGS}")
-    if agg == "frac_above" and threshold is None:
-        raise ValueError("frac_above needs a threshold")
-    acc = _Acc()
-    with rasterio.open(path) as src:
-        if src.crs is None or not src.crs.is_geographic:
-            raise ValueError(f"{path}: raster must be in a geographic CRS (EPSG:4326); reproject first")
-        nd = nodata if nodata is not None else src.nodata
-        for window in _iter_windows(src, bbox, window_size):
-            arr = src.read(band, window=window).astype("float64")
-            valid = np.isfinite(arr)
-            if nd is not None:
-                valid &= arr != nd
-            if not valid.any():
-                continue
-            cells, idx = _window_cells_index(src, window, res)
-            if not cells:
-                continue
-            n = len(cells) + 1
-            flat_idx = idx.ravel()
-            flat_valid = valid.ravel()
-            flat_arr = np.where(flat_valid, arr.ravel(), 0.0)
-            sums = np.bincount(flat_idx, weights=flat_arr, minlength=n)
-            nvalid = np.bincount(flat_idx, weights=flat_valid.astype("float64"), minlength=n)
-            npix = np.bincount(flat_idx, minlength=n)
-            nabove = None
-            if agg == "frac_above":
-                above = flat_valid & (flat_arr >= threshold)
-                nabove = np.bincount(flat_idx, weights=above.astype("float64"), minlength=n)
-            for i, c in enumerate(cells, start=1):
-                if npix[i] == 0:
-                    continue
-                acc.sums[c] = acc.sums.get(c, 0.0) + float(sums[i])
-                acc.n_valid[c] = acc.n_valid.get(c, 0) + int(nvalid[i])
-                acc.n_pixels[c] = acc.n_pixels.get(c, 0) + int(npix[i])
-                if nabove is not None:
-                    acc.n_above[c] = acc.n_above.get(c, 0) + int(nabove[i])
+
+def _accumulate(acc: _Acc, arr: np.ndarray, valid: np.ndarray, cells: list[str], idx: np.ndarray, agg: str, threshold: float | None) -> None:
+    """Group one window's pixels by hex (np.bincount on the rasterized id image) and add the
+    per-hex sums / valid counts / above-threshold counts to the running totals in ``acc``."""
+    n = len(cells) + 1
+    flat_idx = idx.ravel()
+    flat_valid = valid.ravel()
+    flat_arr = np.where(flat_valid, arr.ravel(), 0.0)  # invalid pixels contribute 0 to sums
+    sums = np.bincount(flat_idx, weights=flat_arr, minlength=n)
+    nvalid = np.bincount(flat_idx, weights=flat_valid.astype("float64"), minlength=n)
+    npix = np.bincount(flat_idx, minlength=n)
+    nabove = None
+    if agg == "frac_above":
+        above = flat_valid & (flat_arr >= threshold)
+        nabove = np.bincount(flat_idx, weights=above.astype("float64"), minlength=n)
+    for i, c in enumerate(cells, start=1):
+        if npix[i] == 0:
+            continue
+        acc.sums[c] = acc.sums.get(c, 0.0) + float(sums[i])
+        acc.n_valid[c] = acc.n_valid.get(c, 0) + int(nvalid[i])
+        acc.n_pixels[c] = acc.n_pixels.get(c, 0) + int(npix[i])
+        if nabove is not None:
+            acc.n_above[c] = acc.n_above.get(c, 0) + int(nabove[i])
+
+
+def _finish(acc: _Acc, agg: str) -> pd.DataFrame:
+    """Turn the accumulated totals into the result frame. Cells with no valid pixel get NaN,
+    never 0 (invariant 3)."""
     cells = sorted(acc.n_pixels)
     df = pd.DataFrame(
         {
@@ -213,6 +195,102 @@ def aggregate_raster(
             value = np.where(nvalid > 0, nabove / nvalid, np.nan)
     df["value"] = value
     return df
+
+
+def _check_agg(agg: str, threshold: float | None) -> None:
+    if agg not in AGGS:
+        raise ValueError(f"agg must be one of {AGGS}")
+    if agg == "frac_above" and threshold is None:
+        raise ValueError("frac_above needs a threshold")
+
+
+def aggregate_raster(
+    path: Path,
+    res: int,
+    agg: str,
+    threshold: float | None = None,
+    bbox: BBox | None = None,
+    window_size: int = 2048,
+    band: int = 1,
+    nodata: float | None = None,
+) -> pd.DataFrame:
+    """Aggregate a WGS84 raster to H3 cells.
+
+    Returns a DataFrame with columns ``h3, value, n_pixels, n_valid`` (and ``n_above`` for
+    frac_above). ``value`` is the sum, mean, or fraction of valid pixels >= threshold.
+    Cells with no valid pixel get value NaN (never 0), per invariant 3.
+    """
+    _check_agg(agg, threshold)
+    acc = _Acc()
+    with rasterio.open(path) as src:
+        if src.crs is None or not src.crs.is_geographic:
+            raise ValueError(f"{path}: raster must be in a geographic CRS (EPSG:4326); reproject first")
+        nd = nodata if nodata is not None else src.nodata
+        for window in _iter_windows(src, bbox, window_size):
+            arr = src.read(band, window=window).astype("float64")
+            valid = _mask_valid(arr, nd)
+            if not valid.any():
+                continue
+            cells, idx = _window_cells_index(src, window, res)
+            if not cells:
+                continue
+            _accumulate(acc, arr, valid, cells, idx, agg, threshold)
+    return _finish(acc, agg)
+
+
+def aggregate_rasters(
+    paths: list[Path],
+    res: int,
+    agg: str,
+    threshold: float | None = None,
+    bbox: BBox | None = None,
+    window_size: int = 1024,
+    band: int = 1,
+    nodata: float | None = None,
+    reducer: str = "median",
+) -> pd.DataFrame:
+    """Like :func:`aggregate_raster`, but each pixel's value is the median (or mean) across
+    several aligned rasters before aggregation. Used for the five Aqueduct riverine climate
+    models (SPEC §8.1: "median depth across models, then fraction >= DEPTH_MIN").
+
+    A pixel is valid when at least one raster has a finite, non-nodata value there; the
+    reducer ignores the rasters that are missing at that pixel. All rasters must share the
+    same shape and transform. Memory per window: len(paths) x window_size^2 x 8 bytes
+    (5 x 1024^2 x 8 = 42 MB).
+    """
+    _check_agg(agg, threshold)
+    if reducer not in ("median", "mean"):
+        raise ValueError("reducer must be 'median' or 'mean'")
+    if not paths:
+        raise ValueError("aggregate_rasters needs at least one raster")
+    acc = _Acc()
+    srcs = [rasterio.open(p) for p in paths]
+    try:
+        first = srcs[0]
+        if first.crs is None or not first.crs.is_geographic:
+            raise ValueError(f"{paths[0]}: raster must be in a geographic CRS (EPSG:4326); reproject first")
+        for s in srcs[1:]:
+            if s.shape != first.shape or not np.allclose(tuple(s.transform)[:6], tuple(first.transform)[:6]):
+                raise ValueError(f"{s.name}: rasters are not aligned with {first.name} (shape or transform differ); resample first")
+        nodatas = [nodata if nodata is not None else s.nodata for s in srcs]
+        for window in _iter_windows(first, bbox, window_size):
+            stack = np.stack([s.read(band, window=window).astype("float64") for s in srcs])  # (k, h, w)
+            valid_each = np.stack([_mask_valid(stack[k], nodatas[k]) for k in range(len(srcs))])
+            valid = valid_each.any(axis=0)
+            if not valid.any():
+                continue
+            stack = np.where(valid_each, stack, np.nan)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slices are expected
+                arr = np.nanmedian(stack, axis=0) if reducer == "median" else np.nanmean(stack, axis=0)
+            cells, idx = _window_cells_index(first, window, res)
+            if not cells:
+                continue
+            _accumulate(acc, arr, valid, cells, idx, agg, threshold)
+    finally:
+        for s in srcs:
+            s.close()
+    return _finish(acc, agg)
 
 
 def sample_at_centroids(path: Path, cells: list[str], band: int = 1, nodata: float | None = None) -> pd.Series:

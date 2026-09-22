@@ -230,7 +230,7 @@ inspector or the styling stays in the parquet, not the PMTiles.
   "non_commercial": true,
   "tiles": {"hexes": {"key": "hexes.pmtiles", "sha256": "..."}},
   "sources": [ { "...each sources.yaml entry with checksum and row counts..." : "" } ],
-  "dimensions": [ { "...each dimensions.yaml entry with coverage counts by _res..." : "" } ],
+  "dimensions": [ { "...each dimensions.yaml entry with coverage counts by _res; every joiner carries unit, multiply and decimals so the inspector can print a raw value it has never seen (2026-09-22)..." : "" } ],
   "coverage_summary": {"hexes_total": 0, "hexes_full_coverage": 0, "wb_admin1": 0, "wb_national": 0, "wb_none": 0},
   "processing_notes": ["heat: CMIP6 ensemble median, 2040-2059 vs 1995-2014", "..."]
 }

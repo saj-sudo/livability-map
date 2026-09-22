@@ -16,7 +16,7 @@ function Ramp({ colors, low, high }: { colors: string[]; low: string; high: stri
   return (
     <div>
       <div className="h-3 w-full rounded" style={{ background: `linear-gradient(90deg, ${colors[0]}, ${colors[1]}, ${colors[2]})` }} aria-hidden="true" />
-      <div className="flex justify-between text-[10px] text-[var(--muted)]">
+      <div className="flex justify-between text-[10px] text-muted">
         <span>{low}</span>
         <span>{high}</span>
       </div>
@@ -27,11 +27,11 @@ function Ramp({ colors, low, high }: { colors: string[]; low: string; high: stri
 export default function Legend({ view, dims, conf }: Props) {
   const dim = dims.find((d) => d.id === view);
   return (
-    <div className="space-y-2 border-t border-[var(--border)] pt-2 text-xs">
+    <div className="space-y-2 border-t border-rule pt-2 text-xs">
       {view === "bivar" && (
         <div className="flex items-end gap-2">
           <div className="flex flex-col items-center gap-1" aria-hidden="true">
-            <span className="text-[10px] text-[var(--muted)]" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
+            <span className="text-[10px] text-muted" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
               higher wellbeing ↑
             </span>
           </div>
@@ -41,7 +41,7 @@ export default function Legend({ view, dims, conf }: Props) {
                 <div key={k} className="h-5 w-5" style={{ background: BIVAR[k] }} title={`class ${k}`} />
               ))}
             </div>
-            <div className="mt-1 text-[10px] text-[var(--muted)]">more climate exposure →</div>
+            <div className="mt-1 text-[10px] text-muted">more climate exposure →</div>
           </div>
         </div>
       )}
@@ -70,7 +70,7 @@ export default function Legend({ view, dims, conf }: Props) {
         )}
         {(view === "bivar" || view === "wb") && (
           <li className="flex items-center gap-2">
-            <span className="inline-block h-0 w-5 border-t-2 border-dashed border-gray-600" aria-hidden="true" />
+            <span className="inline-block h-0 w-5 border-t-2 border-dashed border-muted" aria-hidden="true" />
             wellbeing from a national figure, not the region
           </li>
         )}

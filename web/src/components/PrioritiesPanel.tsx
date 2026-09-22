@@ -43,10 +43,10 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
     onChange({ preset: p.id, weights: { ...p.weights }, pol: p.pol ?? state.pol, race: p.race ?? state.race });
   };
   return (
-    <div className="space-y-2 rounded border border-[var(--border)] bg-white p-2">
-      <label className="block text-xs text-[var(--muted)]">
+    <div className="space-y-2 rounded border border-rule bg-panel-solid p-2">
+      <label className="block text-xs text-muted">
         Preset
-        <select className="mt-0.5 w-full rounded border border-[var(--border)] px-1 py-0.5 text-sm" value={state.preset ?? ""} onChange={(e) => (e.target.value ? applyPreset(e.target.value) : onChange({ preset: null }))}>
+        <select className="mt-0.5 w-full rounded border border-rule px-1 py-0.5 text-sm" value={state.preset ?? ""} onChange={(e) => (e.target.value ? applyPreset(e.target.value) : onChange({ preset: null }))}>
           <option value="">custom</option>
           {PRESETS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -55,17 +55,17 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
           ))}
         </select>
       </label>
-      {state.preset && <p className="text-xs text-[var(--muted)]">{presetById(state.preset)?.blurb}</p>}
+      {state.preset && <p className="text-xs text-muted">{presetById(state.preset)?.blurb}</p>}
       <ul className="space-y-1">
         {ordered.map((d) => (
           <li key={d.id} className="grid grid-cols-[1fr_auto] items-center gap-2">
             <label htmlFor={`w-${d.id}`} className="flex flex-col leading-tight">
               <span>
                 {d.name}
-                {d.higher_is === "worse" && d.group !== "hazard" && <span className="text-[var(--muted)]"> (less is better)</span>}
-                {d.group === "hazard" && <span className="text-[var(--muted)]"> (less is better)</span>}
+                {d.higher_is === "worse" && d.group !== "hazard" && <span className="text-muted"> (less is better)</span>}
+                {d.group === "hazard" && <span className="text-muted"> (less is better)</span>}
               </span>
-              {d.chip && <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">{d.chip}</span>}
+              {d.chip && <span className="text-[10px] uppercase tracking-wide text-muted">{d.chip}</span>}
             </label>
             <input id={`w-${d.id}`} type="range" min={0} max={MAX_WEIGHT} step={1} value={state.weights[d.id] ?? 0} onChange={(e) => setWeight(d.id, Number(e.target.value))} className="w-24" aria-label={`weight for ${d.name}`} />
           </li>
@@ -74,7 +74,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
       {(state.weights.pol ?? 0) > 0 && (
         <label className="block text-xs">
           Political lean I want
-          <select className="mt-0.5 w-full rounded border border-[var(--border)] px-1 py-0.5 text-sm" value={state.pol} onChange={(e) => onChange({ pol: e.target.value as PolPick })}>
+          <select className="mt-0.5 w-full rounded border border-rule px-1 py-0.5 text-sm" value={state.pol} onChange={(e) => onChange({ pol: e.target.value as PolPick })}>
             {POL_OPTIONS.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
@@ -86,7 +86,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
       {(state.weights.race ?? 0) > 0 && (
         <label className="block text-xs">
           Composition I want
-          <select className="mt-0.5 w-full rounded border border-[var(--border)] px-1 py-0.5 text-sm" value={state.race} onChange={(e) => onChange({ race: e.target.value as RacePick })}>
+          <select className="mt-0.5 w-full rounded border border-rule px-1 py-0.5 text-sm" value={state.race} onChange={(e) => onChange({ race: e.target.value as RacePick })}>
             {RACE_OPTIONS.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
@@ -95,7 +95,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
           </select>
         </label>
       )}
-      <p className="text-xs text-[var(--muted)]">Dimensions missing on a hex drop out of its average; hexes with none of your weighted dimensions are grey.</p>
+      <p className="text-xs text-muted">Dimensions missing on a hex drop out of its average; hexes with none of your weighted dimensions are grey.</p>
     </div>
   );
 }

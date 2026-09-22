@@ -7,7 +7,7 @@
 import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { useEffect, useRef } from "react";
-import { BASEMAP_ATTRIBUTION, BASEMAP_STYLE, INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/config";
+import { BASEMAP_STYLE, INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/config";
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
 import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, SOURCE_ID, type TileLayer, type ViewOptions } from "../lib/style";
@@ -66,7 +66,8 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
       maxZoom: MAP_MAX_ZOOM,
       attributionControl: false,
     });
-    map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: BASEMAP_ATTRIBUTION }), "bottom-right");
+    // the OpenFreeMap style carries its own attribution (the BASEMAP_ATTRIBUTION text), so no custom one
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
     if (process.env.NODE_ENV !== "production") {

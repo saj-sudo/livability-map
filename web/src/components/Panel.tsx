@@ -36,7 +36,7 @@ export default function Panel({ manifest, dims, state, onChange }: Props) {
     if (window.matchMedia("(max-width: 640px)").matches) setOpen(false);
   }, []);
   return (
-    <aside className="absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-lg border border-[var(--border)] bg-[var(--panel)] text-sm shadow-md">
+    <aside className="absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-lg border border-rule bg-panel text-sm shadow-md">
       <button type="button" className="flex w-full items-center justify-between px-3 py-2 text-left font-semibold" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span>View</span>
         <span aria-hidden="true">{open ? "▾" : "▸"}</span>
@@ -55,7 +55,7 @@ export default function Panel({ manifest, dims, state, onChange }: Props) {
 
           {state.view === "priorities" && <PrioritiesPanel dims={dims} state={state} onChange={onChange} />}
 
-          <p className="text-xs text-[var(--muted)]">
+          <p className="text-xs text-muted">
             Scenario: {SCENARIO_LABELS[manifest.scenario] ?? manifest.scenario}, horizon {manifest.horizon}. Hazards are projections; wellbeing and life dimensions are present-day.
           </p>
 

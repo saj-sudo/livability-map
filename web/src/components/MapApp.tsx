@@ -12,7 +12,7 @@ import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
 import { DEFAULT_STATE, parseState, writeUrl, type AppState } from "../lib/url";
 
-const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center text-[var(--muted)]">Loading map…</div> });
+const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="absolute inset-0 grid place-items-center text-muted">Loading map…</div> });
 
 interface Props {
   manifest: ClientManifest;
@@ -52,7 +52,7 @@ export default function MapApp({ manifest, dims }: Props) {
       {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} onMove={onMove} onSelect={setSelected} onHint={setHint} />}
       <Panel manifest={manifest} dims={dims} state={state} onChange={update} />
       {hint && (
-        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-white/95 px-3 py-1.5 text-sm shadow" role="status">
+        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-panel px-3 py-1.5 text-sm shadow" role="status">
           {hint}
         </div>
       )}

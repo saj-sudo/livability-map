@@ -1,26 +1,117 @@
 @import "tailwindcss";
 @import "maplibre-gl/dist/maplibre-gl.css";
+/* self-hosted variable fonts (bundled from npm; no request leaves the origin, SPEC invariant 7) */
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource-variable/newsreader/opsz-italic.css";
+@import "@fontsource-variable/source-sans-3/index.css";
+@import "@fontsource-variable/source-sans-3/wght-italic.css";
 
+/*
+ * Design tokens (SPEC §13.10, "Atlas" identity). Light is the default; `data-theme="dark"` on
+ * <html> swaps the whole set. The map palette lives in src/lib/palette.ts and mirrors --nodata.
+ */
 :root {
-  --bg: #f7f7f5;
-  --fg: #1c1c1c;
-  --muted: #6b6b6b;
-  --panel: rgba(255, 255, 255, 0.94);
-  --border: #e2e2df;
+  color-scheme: light;
+  --paper: #eef0ec;
+  --panel: rgba(251, 252, 250, 0.92);
+  --panel-solid: #fbfcfa;
+  --ink: #1b2320;
+  --muted: #5f6b67;
+  --rule: #d7dcd7;
+  --accent: #2e5c8a;
+  --accent-ink: #ffffff;
+  --nodata: #cfd3cf;
+  --header-h: 2.75rem;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #141a1c;
+  --panel: rgba(28, 35, 38, 0.92);
+  --panel-solid: #1c2326;
+  --ink: #e6eae7;
+  --muted: #9aa6a1;
+  --rule: #2b3538;
+  --accent: #8fb6dd;
+  --accent-ink: #10171a;
+  --nodata: #3a4346;
+}
+
+/* expose the tokens to Tailwind utilities (bg-paper, text-muted, border-rule, font-serif ...) */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-panel-solid: var(--panel-solid);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-nodata: var(--nodata);
+  --font-sans: "Source Sans 3 Variable", "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
+  --radius-panel: 6px;
 }
 
 html,
 body {
   height: 100%;
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-serif {
+  line-height: 1.25;
+  font-variation-settings: "opsz" 20;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* the map fills the viewport below the header; panels float over it */
 .map-shell {
   position: relative;
-  height: calc(100vh - 3rem);
+  height: calc(100dvh - var(--header-h));
   min-height: 420px;
+  background: var(--paper);
+}
+
+/* MapLibre controls follow the theme */
+.maplibregl-ctrl-group {
+  background: var(--panel-solid);
+  border: 1px solid var(--rule);
+  box-shadow: none;
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--rule);
+}
+.maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: none;
+}
+:root[data-theme="dark"] .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.4);
+}
+.maplibregl-ctrl-attrib {
+  background: var(--panel);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

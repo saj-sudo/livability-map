@@ -14,7 +14,7 @@ function CoverageTable({ dims, res }: { dims: ManifestDimension[]; res: string }
   return (
     <table className="mt-2 w-full text-xs">
       <thead>
-        <tr className="text-left text-[var(--muted)]">
+        <tr className="text-left text-muted">
           <th className="py-1 pr-2">Dimension</th>
           <th className="py-1 pr-2">Kind</th>
           <th className="py-1 pr-2">Coverage</th>
@@ -28,10 +28,10 @@ function CoverageTable({ dims, res }: { dims: ManifestDimension[]; res: string }
           const total = Object.values(cov).reduce((a, b) => a + b, 0);
           const domains = d.domains?.[res] ?? {};
           return (
-            <tr key={d.id} className="border-t border-[var(--border)] align-top">
+            <tr key={d.id} className="border-t border-rule align-top">
               <td className="py-1 pr-2">
                 <span className="font-medium">{d.name}</span>
-                <div className="text-[var(--muted)]">{d.note}</div>
+                <div className="text-muted">{d.note}</div>
               </td>
               <td className="py-1 pr-2">
                 {d.kind}
@@ -60,7 +60,7 @@ function SpotChecks({ m, res }: { m: Manifest; res: string }) {
   return (
     <table className="mt-2 w-full text-xs">
       <thead>
-        <tr className="text-left text-[var(--muted)]">
+        <tr className="text-left text-muted">
           <th className="py-1 pr-2">Place</th>
           <th className="py-1 pr-2">Expected</th>
           <th className="py-1 pr-2">Hot days</th>
@@ -73,10 +73,10 @@ function SpotChecks({ m, res }: { m: Manifest; res: string }) {
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={String(r.name)} className="border-t border-[var(--border)]">
+          <tr key={String(r.name)} className="border-t border-rule">
             <td className="py-1 pr-2">
               {String(r.name)}
-              {r.note ? <span className="text-[var(--muted)]"> ({String(r.note)})</span> : null}
+              {r.note ? <span className="text-muted"> ({String(r.note)})</span> : null}
             </td>
             <td className="py-1 pr-2">{String(r.expect)}</td>
             {r.found ? (
@@ -157,7 +157,7 @@ export default async function Methodology() {
         <p>All data is open-licensed with attribution. {m.non_commercial && "This project is non-commercial; "}{shdi ? `${shdi.name} is used under terms that allow non-commercial use only.` : ""}</p>
         <table className="mt-2 w-full text-xs">
           <thead>
-            <tr className="text-left text-[var(--muted)]">
+            <tr className="text-left text-muted">
               <th className="py-1 pr-2">Source</th>
               <th className="py-1 pr-2">Vintage</th>
               <th className="py-1 pr-2">License</th>
@@ -167,7 +167,7 @@ export default async function Methodology() {
           </thead>
           <tbody>
             {m.sources.map((s) => (
-              <tr key={s.id} className="border-t border-[var(--border)] align-top">
+              <tr key={s.id} className="border-t border-rule align-top">
                 <td className="py-1 pr-2">
                   {s.url ? (
                     <a className="underline" href={s.url} rel="noreferrer">
@@ -176,12 +176,12 @@ export default async function Methodology() {
                   ) : (
                     s.name
                   )}
-                  <div className="text-[var(--muted)]">{s.attribution}</div>
+                  <div className="text-muted">{s.attribution}</div>
                 </td>
                 <td className="py-1 pr-2">{s.vintage}</td>
                 <td className="py-1 pr-2">
                   {s.license}
-                  {s.license_note && <div className="text-[var(--muted)]">{s.license_note}</div>}
+                  {s.license_note && <div className="text-muted">{s.license_note}</div>}
                 </td>
                 <td className="py-1 pr-2">{s.processing}</td>
                 <td className="py-1">{s.verified}</td>
@@ -214,7 +214,7 @@ export default async function Methodology() {
         <p className="mt-2">Small islands and thin coasts whose H3 cell centre falls at sea are not in the grid (Reykjavik&rsquo;s own cell, for example); the spot check falls back to the nearest land hex and says so.</p>
       </section>
 
-      <section className="text-xs text-[var(--muted)]">
+      <section className="text-xs text-muted">
         Built {m.built_at ?? "—"}
         {m.published_at ? `, published ${m.published_at}` : ""}. Source code and the full specification are on GitHub (saj-sudo/livability-map).
       </section>

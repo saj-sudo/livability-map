@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import h3
 import numpy as np
 import pytest
 import rasterio
@@ -108,3 +109,8 @@ def test_cells_overlapping_bbox_handles_full_width_strips():
     cells = h3util.cells_overlapping_bbox((-180.0, 40.0, 180.0, 41.0), 4)
     assert len(cells) > 500
     assert set(h3util.cells_overlapping_bbox((10.0, 40.0, 11.0, 41.0), 4)) <= set(cells)
+
+
+def test_cells_for_large_geometry_matches_direct_fill():
+    big = box(-30.0, 10.0, 25.0, 60.0)  # wider than MAX_FILL_SPAN: filled in pieces
+    assert set(h3util.cells_for_geometry(big, 3)) == set(h3.geo_to_cells(big, 3))

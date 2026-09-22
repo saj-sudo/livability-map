@@ -34,14 +34,31 @@ AGGS = ("sum", "mean", "frac_above")
 # ---- cells and geometry ---------------------------------------------------------------------
 
 
+MAX_FILL_SPAN = 20.0  # degrees; h3.geo_to_cells fails (H3FailedError) on continent-sized polygons at res 5
+
+
 def cells_for_geometry(geom: BaseGeometry, res: int) -> list[str]:
-    """H3 cells whose centre lies inside ``geom`` (WGS84). Empty geometries yield []."""
+    """H3 cells whose centre lies inside ``geom`` (WGS84). Empty geometries yield [].
+
+    Multi-part geometries are filled part by part and large polygons are cut into
+    ``MAX_FILL_SPAN``-degree pieces first: a cell centre lies in exactly one piece, so the union
+    is exact, and H3's polygon fill stays within its limits (Eurasia at res 5 overflows it).
+    """
     if geom.is_empty:
         return []
-    if geom.geom_type == "GeometryCollection":
+    if geom.geom_type in ("GeometryCollection", "MultiPolygon"):
         out: set[str] = set()
         for g in geom.geoms:
             out.update(cells_for_geometry(g, res))
+        return sorted(out)
+    minx, miny, maxx, maxy = geom.bounds
+    if (maxx - minx) > MAX_FILL_SPAN or (maxy - miny) > MAX_FILL_SPAN:
+        out = set()
+        for x0 in np.arange(minx, maxx, MAX_FILL_SPAN):
+            for y0 in np.arange(miny, maxy, MAX_FILL_SPAN):
+                part = geom.intersection(box(x0, y0, min(x0 + MAX_FILL_SPAN, maxx), min(y0 + MAX_FILL_SPAN, maxy)))
+                if not part.is_empty:
+                    out.update(cells_for_geometry(part, res))
         return sorted(out)
     return list(h3.geo_to_cells(geom, res))
 

@@ -125,15 +125,41 @@ def iso3_to_iso2(codes: pd.Series, overrides: dict[str, str] | None = None) -> p
     return codes.map(conv)
 
 
-_STOP = {"region", "province", "state", "prefecture", "county", "of", "the", "and", "autonomous", "community", "department", "governorate", "territory", "district", "oblast", "voivodeship"}
+# generic words that differ between publishers ("Región de Murcia" vs "Murcia", "Lesser Poland
+# Voivodeship" vs "Lesser Poland"); after accent folding, so "región" is "region"
+_STOP = {
+    "region", "regione", "regiao", "regio", "province", "provincia", "provincial", "state", "estado",
+    "prefecture", "county", "of", "the", "and", "autonomous", "autonoma", "autonomo", "community",
+    "comunidad", "comunitat", "foral", "department", "departamento", "governorate", "territory",
+    "district", "distrito", "oblast", "okrug", "kraj", "voivodeship", "ciudad", "city", "de", "del",
+    "da", "do", "dos", "das", "di", "la", "el", "les", "le", "metropolitan",
+}
+
+
+def fix_mojibake(text: str) -> str:
+    """Repair UTF-8 text that was decoded as Latin-1 ("RegiÃ³n" -> "Región"), as in some
+    geoBoundaries names; leaves clean text untouched."""
+    if "Ã" in text or "Â" in text:
+        try:
+            return text.encode("latin-1", errors="ignore").decode("utf-8", errors="ignore")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return text
+    return text
 
 
 def normalize_name(text: str) -> str:
     """Lowercase ASCII with punctuation and generic words removed, for name crosswalks."""
-    s = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode("ascii").lower()
+    s = unicodedata.normalize("NFKD", fix_mojibake(str(text))).encode("ascii", "ignore").decode("ascii").lower()
     s = re.sub(r"[^a-z0-9]+", " ", s)
     words = [w for w in s.split() if w not in _STOP]
     return " ".join(words)
+
+
+def name_aliases(text: str) -> list[str]:
+    """Alternative spellings a publisher packs into one field: "País Vasco/Euskadi" -> both."""
+    t = fix_mojibake(str(text))
+    parts = [p.strip() for p in re.split(r"\s*[/|]\s*|\s+-\s+", t) if p.strip()]
+    return [t] + [p for p in parts if p != t]
 
 
 def read_xlsx(path: Path, sheet: str | int, header_row: int = 1) -> pd.DataFrame:

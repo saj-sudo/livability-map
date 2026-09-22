@@ -35,8 +35,9 @@ def test_country_to_iso2_handles_whr_spellings():
 def test_normalize_name_strips_accents_and_generic_words():
     from pipeline.prep.util import normalize_name
 
-    assert normalize_name("Région Île-de-France") == "ile de france"
-    assert normalize_name("Provincia autónoma de Trento") == "provincia autonoma de trento"
+    assert normalize_name("Région Île-de-France") == "ile france"
+    assert normalize_name("Provincia autónoma de Trento") == "trento"
+    assert normalize_name("RegiÃ³n de AntofagastaÂ ") == "antofagasta"  # mojibake repaired
 
 
 def test_whr_loader_on_synthetic_xlsx(tmp_path, settings, monkeypatch):

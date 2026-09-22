@@ -20,15 +20,16 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 
 from ..config import Settings
 from ..registry import Source
-from .util import find_column, normalize_name, read_xlsx
+from .util import find_column, name_aliases, normalize_name, read_xlsx
 
 CORRESPONDENCE_SOURCE = "oecd_tl2_correspondence"
 ADM1_SOURCE = "geoboundaries_adm1"
 MIN_TL2_MATCH = 0.6
-FUZZY_CUTOFF = 0.85
+FUZZY_CUTOFF = 0.8
 
 
 def match_names(targets: dict[str, list[str]], candidates: dict[int, str]) -> dict[str, int]:
@@ -36,14 +37,15 @@ def match_names(targets: dict[str, list[str]], candidates: dict[int, str]) -> di
     then close matches). ``targets``: id -> name variants; ``candidates``: row index -> name."""
     norm_cands: dict[str, int] = {}
     for idx, name in candidates.items():
-        key = normalize_name(name)
-        if key and key not in norm_cands:
-            norm_cands[key] = idx
+        for alias in name_aliases(name):
+            key = normalize_name(alias)
+            if key and key not in norm_cands:
+                norm_cands[key] = idx
     taken: set[int] = set()
     out: dict[str, int] = {}
     for tid, names in targets.items():
-        keys = [normalize_name(n) for n in names if isinstance(n, str) and n.strip()]
-        keys = [k for k in keys if k]
+        keys = [normalize_name(a) for n in names if isinstance(n, str) and n.strip() for a in name_aliases(n)]
+        keys = list(dict.fromkeys(k for k in keys if k))
         hit = None
         for k in keys:
             if k in norm_cands and norm_cands[k] not in taken:
@@ -108,7 +110,9 @@ def build_tl2_geometry(corr: pd.DataFrame, adm1: gpd.GeoDataFrame, overrides: pd
                 assignment[code] = idxs
                 method = method if method != "none" else "override"
         for code, idxs in assignment.items():
-            geom = cands_df.loc[idxs, "geometry"].union_all() if len(idxs) > 1 else cands_df.loc[idxs[0], "geometry"]
+            # geoBoundaries polygons are not all valid; repair before dissolving TL3 -> TL2
+            parts = shapely.make_valid(cands_df.loc[idxs, "geometry"].to_numpy())
+            geom = shapely.union_all(parts) if len(idxs) > 1 else parts[0]
             region = t2.loc[t2["REG_ID"] == code, "NAME_ENG"]
             rows.append({"Code": code, "ISO3": iso3, "Region": region.iloc[0] if len(region) else code, "method": method, "geometry": geom})
         info["matched"] = len(assignment)

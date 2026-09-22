@@ -23,7 +23,7 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 3
+PREP_VERSION = 4
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {

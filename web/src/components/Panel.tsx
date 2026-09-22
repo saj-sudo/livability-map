@@ -3,7 +3,7 @@
 // Left panel (SPEC §10): view selector, scenario label, confidence and inhabited toggles,
 // the My-priorities controls (SPEC §20.5) and the legend (SPEC §9.3).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Legend from "./Legend";
 import PrioritiesPanel from "./PrioritiesPanel";
 import { SCENARIO_LABELS, type ClientManifest } from "../lib/clientManifest";
@@ -29,6 +29,12 @@ interface Props {
 
 export default function Panel({ manifest, dims, state, onChange }: Props) {
   const [open, setOpen] = useState(true);
+  // on a phone the panel would cover the whole map, so start collapsed there (after hydration,
+  // because the server render cannot know the viewport)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia("(max-width: 640px)").matches) setOpen(false);
+  }, []);
   return (
     <aside className="absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-lg border border-[var(--border)] bg-[var(--panel)] text-sm shadow-md">
       <button type="button" className="flex w-full items-center justify-between px-3 py-2 text-left font-semibold" onClick={() => setOpen((o) => !o)} aria-expanded={open}>

@@ -67,11 +67,16 @@ function fmtRaw(id: string, v: number | null): string | null {
   return String(v);
 }
 
-function fmtLife(d: DimInfo, raw: number | null): string | null {
+function fmtLife(d: DimInfo, raw: number | null, res: string): string | null {
+  // the resolution tag says which source (and unit) produced the value: tract/county = US
+  // layers, admin1 = OECD (0-10 scores) or GSAP (share), national = ILOSTAT (percent)
   if (raw === null) return null;
+  const oecd = res === "admin1";
   switch (d.id) {
     case "jobs":
-      return raw <= 10 ? `${raw.toFixed(1)} / 10 (OECD score)` : raw <= 1 ? `${(100 * raw).toFixed(0)}% employed` : `${raw.toFixed(0)}% employed`;
+      if (oecd) return `${raw.toFixed(1)} / 10 (OECD jobs score)`;
+      if (res === "national") return `${raw.toFixed(0)}% of 15-24s employed`;
+      return `${(100 * raw).toFixed(0)}% employed`;
     case "transit":
       return `${raw.toFixed(1)} transit trips/hour nearby`;
     case "school":
@@ -79,15 +84,16 @@ function fmtLife(d: DimInfo, raw: number | null): string | null {
     case "lgbtq":
       return `${raw.toFixed(1)} same-sex couples per 1,000 households`;
     case "incmix":
-      return raw <= 1 ? `${raw.toFixed(2)}` : `${raw.toFixed(2)}`;
+      return oecd ? `${(100 * raw).toFixed(0)}% above the $4.20/day line` : `income mix ${raw.toFixed(2)} (0-1)`;
     case "house":
-      return raw <= 10 ? `${raw.toFixed(1)} / 10 (OECD, higher = worse)` : `${raw.toFixed(0)}% of income on rent`;
+      return oecd ? `${raw.toFixed(1)} / 10 (OECD, higher = worse)` : `${raw.toFixed(0)}% of income on rent`;
     case "health":
-      return raw <= 10 ? `${raw.toFixed(1)} / 10 (OECD score)` : `${raw.toFixed(1)} physicians per 10,000`;
+      return oecd ? `${raw.toFixed(1)} / 10 (OECD health score)` : `${raw.toFixed(1)} physicians per 10,000`;
     default:
       return String(raw);
   }
 }
+
 
 export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], manifest: ClientManifest): HexModel {
   const iso = str(p.iso_a2);
@@ -117,7 +123,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
       const row: LifeRow = { id: d.id, name: d.name, kind: d.kind, value: null, score: null, res, chip: d.chip };
       if (res === "none") return row;
       if (d.kind === "score") {
-        row.value = fmtLife(d, num(p[`${d.id}_raw`]));
+        row.value = fmtLife(d, num(p[`${d.id}_raw`]), res);
         row.score = num(p[`${d.id}_score`]);
       } else if (d.kind === "signed") {
         const lean = num(p[`${d.id}_lean`]);

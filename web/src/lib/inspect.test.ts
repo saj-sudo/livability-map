@@ -1,0 +1,73 @@
+import { describe, expect, it } from "vitest";
+import type { ClientManifest } from "./clientManifest";
+import type { DimInfo } from "./dims";
+import { describeHex } from "./inspect";
+
+const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile" });
+const DIMS: DimInfo[] = [
+  dim("heat", "score", "hazard", "Extreme heat"),
+  dim("rflood", "score", "hazard"),
+  dim("cflood", "score", "hazard"),
+  dim("wstress", "score", "hazard"),
+  dim("wb", "score", "wellbeing"),
+  dim("jobs", "score", "life", "Jobs"),
+  dim("pol", "signed", "life", "Political lean"),
+  dim("race", "composition", "life", "Composition"),
+];
+const MANIFEST: ClientManifest = {
+  built_at: "2026-09-22T00:00:00Z",
+  scenario: "rcp45_ssp245",
+  horizon: "2050",
+  non_commercial: true,
+  tiles: {},
+  sources: [
+    { id: "cckp_hd35", name: "CCKP", vintage: "2024", license: "CC BY 4.0", license_note: "", attribution: "WB", processing: "", url: null },
+    { id: "whr_ladder", name: "WHR", vintage: "2026", license: "free", license_note: "", attribution: "WHR", processing: "", url: null },
+    { id: "acs_summary", name: "ACS", vintage: "2024", license: "PD", license_note: "", attribution: "Census", processing: "", url: null },
+    { id: "medsl_county_pres", name: "MEDSL", vintage: "2024", license: "CC0", license_note: "", attribution: "MIT", processing: "", url: null },
+    { id: "ghsl_pop", name: "GHSL", vintage: "2023", license: "CC BY 4.0", license_note: "", attribution: "JRC", processing: "", url: null },
+  ],
+  dimensionSources: { heat: ["cckp_hd35"], jobs: ["acs_summary"], pol: ["medsl_county_pres"], race: ["acs_summary"] },
+  notes: {},
+};
+
+describe("describeHex (SPEC §10 inspector)", () => {
+  it("never shows a missing hazard or dimension as zero", () => {
+    const props = { h3: "84x", iso_a2: "BD", admin1_name: "Dhaka", population: 13906075, inhabited: true, heat_days: 33.6, heat_score: 66, heat_ok: true, rflood_ok: false, cflood_ok: false, wstress_cat: -1, wstress_ok: false, coverage: 1, exposure: 66, wb_value: 4.1, wb_score: 35, wb_source: "whr", wb_res: "national", bivar: 6, jobs_res: "none", pol_res: "none", race_res: "none" };
+    const m = describeHex(props, "hex4", DIMS, MANIFEST);
+    expect(m.title).toBe("Dhaka");
+    expect(m.subtitle).toBe("Bangladesh");
+    expect(m.population).toBe("13,906,075 people");
+    const heat = m.hazards.find((h) => h.id === "heat")!;
+    expect(heat.raw).toBe("34 days/yr");
+    expect(heat.score).toBe(66);
+    const rflood = m.hazards.find((h) => h.id === "rflood")!;
+    expect(rflood.raw).toBeNull();
+    expect(rflood.score).toBeNull();
+    expect(m.hazards.find((h) => h.id === "wstress")!.raw).toContain("arid");
+    expect(m.coverage).toBe("1 of 4 hazard layers");
+    expect(m.wellbeing).toEqual({ value: "life evaluation 4.10 / 10", score: 35, source: "whr", res: "national" });
+    expect(m.bivar).toBe("high exposure, medium wellbeing");
+    for (const row of m.life) {
+      expect(row.res).toBe("none");
+      expect(row.value).toBeNull();
+      expect(row.score).toBeNull();
+    }
+    // sources: only what produced a shown value, plus the reference layers
+    expect(m.sources.map((s) => s.id).sort()).toEqual(["cckp_hd35", "ghsl_pop", "whr_ladder"]);
+  });
+
+  it("formats signed and composition dimensions", () => {
+    const props = { h3: "85y", iso_a2: "US", admin1_name: "Arizona", population: 2413788, inhabited: true, coverage: 4, jobs_res: "tract", jobs_raw: 0.93, jobs_score: 71, pol_res: "county", pol_lean: -12, race_res: "tract", race_w: 55, race_b: 5, race_h: 31, race_a: 5, race_o: 4, race_maj: "w", wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex5", DIMS, MANIFEST);
+    expect(m.resolution).toContain("res 5");
+    expect(m.life.find((r) => r.id === "jobs")!.value).toBe("93% employed");
+    expect(m.life.find((r) => r.id === "pol")!.value).toBe("R+12 (two-party margin)");
+    const race = m.life.find((r) => r.id === "race")!;
+    expect(race.majority).toBe("white");
+    expect(race.shares!.reduce((a, s) => a + s.pct, 0)).toBe(100);
+    expect(m.bivar).toContain("not classified");
+    expect(m.wellbeing.value).toBeNull();
+    expect(m.sources.map((s) => s.id)).toContain("medsl_county_pres");
+  });
+});

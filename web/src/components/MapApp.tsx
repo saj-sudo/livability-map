@@ -9,12 +9,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ComparePanel from "./ComparePanel";
 import Inspector from "./Inspector";
+import Intro from "./Intro";
 import Panel from "./Panel";
 import Search from "./Search";
 import Tooltip from "./Tooltip";
 import type { FlyTo, HoveredHex, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
+import { shouldShowIntro } from "../lib/intro";
 import { zoomFor, type Place } from "../lib/search";
 import { DEFAULT_STATE, parseState, writeUrl, type AppState } from "../lib/url";
 
@@ -41,6 +43,8 @@ export default function MapApp({ manifest, dims }: Props) {
   const [compare, setCompare] = useState<SelectedHex | null>(null);
   const [picking, setPicking] = useState(false);
   const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
+  const [helpSlot, setHelpSlot] = useState<HTMLElement | null>(null);
+  const [intro, setIntro] = useState(false);
   const urlTimer = useRef<number | null>(null);
 
   // read the URL once on the client after hydration (no useSearchParams: static export). The
@@ -50,6 +54,8 @@ export default function MapApp({ manifest, dims }: Props) {
     setState(parseState(window.location.search));
     setReady(true);
     setSearchSlot(document.getElementById("search-slot"));
+    setHelpSlot(document.getElementById("help-slot"));
+    setIntro(shouldShowIntro(window.localStorage));
   }, []);
 
   // write the URL on every state change, debounced so map moves do not thrash history
@@ -101,6 +107,17 @@ export default function MapApp({ manifest, dims }: Props) {
     <div className="map-shell">
       {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} />}
       {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
+      {helpSlot &&
+        createPortal(
+          <button type="button" onClick={() => setIntro(true)} aria-label="How to read this map" title="How to read this map" className="grid h-8 w-8 place-items-center rounded-panel text-muted hover:bg-rule/60 hover:text-ink">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M6 6.2a2 2 0 1 1 2.8 1.8c-.6.3-.8.7-.8 1.3M8 11.6v.2" strokeLinecap="round" />
+            </svg>
+          </button>,
+          helpSlot,
+        )}
+      {intro && <Intro onClose={() => setIntro(false)} />}
       {hover && <Tooltip hover={hover} dims={dims} state={state} />}
       <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />
       {hint && (

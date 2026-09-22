@@ -37,6 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               About
             </Link>
           </nav>
+          {/* the map page portals its "How to read this map" button here */}
+          <div id="help-slot" className="shrink-0" />
           <ThemeToggle />
         </header>
         {children}

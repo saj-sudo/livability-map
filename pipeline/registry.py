@@ -12,9 +12,9 @@ from .config import RES_TAGS
 
 VERIFY = "VERIFY"
 ACCESS_MODES = ("direct", "manual", "dataverse", "fixture")
-GROUPS = ("hazard", "wellbeing", "life", "reference")
+GROUPS = ("hazard", "wellbeing", "life", "env", "reference")  # env: present-day environment (air, trees, fire, drought)
 KINDS = ("score", "signed", "composition")
-JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density")
+JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density", "raster_mean", "point_mean")
 
 
 @dataclass
@@ -62,6 +62,8 @@ class Source:
 
 
 SCALES = ("percentile", "minmax")
+HEX_JOINERS = ("raster_mean", "point_mean")  # the joiners that produce the `hex` resolution tag
+RASTER_FORMATS = ("geotiff", "geotiff-zip", "netcdf", "netcdf-zip")  # what raster_mean can read (netcdf via prep/rasters.py)
 COMPOSITION_KEYS = ("w", "b", "h", "a", "o")  # §6.1: {id}_w/b/h/a/o shares
 
 
@@ -79,6 +81,11 @@ class JoinSpec:
     fields: dict[str, str] | None = None
     # short source label carried on the hex (e.g. wb_source = "shdi" | "whr"); defaults to the source id
     label: str | None = None
+    # raster_mean only: band to read, block-average factor before rasterizing hexes (100 m tree
+    # cover -> 1 km), and `sample: centroid` for rasters coarser than the hex (0.25 degree fire)
+    band: int = 1
+    decimate: int = 1
+    sample: str = "mean"  # mean | centroid
 
     def to_manifest(self) -> dict[str, Any]:
         d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source}
@@ -86,6 +93,8 @@ class JoinSpec:
             d["weight_field"] = self.weight_field
         if self.fields:
             d["fields"] = dict(self.fields)
+        if self.joiner == "raster_mean":
+            d.update({"band": self.band, "decimate": self.decimate, "sample": self.sample})
         return d
 
 
@@ -201,6 +210,14 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     raise ValueError(f"{did}: composition joiners need `fields` with keys {COMPOSITION_KEYS}: {j}")
             elif fields:
                 raise ValueError(f"{did}: `fields` is only valid for composition dimensions: {j}")
+            if j.get("joiner") in HEX_JOINERS and j.get("res") != "hex":
+                raise ValueError(f"{did}: {j.get('joiner')} computes per hex, so res must be `hex`: {j}")
+            if j.get("joiner") not in HEX_JOINERS and j.get("res") == "hex":
+                raise ValueError(f"{did}: only {HEX_JOINERS} may carry the `hex` resolution tag: {j}")
+            if j.get("sample", "mean") not in ("mean", "centroid"):
+                raise ValueError(f"{did}: sample must be mean or centroid: {j}")
+            if sources is not None and j.get("joiner") == "raster_mean" and sources[j["source"]].format not in RASTER_FORMATS:
+                raise ValueError(f"{did}: raster_mean needs a raster source (format {RASTER_FORMATS}); {j['source']} is {sources[j['source']].format}")
             joiners.append(
                 JoinSpec(
                     source=j["source"],
@@ -213,6 +230,9 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     per_capita=bool(j.get("per_capita", False)),
                     fields=dict(fields) if fields else None,
                     label=j.get("label"),
+                    band=int(j.get("band", 1)),
+                    decimate=int(j.get("decimate", 1)),
+                    sample=str(j.get("sample", "mean")),
                 )
             )
         out[did] = Dimension(

@@ -293,6 +293,72 @@
   verified: confirmed
   vintage: "fixture"
   files: [counties.gpkg]
+- id: map_healthcare
+  name: travel time to healthcare stand-in (minutes, 0.01 degree)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/care.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [care.tif]
+- id: acag_pm25
+  name: annual PM2.5 stand-in (ug/m3, 0.01 degree, negative off land)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/pm25.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [pm25.tif]
+- id: cgls_tree_cover
+  name: tree-cover fraction stand-in (percent, 0.002 degree uint8, 255 nodata)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/trees.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: 255
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [trees.tif]
+- id: ookla_fixed
+  name: fixed-broadband speed tiles stand-in (lat, lng, d_mbps, tests)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ookla_fixed.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ookla_fixed.csv]
+- id: ookla_mobile
+  name: mobile speed tiles stand-in (lat, lng, d_mbps, tests)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ookla_mobile.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ookla_mobile.csv]
+- id: gfed5_ba
+  name: burned-area stand-in (percent of area per year, 0.25 degree)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/fire.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fire.tif]
 - id: dataverse_example
   name: example of a Dataverse guestbook-gated source (fetch reports missing without .env)
   group: life

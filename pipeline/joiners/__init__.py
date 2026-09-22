@@ -7,13 +7,18 @@ pandas Series aligned to the hexes index. Missing -> NaN / None, never 0 (invari
 from .area_weighted_overlay import area_weighted_overlay
 from .iso_lookup import iso_lookup
 from .point_density import point_density
+from .point_mean import point_mean
 from .polygon_centroid import polygon_centroid
+from .raster_mean import raster_mean
 
 JOINERS = {
     "polygon_centroid": polygon_centroid,
     "iso_lookup": iso_lookup,
     "area_weighted_overlay": area_weighted_overlay,
     "point_density": point_density,
+    # hex-level layers (resolution tag `hex`): computed straight from a raster or a point set
+    "raster_mean": raster_mean,
+    "point_mean": point_mean,
 }
 
-__all__ = ["JOINERS", "area_weighted_overlay", "iso_lookup", "point_density", "polygon_centroid"]
+__all__ = ["JOINERS", "area_weighted_overlay", "iso_lookup", "point_density", "point_mean", "polygon_centroid", "raster_mean"]

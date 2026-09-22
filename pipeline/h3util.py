@@ -154,13 +154,41 @@ def _iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> 
             yield Window(col, row, w, h)
 
 
-def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int) -> tuple[list[str], np.ndarray]:
-    """Rasterize cell polygons into the window; returns (cells, index array) where index 0 = no cell."""
+def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, decimate: int = 1) -> tuple[list[str], np.ndarray]:
+    """Rasterize cell polygons into the window; returns (cells, index array) where index 0 = no
+    cell. With ``decimate`` > 1 the index image is built on the block-averaged grid that
+    :func:`block_mean` produces for the same window (pixel size x decimate, same origin)."""
     bounds = rasterio.windows.bounds(window, src.transform)
+    transform = src.window_transform(window)
+    shape = (int(window.height), int(window.width))
+    if decimate > 1:
+        transform = transform @ rasterio.Affine.scale(decimate)
+        shape = (-(-shape[0] // decimate), -(-shape[1] // decimate))  # ceil division
+    return _cells_index(bounds, transform, shape, res)
+
+
+def block_mean(arr: np.ndarray, valid: np.ndarray, d: int) -> tuple[np.ndarray, np.ndarray]:
+    """Average ``arr`` over d x d blocks, ignoring invalid pixels; a block with no valid pixel is
+    invalid. The array is padded (with invalid pixels) to a multiple of ``d`` so no edge pixel
+    is dropped; the result has ceil(h/d) x ceil(w/d) pixels. Used to bring the 100 m tree-cover
+    mosaic (51 billion pixels) down to 1 km before rasterizing hexes into it."""
+    h, w = arr.shape
+    ph, pw = -(-h // d) * d, -(-w // d) * d
+    a = np.zeros((ph, pw), dtype="float64")
+    v = np.zeros((ph, pw), dtype=bool)
+    a[:h, :w] = np.where(valid, arr, 0.0)
+    v[:h, :w] = valid
+    sums = a.reshape(ph // d, d, pw // d, d).sum(axis=(1, 3))
+    counts = v.reshape(ph // d, d, pw // d, d).sum(axis=(1, 3))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mean = np.where(counts > 0, sums / counts, np.nan)
+    return mean, counts > 0
+
+
+def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int) -> tuple[list[str], np.ndarray]:
     cells = cells_overlapping_bbox(bounds, res)
     if not cells:
-        return [], np.zeros((int(window.height), int(window.width)), dtype="int32")
-    transform = src.window_transform(window)
+        return [], np.zeros(shape, dtype="int32")
     shapes = []
     for i, c in enumerate(cells, start=1):
         poly = cell_polygon(c)
@@ -170,7 +198,7 @@ def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int) -
         shapes.append((poly, i))
     idx = features.rasterize(
         shapes,
-        out_shape=(int(window.height), int(window.width)),
+        out_shape=shape,
         transform=transform,
         fill=0,
         dtype="int32",
@@ -253,14 +281,22 @@ def aggregate_raster(
     window_size: int = 2048,
     band: int = 1,
     nodata: float | None = None,
+    decimate: int = 1,
 ) -> pd.DataFrame:
     """Aggregate a WGS84 raster to H3 cells.
 
     Returns a DataFrame with columns ``h3, value, n_pixels, n_valid`` (and ``n_above`` for
     frac_above). ``value`` is the sum, mean, or fraction of valid pixels >= threshold.
     Cells with no valid pixel get value NaN (never 0), per invariant 3.
+
+    ``decimate`` > 1 block-averages every window by that factor before the hexes are rasterized
+    into it (``mean`` only): the 100 m tree-cover mosaic becomes 1 km pixels, so the per-window
+    H3 fill and bincount run on 1% of the pixels while every source pixel still counts.
+    ``n_pixels`` / ``n_valid`` then count coarse pixels.
     """
     _check_agg(agg, threshold)
+    if decimate < 1 or (decimate > 1 and agg != "mean"):
+        raise ValueError("decimate must be >= 1 and is only meaningful for agg='mean'")
     acc = _Acc()
     with rasterio.open(path) as src:
         if src.crs is None or not src.crs.is_geographic:
@@ -271,7 +307,9 @@ def aggregate_raster(
             valid = _mask_valid(arr, nd)
             if not valid.any():
                 continue
-            cells, idx = _window_cells_index(src, window, res)
+            if decimate > 1:
+                arr, valid = block_mean(arr, valid, decimate)
+            cells, idx = _window_cells_index(src, window, res, decimate)
             if not cells:
                 continue
             _accumulate(acc, arr, valid, cells, idx, agg, threshold)

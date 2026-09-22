@@ -178,3 +178,69 @@
   joiners:
     - {source: hud_fmr, joiner: polygon_centroid, res: county, field: fmr_2br, domain: us, label: hud}
   note: "HUD Fair Market Rent for a 2-bedroom unit, FY2026, USD per month, by county (the whole-county row or the median of New England town rows); the OECD/EU rent level is v2"
+
+# ---- hex-level extras (added 2026-09-22, SPEC §20.6): computed per hex from a global raster or
+# point set, resolution tag `hex` (or `basin` for Aqueduct sub-basins). `env` is present-day
+# environment; it is shown beside the 2050 hazards but never enters `exposure` / `coverage`
+# (decision §13.28).
+- id: care
+  name: Travel time to healthcare
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_healthcare]
+  joiners:
+    - {source: map_healthcare, joiner: raster_mean, res: hex, field: value, domain: global, label: map}
+  note: "Minutes by motorized transport to the nearest healthcare facility (Weiss et al. 2020, Malaria Atlas Project, 1 km, 2019), mean over the hex"
+- id: air
+  name: Air quality (fine particulate matter)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [acag_pm25]
+  joiners:
+    - {source: acag_pm25, joiner: raster_mean, res: hex, field: value, domain: global, label: acag}
+  note: "Annual mean PM2.5 in micrograms per cubic metre, 2024 (satellite-derived, WashU ACAG SatPM2.5 V6.GL.03, 0.01 degree), mean over the hex; the WHO guideline is 5"
+- id: trees
+  name: Tree cover
+  group: env
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [cgls_tree_cover]
+  joiners:
+    - {source: cgls_tree_cover, joiner: raster_mean, res: hex, field: value, domain: global, label: cgls, decimate: 10}
+  note: "Percent of the hex under tree cover (Copernicus Global Land Cover 100 m, 2019), block-averaged to 1 km then averaged over the hex; water and permanent ice are excluded, deserts are honest zeros"
+- id: net
+  name: Internet speed
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [ookla_fixed, ookla_mobile]
+  joiners:
+    - {source: ookla_fixed, joiner: point_mean, res: hex, field: d_mbps, weight_field: tests, domain: global, label: fixed}
+    - {source: ookla_mobile, joiner: point_mean, res: hex, field: d_mbps, weight_field: tests, domain: global, label: mobile}
+  note: "Average Speedtest download speed in Mbps, 2026 Q2, weighted by tests: fixed broadband where anyone tested it, mobile where only mobile tests exist (labeled); CC BY-NC-SA 4.0, so the net_* attributes carry that licence"
+- id: fire
+  name: Wildfire (burned area)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [gfed5_ba]
+  joiners:
+    - {source: gfed5_ba, joiner: raster_mean, res: hex, field: value, domain: global, label: gfed5, sample: centroid}
+  note: "Percent of the area burned per year, mean of 2001-2020 (GFED5 burned area, 0.25 degree): observed, not a 2050 projection, sampled at the hex centroid because the grid is coarser than the hex; cropland burning is included"
+- id: drought
+  name: Drought risk
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [aqueduct_water_stress]
+  joiners:
+    - {source: aqueduct_water_stress, joiner: polygon_centroid, res: basin, field: drr_cat, domain: global, label: aqueduct}
+  note: "WRI Aqueduct drought risk category 0 (low) to 4 (high) of the sub-basin under the hex centroid; baseline from Aqueduct 3.0 carried into 4.0, no future-scenario drought exists; a quarter of sub-basins have no data"

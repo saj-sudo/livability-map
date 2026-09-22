@@ -17,7 +17,9 @@ SCENARIO: str = "rcp45_ssp245"  # §13.3
 HORIZON: str = "2050"  # §13.3
 NON_COMMERCIAL: bool = True  # §13.13
 
-RES_TAGS = ("admin1", "county", "tract", "national", "none")  # invariant 2
+# invariant 2 (SPEC §6.1). hex = computed per hex from a raster or point set; basin = a
+# hydrological sub-basin polygon (Aqueduct) sampled at the hex centroid
+RES_TAGS = ("hex", "basin", "admin1", "county", "tract", "national", "none")
 
 BBox = tuple[float, float, float, float]  # minlng, minlat, maxlng, maxlat
 

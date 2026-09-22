@@ -23,12 +23,20 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 1
+PREP_VERSION = 2
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {
     "whr_ladder": "pipeline.prep.whr:load",
     "gdl_shdi_regions": "pipeline.prep.shdi:load",
+    "wb_gsap": "pipeline.prep.gsap:load",
+    "ilostat_youth_unemp": "pipeline.prep.ilostat:load",
+    "oecd_regional_wellbeing": "pipeline.prep.oecd:load",
+    "acs_summary": "pipeline.prep.acs:load",
+    "medsl_county_pres": "pipeline.prep.medsl:load",
+    "epa_sld": "pipeline.prep.epa_sld:load",
+    "urban_edu_districts": "pipeline.prep.urban_edu:load",
+    "hrsa_ahrf": "pipeline.prep.hrsa:load",
 }
 
 

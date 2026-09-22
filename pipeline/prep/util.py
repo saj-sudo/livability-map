@@ -51,6 +51,14 @@ COUNTRY_OVERRIDES: dict[str, str | None] = {
     "Micronesia": "FM",
     "Cape Verde": "CV",
     "Brunei": "BN",
+    "Republic of Korea": "KR",
+    "Lao PDR": "LA",
+    "Côte d’Ivoire": "CI",
+    "Côte d'Ivoire": "CI",
+    "DR Congo": "CD",
+    "Republic of Moldova": "MD",
+    "Viet Nam": "VN",
+    "Türkiye (Turkey)": "TR",
 }
 ISO3_OVERRIDES: dict[str, str] = {"XKX": "XK", "KSV": "XK", "RKS": "XK"}
 

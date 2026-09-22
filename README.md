@@ -12,8 +12,8 @@ It does **not** recommend where to live. It shows evidence, shows its sources, a
 gaps. Every number on the map is traceable to a dataset, a vintage and a license. Missing data
 renders as missing, never as zero.
 
-Status: Sessions 1-7 built (2026-09-22). The pipeline runs end to end on real data at H3 res 4
-(res 5 pending) and the map app runs locally; publishing to Cloudflare R2 / Pages waits on
+Status: Sessions 1-9 built (2026-09-22). The pipeline runs end to end on real data at H3 res 4
+and res 5 (18 dimensions, 146 MB of tiles) and the map app runs locally; publishing to Cloudflare R2 / Pages waits on
 credentials in `.env`, and two registration-gated inputs (Global Data Lab SHDI, MIT Election Lab
 county returns) on a manual download. See [`SPEC.md`](SPEC.md) for the full spec; section
 numbers below refer to it.

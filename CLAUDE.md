@@ -13,8 +13,9 @@ section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, 
 
 Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScript, Sessions 6-7).
 Status (2026-09-22): every stage and the map app are built and run end to end on real data at
-H3 res 4; res 5, the R2/Pages publish (needs `.env` credentials) and two manual downloads (GDL
-SHDI, MEDSL county returns) are outstanding. SPEC §13.18-27 records the decisions taken.
+H3 res 4 and 5 with 18 dimensions (four hazards, wellbeing, nine life, four environment); the
+R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI, MEDSL county
+returns, HUD FMR workbook) are outstanding. SPEC §13.18-27 records the decisions taken.
 
 ## Commands
 
@@ -29,6 +30,7 @@ uv run ruff check .                              # lint (line length 100, E501 i
 uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also happens lazily)
 uv run python -m pipeline --res 4 all            # real data: fetch -> ... -> tiles -> publish (~35 min, 6 GB RAM)
 uv run python -m pipeline --res 4 --bbox 89.5,23,91.5,25 hazards   # subregion run (own interim/out dirs)
+uv run python -m pipeline --res 5 dims --only care --only net     # add layers without redoing the tract overlays
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```

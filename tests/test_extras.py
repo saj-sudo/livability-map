@@ -184,3 +184,15 @@ def test_extras_on_fixtures(settings):
     assert df.loc[_cell(43.5, 13.0), "drought_raw"] == 4.0 and df.loc[_cell(43.5, 13.0), "drought_res"] == "basin"
     desert = df.loc[_cell(40.7, 12.5)]
     assert desert["drought_res"] == "none" and np.isnan(desert["drought_raw"])
+
+
+def test_dims_only_merges_into_the_existing_parquet(settings):
+    _run_all(settings)
+    full = pd.read_parquet(settings.stage_path("dims", 4))
+    dims.run(settings, only=["care", "net"])
+    again = pd.read_parquet(settings.stage_path("dims", 4))
+    assert list(again.columns) != list(full.columns)  # recomputed columns move to the end
+    pd.testing.assert_frame_equal(again[full.columns].sort_values("h3").reset_index(drop=True), full.sort_values("h3").reset_index(drop=True))
+    with pytest.raises(ValueError, match="unknown dimension"):
+        dims.run(settings, only=["nope"])
+

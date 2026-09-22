@@ -114,3 +114,17 @@ def test_cells_overlapping_bbox_handles_full_width_strips():
 def test_cells_for_large_geometry_matches_direct_fill():
     big = box(-30.0, 10.0, 25.0, 60.0)  # wider than MAX_FILL_SPAN: filled in pieces
     assert set(h3util.cells_for_geometry(big, 3)) == set(h3.geo_to_cells(big, 3))
+
+
+def test_cells_for_geometry_survives_a_piece_that_is_a_hair_over_the_span():
+    """A 20.48 degree window starting at a float32-derived origin produced pieces a few ulp
+    wider than MAX_FILL_SPAN and recursed forever (res-5 PM2.5 run, 2026-09-22)."""
+    from shapely.geometry import box
+
+    g = box(-179.9999951171875, 10.0, -179.9999951171875 + 20.48, 30.48)
+    cells = h3util.cells_for_geometry(g, 4)
+    assert len(cells) > 100
+    # exactly-20 + epsilon must not recurse either, and the union must equal a direct fill
+    g2 = box(0.0, 0.0, 20.000000000000004, 5.0)
+    assert set(h3util.cells_for_geometry(g2, 4)) == set(h3util.cells_for_geometry(box(0.0, 0.0, 19.9, 5.0), 4)) | set(h3util.cells_for_geometry(box(19.9, 0.0, 20.000000000000004, 5.0), 4))
+

@@ -35,6 +35,7 @@ AGGS = ("sum", "mean", "frac_above")
 
 
 MAX_FILL_SPAN = 20.0  # degrees; h3.geo_to_cells fails (H3FailedError) on continent-sized polygons at res 5
+FILL_TOL = 1e-6  # degrees of slack on the size test (see cells_for_geometry)
 
 
 def cells_for_geometry(geom: BaseGeometry, res: int) -> list[str]:
@@ -52,12 +53,20 @@ def cells_for_geometry(geom: BaseGeometry, res: int) -> list[str]:
             out.update(cells_for_geometry(g, res))
         return sorted(out)
     minx, miny, maxx, maxy = geom.bounds
-    if (maxx - minx) > MAX_FILL_SPAN or (maxy - miny) > MAX_FILL_SPAN:
+    # A tolerance on the size test: a piece cut at exactly MAX_FILL_SPAN can come back a few
+    # ulp wider than its box (float64 arithmetic on window bounds such as -179.9999951 + k*20),
+    # and without the slack it would be cut again into the same piece forever (the res-5
+    # PM2.5 run died with RecursionError, 2026-09-22).
+    if (maxx - minx) > MAX_FILL_SPAN + FILL_TOL or (maxy - miny) > MAX_FILL_SPAN + FILL_TOL:
         out = set()
         for x0 in np.arange(minx, maxx, MAX_FILL_SPAN):
             for y0 in np.arange(miny, maxy, MAX_FILL_SPAN):
                 part = geom.intersection(box(x0, y0, min(x0 + MAX_FILL_SPAN, maxx), min(y0 + MAX_FILL_SPAN, maxy)))
-                if not part.is_empty:
+                if part.is_empty:
+                    continue
+                if part.bounds == geom.bounds:  # cutting changed nothing: fill it as it is
+                    out.update(h3.geo_to_cells(part, res))
+                else:
                     out.update(cells_for_geometry(part, res))
         return sorted(out)
     return list(h3.geo_to_cells(geom, res))

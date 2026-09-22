@@ -15,6 +15,11 @@ parquet for the manifest and the score stage; only ``_res`` ships in tiles (§6.
 A joiner whose real source is not downloaded yet is skipped with the source's recipe printed,
 so the fallbacks (for example WHR when SHDI is missing) still run and the sanity output shows
 the gap honestly.
+
+``run(settings, only=[...])`` recomputes just the named dimensions and merges their columns
+into the existing parquet (the other dimensions' columns are kept as they are). That is how a
+new layer is added at res 5 without redoing the hour-long US tract overlays. When the registry
+or a prepared layer of an *unnamed* dimension changed, run without ``--only``.
 """
 
 from __future__ import annotations
@@ -219,10 +224,17 @@ def _tag_counts(df: pd.DataFrame, inhabited: pd.Series, dims: list[Dimension]) -
     return out
 
 
-def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
+def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str, dict[str, int]]]:
     settings.ensure_dirs()
     sources = load_sources(settings.sources_path)
-    dims = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
+    all_dims = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
+    if only:
+        unknown = sorted(set(only) - {d.id for d in all_dims})
+        if unknown:
+            raise ValueError(f"dims --only: unknown dimension id(s) {unknown}; known: {[d.id for d in all_dims]}")
+        dims = [d for d in all_dims if d.id in set(only)]
+    else:
+        dims = all_dims
     yaml_sha = hashlib.sha256(settings.dimensions_path.read_bytes()).hexdigest()[:16]
     layers: dict[str, Layer | None] | None = None
     skipped: dict[str, str] = {}
@@ -232,9 +244,16 @@ def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
             if not p.exists():
                 raise FileNotFoundError(f"{p} missing (run `grid`, `pop` and `admin` first)")
         out = settings.stage_path("dims", res)
-        inputs = _inputs(settings, dims, sources, res)
+        inputs = _inputs(settings, all_dims, sources, res)
         params = {"res": res, "bbox": settings.bbox, "dimensions_sha": yaml_sha, "prep_version": prep.PREP_VERSION, "stage": "dims"}
-        if stage_cache.is_fresh(out, inputs, params, settings.force):
+        existing: pd.DataFrame | None = None
+        if only:
+            if not out.exists():
+                raise FileNotFoundError(f"dims --only needs an existing {out.name}; run `dims` without --only first")
+            existing = pd.read_parquet(out)
+            drop = tuple(f"{d.id}_" for d in dims)
+            existing = existing[[c for c in existing.columns if c == "h3" or not c.startswith(drop)]]
+        elif stage_cache.is_fresh(out, inputs, params, settings.force):
             df = pd.read_parquet(out)
             inhabited = pd.read_parquet(settings.stage_path("pop", res), columns=["inhabited"])["inhabited"]
             counts[res] = _tag_counts(df, inhabited, dims)
@@ -257,10 +276,17 @@ def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
             tags = df.loc[hexes["inhabited"].to_numpy(dtype=bool), f"{dim.id}_res"].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())
             print(f"dims   res {res}: {dim.id:8s} {shares} ({time.time() - t1:.1f}s)")
+        if existing is not None:
+            # merge the recomputed columns into the kept ones, aligned on h3 (same hex set)
+            if len(existing) != len(df) or not set(existing["h3"]) == set(df["h3"]):
+                raise ValueError(f"{out.name} covers a different hex set than the current grid; run `dims` without --only")
+            df = existing.merge(df, on="h3", how="left")
         df.to_parquet(out, index=False)
-        stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": skipped})
-        counts[res] = _tag_counts(df, hexes["inhabited"], dims)
-        print(f"dims   res {res}: {len(dims)} dimensions on {len(df)} hexes in {time.time() - t0:.1f}s -> {out.name}")
+        stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": skipped, "partial": sorted(only) if only else None})
+        inhabited_all = pd.read_parquet(settings.stage_path("pop", res), columns=["h3", "inhabited"]).set_index("h3")["inhabited"].reindex(df["h3"]).to_numpy(dtype=bool)
+        counts[res] = _tag_counts(df, pd.Series(inhabited_all), all_dims)
+        what = f"{len(dims)} of {len(all_dims)} dimensions (--only)" if only else f"{len(dims)} dimensions"
+        print(f"dims   res {res}: {what} on {len(df)} hexes in {time.time() - t0:.1f}s -> {out.name}")
     if skipped:
         print(f"dims   note: {len(skipped)} source(s) unavailable, fallbacks used: {', '.join(skipped)}")
     return counts

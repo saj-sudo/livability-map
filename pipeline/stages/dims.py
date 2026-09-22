@@ -5,7 +5,7 @@ that yields a value for a hex wins; that joiner's ``res`` tag, source id, scorin
 ``label`` travel with the value. Output ``data/interim/dims_r{res}.parquet`` with, per dimension:
 
 - kind ``score``:        ``{id}_raw`` (float32), ``{id}_res``, ``{id}_src``, ``{id}_dom``, ``{id}_lbl``
-- kind ``signed``:       ``{id}_lean`` (float32, clipped later by ``score``), plus the same tags
+- kind ``signed``:       ``{id}_lean`` (Int16, rounded and clipped to -100..100), plus the same tags
 - kind ``composition``:  ``{id}_w/_b/_h/_a/_o`` (Int8 percents that sum to 100), ``{id}_maj``,
                          plus the same tags
 
@@ -117,7 +117,8 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
     if dim.kind == "score":
         cols[f"{dim.id}_raw"] = pd.Series(raw, dtype="float32")
     elif dim.kind == "signed":
-        cols[f"{dim.id}_lean"] = pd.Series(raw, dtype="float32")
+        # §6.1: {id}_lean is an integer in -100..100; missing stays <NA>
+        cols[f"{dim.id}_lean"] = pd.array(np.clip(np.round(raw), -100, 100), dtype="Int16")
     else:
         stack = np.column_stack([comps[k] for k in COMPOSITION_KEYS])
         complete = ~np.isnan(stack).any(axis=1)
@@ -219,7 +220,7 @@ def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
         for dim in dims:
             t1 = time.time()
             for col, series in join_dimension(dim, hexes, res, layers).items():
-                df[col] = series.to_numpy() if not isinstance(series, pd.api.extensions.ExtensionArray) else series
+                df[col] = series
             tags = df.loc[hexes["inhabited"].to_numpy(dtype=bool), f"{dim.id}_res"].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())
             print(f"dims   res {res}: {dim.id:8s} {shares} ({time.time() - t1:.1f}s)")

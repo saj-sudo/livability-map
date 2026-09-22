@@ -12,7 +12,6 @@ Reads ``hexes ⨝ pop ⨝ admin ⨝ hazards ⨝ dims`` and writes ``data/interim
   scoring domain of the joiner that supplied the value (``{id}_dom``: global | oecd | us), among
   inhabited hexes (§8.2, §20.4). Uninhabited hexes with a value are scored against the same
   distribution.
-- ``{id}_lean``  for signed dimensions, rounded and clipped to -100..100
 - ``scenario``, ``horizon`` constants (§6.1)
 
 Scores are plain percentiles; direction is the client's job (SPEC §13.25). Missing stays
@@ -66,11 +65,8 @@ def score_dimension(dim, df: pd.DataFrame) -> dict[str, pd.Series]:
     if dim.scale == "minmax":
         raw = df[f"{dim.id}_raw"]
         return {f"{dim.id}_score": minmax_score(raw, df[f"{dim.id}_lbl"])}
-    if dim.kind == "signed":
-        lean = pd.to_numeric(df[f"{dim.id}_lean"], errors="coerce")
-        return {f"{dim.id}_lean": pd.array(np.clip(np.round(lean.to_numpy(dtype="float64")), -100, 100), dtype="Int16")}
-    if dim.kind == "composition":
-        return {}
+    if dim.kind in ("signed", "composition"):
+        return {}  # {id}_lean and the composition shares are final in the dims output (invariant 8)
     raw = pd.to_numeric(df[f"{dim.id}_raw"], errors="coerce")
     dom = df[f"{dim.id}_dom"]
     score = pd.Series(pd.NA, index=df.index, dtype="Int16")

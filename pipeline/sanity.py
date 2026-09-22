@@ -66,12 +66,18 @@ def spot_check(df: pd.DataFrame, res: int, spots: list[Spot]) -> None:
     idx = df.set_index("h3")
     for s in spots:
         cell = h3.latlng_to_cell(s.lat, s.lng, res)
+        note = ""
         if cell not in idx.index:
-            print(f"  spot {s.name:16s} {cell}: not a land hex in this run")
-            continue
+            # coastal places often sit in a cell whose centre is at sea (a known gap, SPEC §5 grid);
+            # fall back to the nearest neighbouring land hex and say so
+            near = [c for c in h3.grid_disk(cell, 1) if c in idx.index]
+            if not near:
+                print(f"  spot {s.name:16s} {cell}: not a land hex in this run")
+                continue
+            cell, note = near[0], " (nearest land hex)"
         row = idx.loc[cell]
         shown = {k: (row[k].item() if hasattr(row[k], "item") else row[k]) for k in row.index if k not in ("lat", "lng", "res")}
-        print(f"  spot {s.name:16s} expect [{s.expect}] -> {shown}")
+        print(f"  spot {s.name:16s}{note} expect [{s.expect}] -> {shown}")
 
 
 def run(settings: Settings, spots: list[Spot] | None = None) -> None:

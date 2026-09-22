@@ -93,7 +93,7 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
         </div>
       )}
       {view !== "bivar" && view !== "priorities" && dim && (
-        <Ramp colors={rampFor(dim, pal)} label={`${dim.name}, percentile score`} low={dim.group === "hazard" ? "0 least" : "0"} high={dim.group === "hazard" ? "100 most" : "100"} />
+        <Ramp colors={rampFor(dim, pal)} label={`${dim.name}, percentile score`} low={dim.group === "hazard" || dim.higher_is === "worse" ? "0 least" : "0"} high={dim.group === "hazard" || dim.higher_is === "worse" ? "100 most" : "100"} />
       )}
       {view === "priorities" && <Ramp colors={pal.rampPriority} label="Match with your priorities" low="0 poor" high="100 best" />}
       <ul className="space-y-1 text-[11px] text-muted">

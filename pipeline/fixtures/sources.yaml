@@ -240,6 +240,125 @@
   verified: confirmed
   vintage: "fixture"
   files: [districts.gpkg]
+- id: bea_rpp_metro
+  name: fixture county polygons with a metro price parity on the Cedar metro only (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: bea_rpp_state
+  name: fixture BEA-like state price parities (B-North and B-Mid only)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/states.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [states.gpkg]
+- id: wb_icp_pli
+  name: fixture ICP-like national household price level (XA only)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/icp.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [icp.csv]
+- id: wb_gdp_pli
+  name: fixture WDI-like national GDP price level on the world base (both countries)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/gdp_pli.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [gdp_pli.csv]
+- id: hud_fmr
+  name: fixture county polygons with a 2-bedroom rent (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: map_healthcare
+  name: travel time to healthcare stand-in (minutes, 0.01 degree)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/care.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [care.tif]
+- id: acag_pm25
+  name: annual PM2.5 stand-in (ug/m3, 0.01 degree, negative off land)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/pm25.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [pm25.tif]
+- id: cgls_tree_cover
+  name: tree-cover fraction stand-in (percent, 0.002 degree uint8, 255 nodata)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/trees.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: 255
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [trees.tif]
+- id: ookla_fixed
+  name: fixed-broadband speed tiles stand-in (lat, lng, d_mbps, tests)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ookla_fixed.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ookla_fixed.csv]
+- id: ookla_mobile
+  name: mobile speed tiles stand-in (lat, lng, d_mbps, tests)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ookla_mobile.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ookla_mobile.csv]
+- id: gfed5_ba
+  name: burned-area stand-in (percent of area per year, 0.25 degree)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/fire.tif
+  format: geotiff
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fire.tif]
 - id: dataverse_example
   name: example of a Dataverse guestbook-gated source (fetch reports missing without .env)
   group: life

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipFor, DIM_ORDER, dimensionsFrom, isAvailable } from "./dims";
+import { chipFor, DIM_ORDER, dimensionsFrom, envDims, isAvailable, lifeDims, resLabel, unitsFrom } from "./dims";
 import { EMPTY_MANIFEST, type Manifest, type ManifestDimension } from "./manifest";
 
 // shaped like the real manifest.json: `coverage` holds per-res tag counts (the registry's
@@ -38,5 +38,39 @@ describe("dimension registry from the manifest", () => {
     const dims = dimensionsFrom(EMPTY_MANIFEST);
     expect(dims.map((d) => d.id)).toEqual([...DIM_ORDER]);
     expect(dims.find((d) => d.id === "transit")!.chip).toBe("US only");
+  });
+
+  it("appends new dimensions to DIM_ORDER so old `w=` links keep their meaning", () => {
+    // the first fourteen slots are frozen: hazards, wellbeing, then the Session 4 life dimensions
+    expect(DIM_ORDER.slice(0, 14)).toEqual(["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"]);
+    expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
+    expect(DIM_ORDER.slice(16)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
+    expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
+  });
+
+  it("reads units per resolution tag from the manifest joiners, first joiner per tag winning", () => {
+    const cost = dim("cost", { unit: "index", decimals: 0, joiners: [
+      { source: "bea_rpp_metro", joiner: "polygon_centroid", res: "county", field: "rpp_all", domain: "us", label: "bea", unit: "index (US = 100)", multiply: 1, decimals: 0 },
+      { source: "wb_icp_pli", joiner: "iso_lookup", res: "national", field: "pli_household", domain: "global", label: "icp", unit: "index (world = 100)", multiply: 1, decimals: 0 },
+      { source: "wb_gdp_pli", joiner: "iso_lookup", res: "national", field: "pli_gdp", domain: "global", label: "wdi", unit: "should not win", multiply: 1, decimals: 0 },
+    ] });
+    const u = unitsFrom(cost);
+    expect(u["*"]).toEqual({ unit: "index", multiply: 1, decimals: 0 });
+    expect(u.county.unit).toBe("index (US = 100)");
+    expect(u.national.unit).toBe("index (world = 100)");
+    expect(dimensionsFrom({ ...EMPTY_MANIFEST, dimensions: [cost] })[0].units!.national.unit).toBe("index (world = 100)");
+    expect(unitsFrom(dim("plain"))).toEqual({});
+  });
+
+  it("keeps the environment group apart from the life dimensions and labels the new tags", () => {
+    const dims = dimensionsFrom(EMPTY_MANIFEST);
+    expect(envDims(dims).map((d) => d.id)).toEqual(["air", "trees", "fire", "drought"]);
+    expect(lifeDims(dims).map((d) => d.id)).toContain("care");
+    expect(lifeDims(dims).map((d) => d.id)).not.toContain("air");
+    expect(dims.find((d) => d.id === "cost")!.higher_is).toBe("worse"); // a higher price level is worse for the person
+    expect(dims.find((d) => d.id === "rent")!.chip).toBe("US only");
+    expect(resLabel("hex")).toBe("this hex");
+    expect(resLabel("basin")).toBe("sub-basin");
+    expect(resLabel("weird")).toBe("weird");
   });
 });

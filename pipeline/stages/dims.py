@@ -21,20 +21,34 @@ from __future__ import annotations
 
 import hashlib
 import time
+from dataclasses import dataclass
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from .. import h3util, prep, stage_cache
-from ..config import Settings
+from ..config import BBox, Settings
 from ..joiners import JOINERS
 from ..registry import COMPOSITION_KEYS, Dimension, JoinSpec, Source, load_dimensions, load_sources
 
 OVERLAY_CHUNK = 2000  # hexes per area_weighted_overlay call
 
 
-def _as_wgs84(layer: pd.DataFrame) -> pd.DataFrame:
+@dataclass(frozen=True)
+class RasterLayer:
+    """A raster source as the dims stage sees it: the GeoTIFF to read and its nodata sentinel
+    (from `nodata:` on the source; the file's own nodata tag is the fallback)."""
+
+    path: Path
+    nodata: float | None = None
+
+
+Layer = pd.DataFrame | RasterLayer
+
+
+def _as_wgs84(layer: Layer) -> Layer:
     if isinstance(layer, gpd.GeoDataFrame):
         if layer.crs is None:
             return layer.set_crs(4326)
@@ -54,12 +68,20 @@ def _layer_mask(hexes: pd.DataFrame, layer: pd.DataFrame, res: int) -> np.ndarra
     return (lng >= minx - pad) & (lng <= maxx + pad) & (lat >= miny - pad) & (lat <= maxy + pad)
 
 
-def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: pd.DataFrame, res: int, field: str) -> np.ndarray:
+def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, field: str, bbox: BBox | None = None) -> np.ndarray:
     """One joiner over the relevant subset of hexes; float array aligned to ``hexes`` rows."""
     out = np.full(len(hexes), np.nan, dtype="float64")
     if spec.joiner == "iso_lookup":
         v = JOINERS["iso_lookup"](hexes, layer, field)
         return pd.to_numeric(v, errors="coerce").to_numpy(dtype="float64")
+    if spec.joiner == "raster_mean":
+        # hex-level: every hex at once; the joiner reads only the windows inside `bbox`
+        assert isinstance(layer, RasterLayer), f"{spec.source}: raster_mean needs a raster layer"
+        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox)
+        return v.to_numpy(dtype="float64")
+    if spec.joiner == "point_mean":
+        v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)
+        return v.to_numpy(dtype="float64")
     mask = _layer_mask(hexes, layer, res)
     if not mask.any():
         return out
@@ -86,7 +108,7 @@ def _largest_remainder(shares: np.ndarray) -> np.ndarray:
     return (floors + (rank < remainder[:, None])).astype("int64")
 
 
-def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[str, pd.DataFrame | None]) -> dict[str, pd.Series]:
+def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[str, Layer | None], bbox: BBox | None = None) -> dict[str, pd.Series]:
     """All output columns for one dimension, first-hit-wins across its joiners."""
     n = len(hexes)
     res_tag = np.full(n, "none", dtype=object)
@@ -100,16 +122,16 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
         if layer is None:
             continue  # source not available; reported by run()
         if comps is not None:
-            first = run_joiner(spec, hexes, layer, res, spec.fields["w"])
+            first = run_joiner(spec, hexes, layer, res, spec.fields["w"], bbox)
             fill = np.isnan(comps["w"]) & ~np.isnan(first)
             if not fill.any():
                 continue
             comps["w"][fill] = first[fill]
             for k in COMPOSITION_KEYS[1:]:
-                v = run_joiner(spec, hexes, layer, res, spec.fields[k])
+                v = run_joiner(spec, hexes, layer, res, spec.fields[k], bbox)
                 comps[k][fill] = v[fill]
         else:
-            v = run_joiner(spec, hexes, layer, res, spec.field)
+            v = run_joiner(spec, hexes, layer, res, spec.field, bbox)
             fill = np.isnan(raw) & ~np.isnan(v)
             if not fill.any():
                 continue
@@ -150,15 +172,21 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
     return cols
 
 
-def _load_layers(settings: Settings, dims: list[Dimension], sources: dict[str, Source]) -> tuple[dict[str, pd.DataFrame | None], dict[str, str]]:
-    """Every joiner source once; missing real downloads become None with the reason kept."""
-    layers: dict[str, pd.DataFrame | None] = {}
+def _load_layers(settings: Settings, dims: list[Dimension], sources: dict[str, Source]) -> tuple[dict[str, Layer | None], dict[str, str]]:
+    """Every joiner source once; missing real downloads become None with the reason kept.
+    Raster sources (``raster_mean``) load as a :class:`RasterLayer`, everything else as a
+    prepared (Geo)DataFrame."""
+    layers: dict[str, Layer | None] = {}
     skipped: dict[str, str] = {}
     for dim in dims:
         for spec in dim.joiners:
             if spec.source in layers:
                 continue
             try:
+                if spec.joiner == "raster_mean":
+                    nd = sources[spec.source].extra.get("nodata")
+                    layers[spec.source] = RasterLayer(prep.load_raster(settings, spec.source, sources), float(nd) if nd is not None else None)
+                    continue
                 layers[spec.source] = _as_wgs84(prep.load_layer(settings, spec.source, sources))
             except FileNotFoundError as exc:
                 layers[spec.source] = None
@@ -196,7 +224,7 @@ def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
     sources = load_sources(settings.sources_path)
     dims = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
     yaml_sha = hashlib.sha256(settings.dimensions_path.read_bytes()).hexdigest()[:16]
-    layers: dict[str, pd.DataFrame | None] | None = None
+    layers: dict[str, Layer | None] | None = None
     skipped: dict[str, str] = {}
     counts: dict[int, dict[str, dict[str, int]]] = {}
     for res in settings.res:
@@ -224,7 +252,7 @@ def run(settings: Settings) -> dict[int, dict[str, dict[str, int]]]:
         df = pd.DataFrame({"h3": hexes["h3"]})
         for dim in dims:
             t1 = time.time()
-            for col, series in join_dimension(dim, hexes, res, layers).items():
+            for col, series in join_dimension(dim, hexes, res, layers, settings.bbox).items():
                 df[col] = series
             tags = df.loc[hexes["inhabited"].to_numpy(dtype=bool), f"{dim.id}_res"].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())

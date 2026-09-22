@@ -156,6 +156,9 @@
   format: filegdb-zip
   gdb_member: Aqueduct40_waterrisk_download_Y2023M07D05/GDB/Aq40_Y2023D07M05.gdb/
   layer: future_annual
+  # baseline_annual carries drr_cat (Aqueduct 3.0 drought risk; no future-scenario drought exists
+  # in Aqueduct 4.0); prep/aqueduct.py reads it for the `drought` dimension
+  baseline_layer: baseline_annual
   crs: EPSG:4326
   scenario: bau (SSP3 / RCP7.0)
   horizon: "2050"
@@ -433,3 +436,214 @@
   attribution: "HRSA, Area Health Resources Files 2024-2025"
   processing: "total active non-federal MDs (md_nf_activ_23) per 10k residents at county (polygon_centroid)"
   files: [AHRF_2024-2025_CSV.zip]
+
+# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
+# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
+# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
+- id: bea_rpp_metro
+  name: BEA Regional Price Parities by metropolitan statistical area (MARPP), all items
+  group: life
+  access: direct
+  url: https://apps.bea.gov/regional/zip/MARPP.zip
+  format: csv-zip
+  member: MARPP_MSA_2008_2024.csv
+  geometry: cb_cbsa
+  license: Public domain (US federal work; BEA statistics carry no copyright)
+  verified: confirmed
+  vintage: "2024 statistics (released 2026-02-19); table covers 2008-2024"
+  attribution: "US Bureau of Economic Analysis, Regional Price Parities (MARPP)"
+  processing: "LineCode 1 (RPPs: All items, US = 100) for the latest year; GeoFIPS is the 5-digit CBSA code, joined to the Census CBSA polygons (polygon_centroid). BEA publishes no county table"
+  files: [MARPP.zip]
+
+- id: bea_rpp_state
+  name: BEA Regional Price Parities by state (SARPP), all items
+  group: life
+  access: direct
+  url: https://apps.bea.gov/regional/zip/SARPP.zip
+  format: csv-zip
+  member: SARPP_STATE_2008_2024.csv
+  geometry: cb_states
+  license: Public domain (US federal work; BEA statistics carry no copyright)
+  verified: confirmed
+  vintage: "2024 statistics (released 2026-02-19); table covers 2008-2024"
+  attribution: "US Bureau of Economic Analysis, Regional Price Parities (SARPP)"
+  processing: "LineCode 1 (RPPs: All items, US = 100) for the latest year; GeoFIPS ' SS000' -> 2-digit state FIPS, joined to the Census state polygons (polygon_centroid); the fallback where a hex is outside any priced metro area"
+  files: [SARPP.zip]
+
+- id: cb_cbsa
+  name: US Census cartographic boundary core based statistical areas 2025 (1:500k)
+  group: life
+  access: direct
+  url: https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_cbsa_500k.zip
+  format: shapefile-zip
+  crs: EPSG:4269
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "2025 (file dated 2026-04-23, 4.7 MB; HEAD 200 on 2026-09-22)"
+  attribution: "US Census Bureau, cartographic boundary files"
+  processing: "geometry for bea_rpp_metro (GEOID = 5-digit CBSA code); micropolitan areas are present but unpriced by BEA"
+  files: [cb_2025_us_cbsa_500k.zip]
+
+- id: cb_states
+  name: US Census cartographic boundary states 2025 (1:500k)
+  group: life
+  access: direct
+  url: https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_state_500k.zip
+  format: shapefile-zip
+  crs: EPSG:4269
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "2025 (file dated 2026-04-23, 3.2 MB; HEAD 200 on 2026-09-22)"
+  attribution: "US Census Bureau, cartographic boundary files"
+  processing: "geometry for bea_rpp_state (GEOID = 2-digit state FIPS)"
+  files: [cb_2025_us_state_500k.zip]
+
+- id: wb_icp_pli
+  name: World Bank ICP 2021, household consumption price level index (World = 100), all countries and years
+  group: life
+  access: direct
+  # source 90 = ICP 2021; series 9100000 = households and NPISHs final consumption expenditure;
+  # classification PX.WL = price level index, World = 100. The `all` country selector works
+  # (1,449 records on one page, probed 2026-09-22); the loader refuses a paginated answer.
+  url: "https://api.worldbank.org/v2/sources/90/Country/all/Series/9100000/Classification/PX.WL/Time/all/data?format=json&per_page=20000"
+  format: json
+  license: CC BY 4.0 (World Bank open data terms)
+  verified: confirmed
+  vintage: "ICP 2021 cycle (API lastupdated 2024-08-04); latest year with a value per country"
+  attribution: "World Bank, International Comparison Program (ICP) 2021"
+  processing: "latest non-null year per ISO3 -> iso_a2, pli_household (World = 100); aggregates without an ISO2 code are dropped (iso_lookup)"
+  files: [icp2021_household_pli.json]
+
+- id: wb_gdp_pli
+  name: World Bank WDI PA.NUS.PPPC.RF, price level ratio of the PPP conversion factor (GDP) to the market exchange rate
+  group: life
+  access: direct
+  # the served file name carries a changing suffix (API_PA.NUS.PPPC.RF_DS57_en_csv_v2_370312.zip
+  # on 2026-09-22, 98 KB, HTTP 200); fetch saves it under the stable name in `files`
+  url: "https://api.worldbank.org/v2/en/indicator/PA.NUS.PPPC.RF?downloadformat=csv"
+  format: csv-zip
+  also_needs: [wb_icp_pli]
+  license: CC BY 4.0 (World Bank open data terms)
+  verified: confirmed
+  vintage: "WDI (latest broad year 2024); latest year with a value per country"
+  attribution: "World Bank, World Development Indicators (PA.NUS.PPPC.RF)"
+  processing: "a ratio with the US = 1, rescaled onto the ICP world base by the median of ICP / ratio over the countries both cover -> pli_gdp; aggregates (blank Region in Metadata_Country) dropped; fills only where ICP has no row (iso_lookup)"
+  files: [API_PA.NUS.PPPC.RF_en_csv_v2.zip]
+
+- id: hud_fmr
+  name: HUD Fair Market Rents FY2026 (county / FMR area)
+  group: life
+  access: manual
+  recipe: |
+    huduser.gov answers automated clients with an empty 202 (AWS WAF challenge), so download by hand:
+    open https://www.huduser.gov/portal/datasets/fmr/fmr2026/FY26_FMRs.xlsx in a browser
+    and save it as data/raw/hud_fmr/FY26_FMRs.xlsx (377 KB, public domain).
+  # a HEAD request answers 202; GET serves the workbook
+  url: https://www.huduser.gov/portal/datasets/fmr/fmr2026/FY26_FMRs.xlsx
+  format: xlsx
+  geometry: cb_counties
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "FY2026 (effective 2025-10-01)"
+  attribution: "US Department of Housing and Urban Development, Fair Market Rents FY2026"
+  processing: "2-bedroom FMR (fmr_2, USD/month) per county: the whole-county row (10-digit fips ending 99999) or the median of its New England town rows; joined to the Census counties on the 5-digit GEOID (polygon_centroid)"
+  files: [FY26_FMRs.xlsx]
+
+# ---------------------------------------------------------------- extras (hex-level layers) --
+# Verified first-hand 2026-09-22 (SPEC §15). Each is a global raster or point set joined per hex
+# (`res: hex`), so none needs a polygon geometry source.
+- id: map_healthcare
+  name: Malaria Atlas Project, motorized travel time to healthcare 2020 (Weiss et al. 2020), 1 km
+  group: life
+  access: direct
+  # GeoServer WCS GetCoverage of the whole coverage: streamed chunked (no Content-Length, no Range
+  # support), ~2.8 GiB uncompressed float32, tiled 512x512; about 20 minutes at 3 MB/s
+  url: "https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Accessibility__202001_Global_Motorized_Travel_Time_to_Healthcare&format=image/geotiff"
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  native_res_m: ~1000
+  license: CC BY 4.0
+  license_note: "licence text is on the Google Earth Engine catalog entry (projects/malariaatlasproject/assets/accessibility/accessibility_to_healthcare_2019): 'This work is licensed under a Creative Commons Attribution 4.0 International License'; malariaatlas.org itself has no licence page"
+  verified: confirmed
+  vintage: "Accessibility 202001 release (data year 2019), extent 60S-85N, 43200 x 17400"
+  attribution: "D.J. Weiss, A. Nelson, C.A. Vargas-Ruiz et al. (2020) Global maps of travel time to healthcare facilities. Nature Medicine; Malaria Atlas Project"
+  processing: "minutes at 1 km, mean over the hex (raster_mean); -9999 is nodata; the walking-only coverage exists but is not used"
+  files: [Accessibility__202001_Global_Motorized_Travel_Time_to_Healthcare.tif]
+
+- id: acag_pm25
+  name: WashU ACAG satellite-derived annual PM2.5 (SatPM2.5 V6.GL.03), 2024, 0.01 degree
+  group: env
+  access: direct
+  url: https://satpmdata.s3.amazonaws.com/V6GL03/FineResolution/GL/Annual/V6GL03.CNNPM25.GL.202401-202412.nc
+  format: netcdf
+  variable: PM25
+  crs: EPSG:4326
+  native_res_m: ~1000
+  license: CC BY 4.0
+  license_note: "AWS Open Data registry entry (https://registry.opendata.aws/satpmdata/): 'License: Creative Commons Attribution 4.0 International'"
+  verified: confirmed
+  vintage: "V6.GL.03 annual 2024 (450 MB NetCDF-4, bucket file dated 2026-05-04)"
+  attribution: "Atmospheric Composition Analysis Group, Washington University in St. Louis (van Donkelaar et al.); SatPM2.5 was accessed on 2026-09-22 from https://registry.opendata.aws/satpmdata"
+  processing: "PM25 (ug/m3) written once to a GeoTIFF (prep/rasters.py), then mean over the hex (raster_mean); NaN over water stays missing"
+  files: [V6GL03.CNNPM25.GL.202401-202412.nc]
+
+- id: cgls_tree_cover
+  name: Copernicus Global Land Service Land Cover 100 m, collection 3, epoch 2019, tree-cover fraction
+  group: env
+  access: direct
+  url: https://zenodo.org/records/3939050/files/PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: 255
+  native_res_m: 100
+  license: CC BY 4.0
+  license_note: "Zenodo record licence cc-by-4.0; file tag copyright 'Copernicus Service information 2020'"
+  verified: confirmed
+  vintage: "v3.0.1, epoch 2019 (published 2020-09-08, doi 10.5281/zenodo.3939050); 5.26 GiB, tiled 256x256 DEFLATE, 362880 x 141120 uint8, extent 60S-80N"
+  attribution: "Buchhorn, M. et al. (2020) Copernicus Global Land Service: Land Cover 100m: collection 3: epoch 2019, Globe. VITO NV / Copernicus Service information 2020"
+  processing: "percent tree cover 0-100 (255 nodata) block-averaged from 100 m to 1 km inside each window, then mean over the hex (raster_mean, decimate 10)"
+  files: [PROBAV_LC100_global_v3.0.1_2019-nrt_Tree-CoverFraction-layer_EPSG-4326.tif]
+
+- id: ookla_fixed
+  name: Ookla Open Data, Speedtest fixed broadband performance tiles, 2026 Q2
+  group: life
+  access: direct
+  url: https://ookla-open-data.s3.amazonaws.com/parquet/performance/type=fixed/year=2026/quarter=2/2026-04-01_performance_fixed_tiles.parquet
+  format: parquet
+  license: CC BY-NC-SA 4.0
+  license_note: "NonCommercial AND ShareAlike (README of github.com/teamookla/ookla-open-data): the per-hex net_* attributes derived from it are redistributed under CC BY-NC-SA 4.0; the project is non-commercial (§13.13). Coverage holes are expected: Ookla dropped some regions on 2026-04-16"
+  verified: confirmed
+  vintage: "2026 Q2 (tiles dated 2026-04-01; 354 MB parquet written by pyarrow 24)"
+  attribution: "Speedtest® by Ookla® Global Fixed and Mobile Network Performance Maps was accessed on 2026-09-22 from https://registry.opendata.aws/speedtest-global-performance/. Based on livability-map's analysis of Speedtest® by Ookla® Global Fixed and Mobile Network Performance Maps for 2026 Q2. Ookla trademarks used under license and reprinted with permission."
+  processing: "avg_d_kbps per ~610 m web-mercator z16 tile (columns quadkey, tile, tile_x, tile_y, avg_d_kbps, avg_u_kbps, avg_lat_ms, tests, devices), weighted by tests, mean over the hex of the tile centroids (point_mean); shown as Mbps"
+  files: [2026-04-01_performance_fixed_tiles.parquet]
+
+- id: ookla_mobile
+  name: Ookla Open Data, Speedtest mobile performance tiles, 2026 Q2
+  group: life
+  access: direct
+  url: https://ookla-open-data.s3.amazonaws.com/parquet/performance/type=mobile/year=2026/quarter=2/2026-04-01_performance_mobile_tiles.parquet
+  format: parquet
+  license: CC BY-NC-SA 4.0
+  license_note: "as ookla_fixed; used only where no fixed-broadband tile exists"
+  verified: confirmed
+  vintage: "2026 Q2 (tiles dated 2026-04-01; 185 MB parquet)"
+  attribution: "Speedtest® by Ookla® Global Fixed and Mobile Network Performance Maps was accessed on 2026-09-22 from https://registry.opendata.aws/speedtest-global-performance/. Ookla trademarks used under license and reprinted with permission."
+  processing: "as ookla_fixed"
+  files: [2026-04-01_performance_mobile_tiles.parquet]
+
+- id: gfed5_ba
+  name: Global Fire Emissions Database GFED5 burned area, monthly 0.25 degree, 1997-2020
+  group: env
+  access: direct
+  url: https://zenodo.org/records/7668424/files/BA.zip
+  format: netcdf-zip
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "Zenodo record 7668424 licence CC BY 4.0"
+  verified: confirmed
+  vintage: "GFED5 v0.1 burned area (published 2023-02-23, doi 10.5281/zenodo.7668424); 265 MB zip of 288 monthly files BA{YYYYMM}.nc plus BurnableArea.nc; 2001-2020 (0.25 degree) used"
+  attribution: "Chen, Y. et al. (2023) Multi-decadal trends and variability in burned area from the fifth version of the Global Fire Emissions Database (GFED5). Earth System Science Data 15, 5227-5259"
+  processing: "monthly Total burned area per cell summed per year, averaged over 2001-2020, divided by the cell's area -> percent of area burned per year, written once to a 0.25 degree GeoTIFF (prep/rasters.py) and sampled at the hex centroid (coarser than the hex)"
+  files: [BA.zip]

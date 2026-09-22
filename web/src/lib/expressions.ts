@@ -37,6 +37,8 @@ export function scoreColor(id: string, ramp: string[], grey: string = PALETTES.l
 export function rampFor(dim: DimInfo, pal: Palette = PALETTES.light): string[] {
   if (dim.group === "hazard") return pal.rampHazard;
   if (dim.group === "wellbeing") return pal.rampWellbeing;
+  // present-day environment: "more is worse" layers (PM2.5, fire, drought) read like hazards
+  if (dim.group === "env" && dim.higher_is === "worse") return pal.rampHazard;
   return pal.rampGood;
 }
 

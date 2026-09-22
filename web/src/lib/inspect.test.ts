@@ -3,7 +3,16 @@ import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
 import { describeHex } from "./inspect";
 
-const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile", available: true });
+// units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
+const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
+  care: { hex: { unit: "min to the nearest health facility", multiply: 1, decimals: 0 } },
+  net: { hex: { unit: "Mbps download", multiply: 1, decimals: 0 } },
+  air: { hex: { unit: "µg/m³ PM2.5 (WHO guideline 5)", multiply: 1, decimals: 1 } },
+  trees: { hex: { unit: "% tree cover", multiply: 1, decimals: 0 } },
+  fire: { hex: { unit: "% of the area burns per year (2001-2020)", multiply: 1, decimals: 2 } },
+  transit: { tract: { unit: "transit trips/hour nearby", multiply: 1, decimals: 1 } },
+};
+const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], name = id): DimInfo => ({ id, name, group, kind, higher_is: "better", chip: group === "life" ? "US only" : "Global", note: "", scale: "percentile", available: true, units: UNITS[id] ?? {} });
 const DIMS: DimInfo[] = [
   dim("heat", "score", "hazard", "Extreme heat"),
   dim("rflood", "score", "hazard"),
@@ -13,6 +22,14 @@ const DIMS: DimInfo[] = [
   dim("jobs", "score", "life", "Jobs"),
   dim("pol", "signed", "life", "Political lean"),
   dim("race", "composition", "life", "Composition"),
+  dim("cost", "score", "life", "Cost of living"),
+  dim("rent", "score", "life", "Housing cost"),
+  dim("care", "score", "life", "Travel time to healthcare"),
+  dim("net", "score", "life", "Internet speed"),
+  dim("air", "score", "env", "Air quality"),
+  dim("trees", "score", "env", "Tree cover"),
+  dim("fire", "score", "env", "Wildfire"),
+  dim("drought", "score", "env", "Drought risk"),
 ];
 const MANIFEST: ClientManifest = {
   built_at: "2026-09-22T00:00:00Z",
@@ -26,8 +43,9 @@ const MANIFEST: ClientManifest = {
     { id: "acs_summary", name: "ACS", vintage: "2024", license: "PD", license_note: "", attribution: "Census", processing: "", url: null },
     { id: "medsl_county_pres", name: "MEDSL", vintage: "2024", license: "CC0", license_note: "", attribution: "MIT", processing: "", url: null },
     { id: "ghsl_pop", name: "GHSL", vintage: "2023", license: "CC BY 4.0", license_note: "", attribution: "JRC", processing: "", url: null },
+    { id: "acag_pm25", name: "ACAG PM2.5", vintage: "2024", license: "CC BY 4.0", license_note: "", attribution: "WashU", processing: "", url: null },
   ],
-  dimensionSources: { heat: ["cckp_hd35"], jobs: ["acs_summary"], pol: ["medsl_county_pres"], race: ["acs_summary"] },
+  dimensionSources: { heat: ["cckp_hd35"], jobs: ["acs_summary"], pol: ["medsl_county_pres"], race: ["acs_summary"], air: ["acag_pm25"] },
   notes: {},
 };
 
@@ -69,5 +87,52 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(m.bivar).toContain("not classified");
     expect(m.wellbeing.value).toBeNull();
     expect(m.sources.map((s) => s.id)).toContain("medsl_county_pres");
+  });
+
+  it("formats cost of living by its base (US = 100 for BEA tags, world = 100 nationally) and rent as a monthly dollar amount", () => {
+    const us = { h3: "85z", iso_a2: "US", admin1_name: "Arizona", population: 1000, inhabited: true, coverage: 4, cost_res: "county", cost_raw: 112.3, cost_score: 70, rent_res: "county", rent_raw: 1450, rent_score: 55, wb_res: "none", wb_source: "none", bivar: 0 };
+    let m = describeHex(us, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 112 (US = 100)");
+    expect(m.life.find((r) => r.id === "rent")!.value).toBe("$1,450/month (2-bedroom FMR)");
+    // a state-level BEA value carries the admin1 tag and is still on the US = 100 base
+    m = describeHex({ ...us, cost_res: "admin1", cost_raw: 96.6 }, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 97 (US = 100)");
+    // outside the US the national ICP / WDI value is on the world = 100 base and rent is absent
+    m = describeHex({ ...us, iso_a2: "IS", admin1_name: null, cost_res: "national", cost_raw: 143.2, rent_res: "none", rent_raw: undefined }, "hex5", DIMS, MANIFEST);
+    expect(m.life.find((r) => r.id === "cost")!.value).toBe("index 143 (world = 100)");
+    expect(m.life.find((r) => r.id === "rent")!.value).toBeNull();
+  });
+});
+
+describe("hex-level layers in the inspector", () => {
+  it("formats the environment rows with their units and the hex / basin tags", () => {
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, care_res: "hex", care_raw: 34.6, care_score: 40, net_res: "hex", net_raw: 118.2, net_score: 80, air_res: "hex", air_raw: 12.34, air_score: 60, trees_res: "hex", trees_raw: 41.2, trees_score: 55, fire_res: "hex", fire_raw: 0.372, fire_score: 70, drought_res: "basin", drought_raw: 3, drought_score: 75, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex5", DIMS, MANIFEST);
+    expect(m.env.map((r) => r.id)).toEqual(["air", "trees", "fire", "drought"]);
+    expect(m.life.map((r) => r.id)).toEqual(["jobs", "pol", "race", "cost", "rent", "care", "net"]);
+    expect(m.env.find((r) => r.id === "air")!.value).toBe("12.3 µg/m³ PM2.5 (WHO guideline 5)");
+    expect(m.env.find((r) => r.id === "trees")!.value).toBe("41% tree cover");
+    expect(m.env.find((r) => r.id === "fire")!.value).toBe("0.37% of the area burns per year (2001-2020)");
+    expect(m.env.find((r) => r.id === "drought")!).toMatchObject({ value: "drought risk 3 of 4 (medium to high)", res: "basin", score: 75 });
+    expect(m.life.find((r) => r.id === "care")!.value).toBe("35 min to the nearest health facility");
+    expect(m.life.find((r) => r.id === "net")!.value).toBe("118 Mbps download");
+    expect(m.sources.map((s) => s.id)).toContain("acag_pm25");
+    // life dimensions without a tag stay "no data"
+    expect(m.life.find((r) => r.id === "jobs")!).toMatchObject({ value: null, score: null, res: "none" });
+  });
+
+  it("prints a dimension it has never heard of from the manifest's unit fields", () => {
+    const unknown: DimInfo = { id: "noise", name: "Night noise", group: "env", kind: "score", higher_is: "worse", chip: "Global", note: "", scale: "percentile", available: true, units: { "*": { unit: "dB at night", multiply: 1, decimals: 0 }, tract: { unit: "% of homes above 55 dB", multiply: 100, decimals: 0 } } };
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, noise_res: "hex", noise_raw: 47.6, noise_score: 30, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex4", [...DIMS, unknown], MANIFEST);
+    expect(m.env.find((r) => r.id === "noise")!.value).toBe("48 dB at night");
+    const tract = describeHex({ ...props, noise_res: "tract", noise_raw: 0.123 }, "hex4", [...DIMS, unknown], MANIFEST);
+    expect(tract.env.find((r) => r.id === "noise")!.value).toBe("12% of homes above 55 dB");
+  });
+
+  it("keeps a missing environment layer as no data, never zero", () => {
+    const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, wb_res: "none", wb_source: "none", bivar: 0 };
+    const m = describeHex(props, "hex4", DIMS, MANIFEST);
+    for (const row of m.env) expect(row).toMatchObject({ value: null, score: null, res: "none" });
   });
 });

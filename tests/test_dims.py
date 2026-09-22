@@ -83,6 +83,30 @@ def test_us_life_dims_on_fixtures(settings):
     assert (west["transit_res"] == "none").all() and west["transit_raw"].isna().all()
 
 
+def test_cost_and_rent_on_fixtures(settings):
+    """cost: BEA metro (county) inside the fixture metro, BEA state (admin1) elsewhere in XKB,
+    the WDI fallback for the one XKB region the state stand-in leaves out, ICP national in XKA.
+    rent: HUD-like county rents cover every XKB county; nothing outside the US-like country."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4)
+    xa = df[df["iso_a2"] == "XA"]
+    xb = df[df["iso_a2"] == "XB"]
+    # rent (US only)
+    assert (xb["rent_res"] == "county").all() and xb["rent_raw"].between(700, 1450).all()
+    assert (xa["rent_res"] == "none").all() and xa["rent_raw"].isna().all()
+    # cost: metro > state > ICP > WDI, first hit wins (SPEC §20.2)
+    b_mid = xb[xb["admin1_name"] == "B-Mid"]  # the fixture metro (Cedar Co)
+    assert len(b_mid) and (b_mid["cost_res"] == "county").all() and (b_mid["cost_lbl"] == "bea").all()
+    assert (b_mid["cost_raw"] == np.float32(108.5)).all() and (b_mid["cost_dom"] == "us").all()
+    b_north = xb[xb["admin1_name"] == "B-North"]  # no metro row: state price parity
+    assert len(b_north) and (b_north["cost_res"] == "admin1").all() and (b_north["cost_raw"] == np.float32(97.0)).all()
+    b_south = xb[xb["admin1_name"] == "B-South"]  # neither metro nor state: WDI GDP price level
+    assert len(b_south) and (b_south["cost_res"] == "national").all() and (b_south["cost_lbl"] == "wdi").all()
+    assert (b_south["cost_raw"] == np.float32(121.0)).all() and (b_south["cost_dom"] == "global").all()
+    assert len(xa) and (xa["cost_res"] == "national").all() and (xa["cost_lbl"] == "icp").all()
+    assert (xa["cost_raw"] == np.float32(88.0)).all()
+
+
 def test_dims_is_idempotent(settings, capsys):
     _run_all(settings)
     capsys.readouterr()

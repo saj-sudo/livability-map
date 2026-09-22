@@ -19,4 +19,13 @@ describe("presets (SPEC §20.5)", () => {
     const climate = PRESETS.find((p) => p.id === "climate")!;
     expect(Object.keys(climate.weights).sort()).toEqual([...HAZARD_IDS].sort());
   });
+
+  it("early career weights cost of living and rent; retiring weights cost of living", () => {
+    const early = PRESETS.find((p) => p.id === "early")!;
+    expect(early.weights.cost).toBe(2);
+    expect(early.weights.rent).toBe(2);
+    const retiring = PRESETS.find((p) => p.id === "retiring")!;
+    expect(retiring.weights.cost).toBe(2);
+    expect(retiring.weights.rent).toBeUndefined();
+  });
 });

@@ -170,44 +170,53 @@ def assign_tiles(bbox: np.ndarray, z: int, buffer_units: int = BUFFER) -> dict[t
 _DECIMALS = {"heat_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}
 
 
-def column_objects(df: pd.DataFrame, names: list[str]) -> dict[str, np.ndarray]:
-    """Each attribute as an object array of native Python scalars, None where missing, floats
-    rounded (the MVT encoder drops numpy scalars and None silently, so this matters)."""
-    out: dict[str, np.ndarray] = {}
-    n = len(df)
+def column_store(df: pd.DataFrame, names: list[str]) -> dict[str, tuple[str, np.ndarray, np.ndarray | None, list | None]]:
+    """Per column: (kind, values, valid mask or None, categories or None), all as typed numpy
+    arrays. Strings become categorical codes. This replaces a per-column array of Python
+    objects: at res 5 (570k hexes x ~80 attributes) that representation cost ~1.7 GB per
+    encoder process and the 15-process pool ran the laptop out of memory (SPEC §15, 2026-09-22).
+    Values are turned into Python objects one feature at a time in :func:`props_for_rows`."""
+    out: dict[str, tuple[str, np.ndarray, np.ndarray | None, list | None]] = {}
     for name in names:
         if name not in df.columns:
             continue
         s = df[name]
-        obj = np.full(n, None, dtype=object)
         missing = s.isna().to_numpy()
-        valid = ~missing
-        if not valid.any():
-            out[name] = obj
-            continue
-        kind = s.dtype
-        if str(kind) == "bool" or (str(kind).startswith("bool")):
-            obj[valid] = s.to_numpy()[valid].astype(bool).tolist()
-        elif str(kind).startswith(("Int", "int", "UInt", "uint")):
-            obj[valid] = s[valid].astype("int64").to_numpy().tolist()
-        elif str(kind).startswith(("float", "Float")):
-            vals = s[valid].astype("float64").to_numpy()
-            obj[valid] = np.round(vals, _DECIMALS.get(name, 3)).tolist()
+        valid = None if not missing.any() else ~missing
+        kind = str(s.dtype)
+        if kind.startswith("bool"):
+            out[name] = ("bool", s.fillna(False).to_numpy().astype(bool), valid, None)
+        elif kind.startswith(("Int", "int", "UInt", "uint")):
+            out[name] = ("int", s.fillna(0).to_numpy().astype("int64"), valid, None)
+        elif kind.startswith(("float", "Float")):
+            vals = np.round(s.astype("float64").to_numpy(), _DECIMALS.get(name, 3))
+            out[name] = ("float", vals, valid, None)
         else:
-            obj[valid] = [str(v) for v in s[valid].tolist()]
-        out[name] = obj
+            cat = pd.Categorical(s.astype("object").where(~missing, None))
+            out[name] = ("str", cat.codes.astype("int32"), valid, [str(c) for c in cat.categories])
     return out
 
 
-def props_for_rows(cols: dict[str, np.ndarray], names: list[str], rows: np.ndarray) -> list[dict]:
-    present = [k for k in names if k in cols]
+def props_for_rows(cols: dict[str, tuple[str, np.ndarray, np.ndarray | None, list | None]], names: list[str], rows: np.ndarray) -> list[dict]:
+    """Property dicts for the given row indexes; missing values are simply absent (invariant 3)."""
+    present = [(k, *cols[k]) for k in names if k in cols]
     out = []
     for r in rows:
         d = {}
-        for k in present:
-            v = cols[k][r]
-            if v is not None:
-                d[k] = v
+        for k, kind, vals, valid, cats in present:
+            if valid is not None and not valid[r]:
+                continue
+            v = vals[r]
+            if kind == "float":
+                if not np.isfinite(v):
+                    continue
+                d[k] = float(v)
+            elif kind == "int":
+                d[k] = int(v)
+            elif kind == "bool":
+                d[k] = bool(v)
+            else:
+                d[k] = cats[int(v)]
         out.append(d)
     return out
 
@@ -244,7 +253,7 @@ def _load_layer(spec: LayerSpec) -> dict:
     df = pd.read_parquet(spec.parquet)
     df = df[[c for c in names if c in df.columns]]
     rings = cell_rings(df["h3"].tolist())
-    return {"spec": spec, "geoms": ring_polygons(rings), "row_of": rings.row_of, "cols": column_objects(df, names), "rows": len(df)}
+    return {"spec": spec, "geoms": ring_polygons(rings), "row_of": rings.row_of, "cols": column_store(df, names), "rows": len(df)}
 
 
 def _init_worker(specs: list[LayerSpec]) -> None:
@@ -291,6 +300,22 @@ def _field_types(df: pd.DataFrame, names: tuple[str, ...]) -> dict[str, str]:
         k = str(df[n].dtype)
         types[n] = "Boolean" if k.startswith("bool") else "Number" if k[0] in "iIuUfF" else "String"
     return types
+
+
+def default_workers(layers: list[LayerSpec]) -> int:
+    """cores - 1, capped so every encoder process fits in the memory that is free right now.
+    Each process holds every layer's geometry and column store; ~120 bytes per hex per attribute
+    covers the typed arrays, the shapely polygons and Python overhead with a margin."""
+    import psutil
+
+    rows_x_attrs = 0
+    for spec in layers:
+        rows = pd.read_parquet(spec.parquet, columns=["h3"]).shape[0]
+        rows_x_attrs += rows * (len(set(spec.attrs) | set(spec.slim_attrs)) + 1)
+    per_worker = max(1, rows_x_attrs * 120)
+    free = int(psutil.virtual_memory().available * 0.8)
+    by_memory = max(1, free // per_worker)
+    return int(max(1, min((os.cpu_count() or 2) - 1, by_memory)))
 
 
 def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = None, bounds: tuple[float, float, float, float] | None = None, metadata_extra: dict | None = None) -> TileReport:
@@ -359,7 +384,7 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
     with open(tmp, "wb") as fh:
         writer = Writer(fh)
         if use_pool:
-            pool = ProcessPoolExecutor(max_workers=workers or max(1, (os.cpu_count() or 2) - 1), initializer=_init_worker, initargs=(layers,))
+            pool = ProcessPoolExecutor(max_workers=workers or default_workers(layers), initializer=_init_worker, initargs=(layers,))
             results = pool.map(_encode_batch, batches, chunksize=1)
         else:
             _init_worker(layers)

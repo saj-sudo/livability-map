@@ -17,10 +17,28 @@ export interface DimInfo {
   scale: "percentile" | "minmax";
   /** false when the manifest shows no hex with a value (e.g. a source still pending) */
   available: boolean;
+  /** how to print the raw value, keyed by resolution tag; "*" is the dimension-level default
+   *  (optional so test fixtures and older callers need not state it) */
+  units?: Record<string, Unit>;
+}
+
+export interface Unit {
+  unit: string;
+  multiply: number;
+  decimals: number;
+}
+
+/** Units per resolution tag from the manifest joiners (first joiner per tag wins, like the
+ *  first-hit-wins join itself), plus the dimension's own unit under "*". */
+export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multiply" | "decimals">): Record<string, Unit> {
+  const out: Record<string, Unit> = {};
+  if (d.unit) out["*"] = { unit: d.unit, multiply: d.multiply ?? 1, decimals: d.decimals ?? 1 };
+  for (const j of d.joiners ?? []) if (j.unit && !(j.res in out)) out[j.res] = { unit: j.unit, multiply: j.multiply ?? 1, decimals: j.decimals ?? 1 };
+  return out;
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -31,7 +49,7 @@ export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: str
 
 // Fallback registry when the manifest is empty (CI builds without data); ids, kinds and
 // directions mirror pipeline/dimensions.yaml.
-const F = (id: string, name: string, group: DimGroup, kind: DimKind, higher_is: "better" | "worse", chip: string, scale: "percentile" | "minmax" = "percentile"): DimInfo => ({ id, name, group, kind, higher_is, chip, note: "", scale, available: true });
+const F = (id: string, name: string, group: DimGroup, kind: DimKind, higher_is: "better" | "worse", chip: string, scale: "percentile" | "minmax" = "percentile"): DimInfo => ({ id, name, group, kind, higher_is, chip, note: "", scale, available: true, units: {} });
 const FALLBACK: DimInfo[] = [
   F("heat", "Extreme heat", "hazard", "score", "worse", "Global"),
   F("rflood", "Riverine flood", "hazard", "score", "worse", "Global"),
@@ -47,6 +65,16 @@ const FALLBACK: DimInfo[] = [
   F("incmix", "Income mix", "life", "score", "better", "Global / US"),
   F("house", "Housing cost burden", "life", "score", "worse", "OECD / US"),
   F("health", "Healthcare access", "life", "score", "better", "OECD / US"),
+  // cost of living (a higher price level or rent is worse for the person)
+  F("cost", "Cost of living (price level)", "life", "score", "worse", "Global / US"),
+  F("rent", "Housing cost (rent level)", "life", "score", "worse", "US only"),
+  // hex-level layers (2026-09-22): global rasters and point sets computed per hex
+  F("care", "Travel time to healthcare", "life", "score", "worse", "Global"),
+  F("air", "Air quality (fine particulate matter)", "env", "score", "worse", "Global"),
+  F("trees", "Tree cover", "env", "score", "better", "Global"),
+  F("net", "Internet speed", "life", "score", "better", "Global"),
+  F("fire", "Wildfire (burned area)", "env", "score", "worse", "Global"),
+  F("drought", "Drought risk", "env", "score", "worse", "Global"),
 ];
 
 const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US" };
@@ -89,6 +117,7 @@ function fromManifest(d: ManifestDimension): DimInfo {
     note: d.note ?? "",
     scale: d.scale ?? "percentile",
     available: isAvailable(d),
+    units: unitsFrom(d),
   };
 }
 
@@ -106,4 +135,9 @@ export function dimensionsFrom(manifest: Manifest): DimInfo[] {
 export const shortName = (name: string): string => name.replace(/\s*\([^)]*\)\s*$/, "");
 
 export const lifeDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "life");
+export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env");
 export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");
+
+/** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
+export const RES_LABELS: Record<string, string> = { hex: "this hex", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
+export const resLabel = (tag: string): string => RES_LABELS[tag] ?? tag;

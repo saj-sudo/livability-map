@@ -53,17 +53,17 @@ def test_cell_rings_handle_antimeridian_and_pole():
     assert (tiler.cell_rings([near]).coords[:, 1] >= 0).all()
 
 
-def test_column_objects_are_native_scalars(tmp_path):
+def test_column_store_yields_native_scalars_and_drops_missing(tmp_path):
     import pandas as pd
 
     df = pd.DataFrame({"a": pd.array([1, None, 3], dtype="Int16"), "b": [0.12345, np.nan, 2.0], "c": [True, False, True], "d": ["x", None, "z"]})
-    cols = tiler.column_objects(df, ["a", "b", "c", "d"])
-    assert cols["a"].tolist() == [1, None, 3] and type(cols["a"][0]) is int
-    assert cols["b"].tolist() == [0.123, None, 2.0] and type(cols["b"][0]) is float
-    assert cols["c"].tolist() == [True, False, True] and type(cols["c"][0]) is bool
-    assert cols["d"].tolist() == ["x", None, "z"]
-    props = tiler.props_for_rows(cols, ["a", "b", "c", "d"], np.array([1]))
-    assert props == [{"c": False}]
+    cols = tiler.column_store(df, ["a", "b", "c", "d", "absent"])
+    assert set(cols) == {"a", "b", "c", "d"}
+    assert cols["d"][0] == "str" and cols["d"][3] == ["x", "z"]  # categorical codes + categories
+    assert cols["c"][2] is None  # no missing values -> no mask
+    props = tiler.props_for_rows(cols, ["a", "b", "c", "d"], np.array([0, 1, 2]))
+    assert props == [{"a": 1, "b": 0.123, "c": True, "d": "x"}, {"c": False}, {"a": 3, "b": 2.0, "c": True, "d": "z"}]
+    assert type(props[0]["a"]) is int and type(props[0]["b"]) is float and type(props[0]["c"]) is bool
     json.dumps(props)
 
 

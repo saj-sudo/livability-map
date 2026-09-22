@@ -31,8 +31,8 @@ const RACE_OPTIONS: { id: RacePick; label: string }[] = [
   { id: "o", label: "majority other" },
 ];
 
-const GROUP_ORDER: DimGroup[] = ["hazard", "wellbeing", "life"];
-const GROUP_LABELS: Record<string, string> = { hazard: "Climate hazards", wellbeing: "Wellbeing", life: "Life" };
+const GROUP_ORDER: DimGroup[] = ["hazard", "wellbeing", "env", "life"];
+const GROUP_LABELS: Record<string, string> = { hazard: "Climate hazards", wellbeing: "Wellbeing", env: "Environment today", life: "Life" };
 
 function groupsOf(dims: DimInfo[]): { group: string; label: string; dims: DimInfo[] }[] {
   const seen = new Map<string, DimInfo[]>();

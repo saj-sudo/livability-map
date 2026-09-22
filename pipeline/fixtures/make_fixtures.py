@@ -8,8 +8,12 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
 - global life-dimension stand-ins: GSAP regions (all five admin1), OECD TL2 (XKA only), ILOSTAT
-- US-like detail layers over XKB: tracts (ACS-like fields), counties (margin, physicians),
-  block groups (EPA SLD-like), school districts, transit stops (for joiner and dims tests)
+- US-like detail layers over XKB: tracts (ACS-like fields), counties (margin, physicians,
+  2-bedroom rent, metro price parity), block groups (EPA SLD-like), school districts, transit
+  stops (for joiner and dims tests)
+- cost-of-living stand-ins: states (BEA-like price parity for two of the three XKB regions, so
+  the third falls through to the national fallback), ICP-like (XA only) and WDI-like (both)
+  national price levels
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -29,17 +33,19 @@ import numpy as np
 import pandas as pd
 import rasterio
 import xarray as xr
+from rasterio import features
 from rasterio.transform import from_origin
 from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 4  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 6  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
 NODATA_POP = -200.0
 NODATA_FLOOD = -9999.0
+NODATA_CARE = -9999.0  # travel-time raster nodata (as the real MAP file)
 
 TOWNS = {  # name: (lng, lat, peak persons/pixel, sigma degrees)
     "Alder": (11.0, 43.0, 3000.0, 0.05),
@@ -194,8 +200,9 @@ def water_stress() -> gpd.GeoDataFrame:
         (box(12.0, 43.0, 14.0, 44.0), 4, 0.9),
         (box(12.0, 40.0, 14.0, 41.5).difference(DESERT), 2, 0.3),
     ]
+    drr = [np.nan, 0.0, 1.0, 3.0, 4.0, 2.0]  # baseline drought risk 0-4; desert = no data (real file: -9999)
     return gpd.GeoDataFrame(
-        {"bau50_ws_x_c": [p[1] for p in polys], "bau50_ws_x_r": [p[2] for p in polys], "pfaf_id": list(range(100001, 100001 + len(polys)))},
+        {"bau50_ws_x_c": [p[1] for p in polys], "bau50_ws_x_r": [p[2] for p in polys], "drr_cat": drr, "pfaf_id": list(range(100001, 100001 + len(polys)))},
         geometry=[p[0].intersection(land) for p in polys],
         crs=4326,
     )
@@ -263,6 +270,11 @@ def us_like_layers(land, rng: np.random.Generator):
             "name": ["Cedar Co", "North Co", "Desert Co", "Coast Co"],
             "margin_2024": [35.0, -20.0, -60.0, 5.0],
             "physicians_per_10k": [35.0, 18.0, 5.0, 12.0],
+            # HUD-like 2-bedroom rent (USD/month) for every county ...
+            "fmr_2br": [1450.0, 980.0, 700.0, 1120.0],
+            # ... but a BEA-like metro price parity (US = 100) only for the Cedar metro: the
+            # other counties are NULL so the cost dimension falls through to the state layer
+            "rpp_all": [108.5, np.nan, np.nan, np.nan],
         },
         geometry=[
             box(12.0, 41.5, 14.0, 43.0).intersection(land),
@@ -344,6 +356,27 @@ def global_life_layers(adm1: gpd.GeoDataFrame):
     return gsap, oecd, ilostat
 
 
+def cost_layers(adm1: gpd.GeoDataFrame):
+    """Stand-ins for the cost-of-living sources (SPEC §20.6 cost).
+
+    - ``states``: BEA-like state price parities (US = 100) as polygons keyed like the Census
+      state file (``GEOID``). Only B-North and B-Mid are priced; B-South is left out so one XKB
+      region exercises the national fallback in the fixture world.
+    - ``icp``: ICP-like household price level (World = 100) for XA only.
+    - ``gdp``: WDI-like GDP price level already rescaled to the world base, for both countries,
+      so it is the last-resort fill for XB's B-South (and never wins for XA, where ICP comes first).
+    """
+    xkb = adm1[adm1["shapeGroup"] == "XKB"].set_index("shapeName")
+    states = gpd.GeoDataFrame(
+        {"GEOID": ["XB1", "XB2"], "name": ["B-North", "B-Mid"], "rpp_all": [97.0, 104.0], "year": [2024, 2024]},
+        geometry=[xkb.loc["B-North", "geometry"], xkb.loc["B-Mid", "geometry"]],
+        crs=4326,
+    )
+    icp = pd.DataFrame({"iso_a3": ["XKA"], "iso_a2": ["XA"], "pli_household": [88.0], "year": [2021]})
+    gdp = pd.DataFrame({"iso_a3": ["XKA", "XKB"], "iso_a2": ["XA", "XB"], "pli_gdp": [85.0, 121.0], "pli_ratio_us": [0.85, 1.21], "year": [2024, 2024]})
+    return states, icp, gdp
+
+
 def _content_digest(path: Path) -> str:
     """sha256 of file bytes, or of WKB + attributes for vector files (GeoPackage is not byte-stable)."""
     if path.suffix in (".gpkg", ".fgb", ".shp"):
@@ -353,6 +386,78 @@ def _content_digest(path: Path) -> str:
         h.update(b"".join(gdf.geometry.to_wkb()))
         return h.hexdigest()
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_tif_u8(path: Path, arr: np.ndarray, transform, nodata: int = 255) -> None:
+    """uint8 GeoTIFF (the tree-cover mosaic is uint8 percent with 255 nodata)."""
+    with rasterio.open(path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1, dtype="uint8", crs="EPSG:4326", transform=transform, nodata=nodata, compress="deflate", tiled=True, blockxsize=256, blockysize=256) as dst:
+        dst.write(arr.astype("uint8"), 1)
+
+
+def _town_distance(LNG, LAT):
+    """Distance in degrees from each pixel to the nearest town centre."""
+    d = np.full(LNG.shape, np.inf)
+    for lng, lat, _pop, _sigma in TOWNS.values():
+        d = np.minimum(d, np.hypot(LNG - lng, LAT - lat))
+    return d
+
+
+def extras_rasters(LNG, LAT, land: np.ndarray):
+    """Stand-ins for the hex-level raster extras (SPEC §20.6): travel time to healthcare (minutes,
+    grows with the distance to the nearest town), PM2.5 (worst near Cedar, cleanest in the far
+    north-west, negative sentinel off land like the real ACAG file) and burned area (percent of
+    area per year on a coarse 0.25 degree grid: 6 around the desert edge, 0.5 elsewhere)."""
+    dist = _town_distance(LNG, LAT)
+    care = np.where(land, 8.0 + 220.0 * dist, NODATA_CARE)
+    near_cedar = np.exp(-((LNG - 13.0) ** 2 + (LAT - 42.5) ** 2) / (2 * 0.6**2))
+    pm25 = np.where(land, 4.0 + 30.0 * near_cedar + 2.0 * (44.0 - LAT), -999.0)
+    # 0.25 degree grid over the same bbox (16 x 16 cells)
+    minlng, minlat, maxlng, maxlat = BBOX
+    lng_c = np.arange(minlng + 0.125, maxlng, 0.25)
+    lat_c = np.arange(maxlat - 0.125, minlat, -0.25)
+    CLNG, CLAT = np.meshgrid(lng_c, lat_c)
+    fire = np.full(CLNG.shape, 0.5)
+    fire[(CLNG > 12.0) & (CLNG < 13.5) & (CLAT > 40.0) & (CLAT < 41.5)] = 6.0  # the dry south-east
+    fire[(CLNG > 10.0) & (CLNG < 11.5) & (CLAT > 42.5)] = 0.0  # the wet north-west around Alder never burns
+    coarse_transform = from_origin(minlng, maxlat, 0.25, 0.25)
+    return care, pm25, fire, coarse_transform
+
+
+def tree_raster(land_geom):
+    """Tree-cover fraction at 0.002 degree (five times finer than the other fixture rasters) so
+    `decimate: 10` is exercised: 85 percent in the north-west quadrant, 12 elsewhere, 0 in the
+    desert, 255 (nodata) off land."""
+    minlng, minlat, maxlng, maxlat = BBOX
+    px = 0.002
+    lng = np.arange(minlng + px / 2, maxlng, px)
+    lat = np.arange(maxlat - px / 2, minlat, -px)
+    LNG, LAT = np.meshgrid(lng, lat)
+    land = features.rasterize([(land_geom, 1)], out_shape=LNG.shape, transform=from_origin(minlng, maxlat, px, px), fill=0, dtype="uint8").astype(bool)
+    trees = np.where((LNG < 12.0) & (LAT > 42.0), 85, 12).astype("uint8")
+    trees[(LNG > 12.5) & (LNG < 13.5) & (LAT > 40.0) & (LAT < 41.0)] = 0
+    trees[~land] = 255
+    return trees, from_origin(minlng, maxlat, px, px)
+
+
+def ookla_points():
+    """Speed-tile centroids: fixed broadband around Alder, Birch and Cedar (no fixed tiles at
+    Dune), mobile tiles at Dune and Cedar; `point_mean` must weight by tests and the mobile
+    joiner must only fill Dune (first hit wins)."""
+    rng = np.random.default_rng(7)
+    rows = []
+    for name, (lng, lat, _pop, _sigma) in TOWNS.items():
+        if name == "Dune":
+            continue
+        mbps = {"Alder": 210.0, "Birch": 75.0, "Cedar": 320.0}[name]
+        for _ in range(12):
+            rows.append({"lat": lat + rng.normal(0, 0.03), "lng": lng + rng.normal(0, 0.03), "d_mbps": mbps * rng.uniform(0.8, 1.2), "tests": int(rng.integers(5, 60))})
+    fixed = pd.DataFrame(rows)
+    mob = []
+    for name in ("Dune", "Cedar"):
+        lng, lat, _pop, _sigma = TOWNS[name]
+        for _ in range(8):
+            mob.append({"lat": lat + rng.normal(0, 0.03), "lng": lng + rng.normal(0, 0.03), "d_mbps": 42.0 * rng.uniform(0.8, 1.2), "tests": int(rng.integers(3, 30))})
+    return fixed, pd.DataFrame(mob)
 
 
 def build(out: Path) -> dict[str, str]:
@@ -388,6 +493,19 @@ def build(out: Path) -> dict[str, str]:
     gsap.to_file(out / "gsap_regions.gpkg", driver="GPKG")
     oecd.to_file(out / "oecd_tl2.gpkg", driver="GPKG")
     ilostat.to_csv(out / "ilostat.csv", index=False)
+    states, icp, gdp = cost_layers(adm1)
+    states.to_file(out / "states.gpkg", driver="GPKG")
+    icp.to_csv(out / "icp.csv", index=False)
+    gdp.to_csv(out / "gdp_pli.csv", index=False)
+    care, pm25, fire, coarse = extras_rasters(LNG, LAT, land)
+    _write_tif(out / "care.tif", care, transform, NODATA_CARE)
+    _write_tif(out / "pm25.tif", pm25, transform, np.nan)
+    _write_tif(out / "fire.tif", fire, coarse, -9999.0)
+    trees, tree_transform = tree_raster(land_gdf.geometry.iloc[0])
+    _write_tif_u8(out / "trees.tif", trees, tree_transform, 255)
+    fixed, mobile = ookla_points()
+    fixed.to_csv(out / "ookla_fixed.csv", index=False)
+    mobile.to_csv(out / "ookla_mobile.csv", index=False)
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
     (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")

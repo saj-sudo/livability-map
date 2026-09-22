@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
-from pipeline.prep import acs, epa_sld, hrsa, ilostat, medsl, oecd, urban_edu
+from pipeline.prep import acs, bea, epa_sld, hrsa, hud, icp, ilostat, medsl, oecd, urban_edu
 
 
 def test_ilostat_prepare_keeps_latest_total_youth_row():
@@ -138,3 +138,161 @@ def test_hrsa_per_10k_uses_newest_physician_column():
     pop = pd.DataFrame({"GEOID": ["01001", "01003"], "county_pop": [60000.0, 0.0]})
     out = hrsa.prepare(ahrf, pop)
     assert len(out) == 1 and out.loc[0, "GEOID"] == "01001" and out.loc[0, "physicians_per_10k"] == pytest.approx(2.0)
+
+
+# ---- BEA regional price parities (cost) ---------------------------------------------------
+
+BEA_COLUMNS = ["GeoFIPS", "GeoName", "Region", "TableName", "LineCode", "IndustryClassification", "Description", "Unit", "2022", "2023", "2024"]
+
+
+def _bea_row(fips, name, line, v22, v23, v24):
+    # GeoFIPS arrives from the CSV as BEA writes it: quoted and space-padded (' "01000"')
+    return [f' "{fips}"', name, "5", "SARPP", line, "...", "RPPs: All items" if line == "1" else "RPPs: Goods", "Index", v22, v23, v24]
+
+
+def test_bea_state_prepare_pads_geofips_and_keeps_all_items_latest_year():
+    rows = [
+        _bea_row("00000", "United States", "1", "100.000", "100.000", "100.000"),  # national row: no polygon
+        _bea_row("01000", "Alabama", "1", "87.1", "87.5", "87.9"),
+        _bea_row("01000", "Alabama", "2", "90.0", "90.2", "90.4"),  # goods line, ignored
+        _bea_row("06000", "California", "1", "112.0", "112.3", "112.6"),
+        _bea_row("72000", "Puerto Rico", "1", "(NA)", "(NA)", "(NA)"),  # missing stays missing, never 0
+    ]
+    out = bea.prepare(pd.DataFrame(rows, columns=BEA_COLUMNS), level="state").set_index("GEOID")
+    assert list(out.index) == ["01", "06"]
+    assert out.loc["01", "rpp_all"] == pytest.approx(87.9) and out.loc["06", "rpp_all"] == pytest.approx(112.6)
+    assert (out["year"] == 2024).all()
+
+
+def test_bea_metro_prepare_keeps_five_digit_cbsa_codes_only():
+    rows = [
+        _bea_row("00998", "United States (Metropolitan Portion)", "1", "101.0", "101.1", "101.2"),  # not a CBSA
+        _bea_row("10180", "Abilene, TX (Metropolitan Statistical Area)", "1", "90.1", "90.3", "90.5"),
+        _bea_row("35620", "New York-Newark-Jersey City, NY-NJ", "1", "118.0", "118.5", "119.0"),
+    ]
+    out = bea.prepare(pd.DataFrame(rows, columns=BEA_COLUMNS), level="metro").set_index("GEOID")
+    assert list(out.index) == ["10180", "35620"] and out.loc["35620", "rpp_all"] == pytest.approx(119.0)
+
+
+def test_bea_read_zip_member_drops_the_footer_lines(tmp_path):
+    import zipfile
+
+    text = (
+        "GeoFIPS,GeoName,Region,TableName,LineCode,IndustryClassification,Description,Unit,2023,2024\n"
+        '" 01000","Alabama",5,SARPP,1,...,"RPPs: All items",Index,87.5,87.9\n'
+        '" 06000","California",8,SARPP,1,...,"RPPs: All items",Index,112.3,112.6\n'
+        "\n"
+        "Note: See the included footnote file.\n"
+        "Legend / Footnotes:\n"
+        "(NA) Not available.\n"
+        "Last updated: February 19, 2026 -- new statistics for 2024.\n"
+    )
+    archive = tmp_path / "SARPP.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("SARPP_STATE_2008_2024.csv", text)
+    df = bea.read_zip_member(archive, "SARPP_STATE_2008_2024.csv")
+    assert len(df) == 2 and df["GeoFIPS"].str.strip().tolist() == ["01000", "06000"]
+    out = bea.prepare(df, level="state")
+    assert out["rpp_all"].tolist() == pytest.approx([87.9, 112.6])
+
+
+# ---- World Bank ICP household price level and the WDI GDP fallback (cost) --------------------
+
+
+def _icp_row(iso3, year, value):
+    # one record of the ICP API's JSON (source 90, series 9100000, classification PX.WL)
+    return {
+        "variable": [
+            {"concept": "Country", "id": iso3, "value": iso3},
+            {"concept": "Time", "id": f"YR{year}", "value": str(year)},
+            {"concept": "Series", "id": "9100000", "value": "9100000:HOUSEHOLDS AND NPISHS FINAL CONSUMPTION EXPENDITURE"},
+            {"concept": "Classification", "id": "PX.WL", "value": "Price level index (World = 100)"},
+        ],
+        "value": value,
+    }
+
+
+def test_icp_parse_json_and_latest_non_null_year_per_country():
+    payload = {"page": 1, "pages": 1, "source": {"id": "90", "name": "ICP 2021", "data": [_icp_row("FRA", 2020, 108.0), _icp_row("FRA", 2021, 110.0), _icp_row("FRA", 2022, None), _icp_row("EAS", 2021, 90.0), _icp_row("XKX", 2021, 55.0)]}}
+    df = icp.parse_icp(payload)
+    assert set(df.columns) == {"iso_a3", "year", "value"} and len(df) == 5
+    out = icp.prepare_household(df).set_index("iso_a2")
+    assert out.loc["FR", "pli_household"] == 110.0 and out.loc["FR", "year"] == 2021  # 2022 is null, not "0"
+    assert out.loc["XK", "pli_household"] == 55.0
+    assert "EAS" not in out["iso_a3"].tolist()  # aggregate without an ISO2 code is dropped
+
+
+def test_wdi_zip_preamble_metadata_aggregates_and_calibration(tmp_path):
+    import zipfile
+
+    api = (
+        '"Data Source","World Development Indicators",\n'
+        "\n"
+        '"Last Updated Date","2026-07-01",\n'
+        "\n"
+        '"Country Name","Country Code","Indicator Name","Indicator Code","2022","2023","2024","2025",\n'
+        '"France","FRA","Price level ratio of PPP conversion factor (GDP) to market exchange rate","PA.NUS.PPPC.RF","1.05","1.08","1.1","",\n'
+        '"Germany","DEU","Price level ratio of PPP conversion factor (GDP) to market exchange rate","PA.NUS.PPPC.RF","1.15","1.18","1.2","",\n'
+        '"Iceland","ISL","Price level ratio of PPP conversion factor (GDP) to market exchange rate","PA.NUS.PPPC.RF","1.4","1.45","1.5","",\n'
+        '"East Asia & Pacific","EAS","Price level ratio of PPP conversion factor (GDP) to market exchange rate","PA.NUS.PPPC.RF","0.7","0.7","0.7","",\n'
+        '"Nowhere","XXX","Price level ratio of PPP conversion factor (GDP) to market exchange rate","PA.NUS.PPPC.RF","","","","",\n'
+    )
+    meta = (
+        '"Country Code","Region","IncomeGroup","SpecialNotes","TableName",\n'
+        '"FRA","Europe & Central Asia","High income","","France",\n'
+        '"DEU","Europe & Central Asia","High income","","Germany",\n'
+        '"ISL","Europe & Central Asia","High income","","Iceland",\n'
+        '"EAS","","","aggregate","East Asia & Pacific",\n'
+        '"XXX","Europe & Central Asia","High income","","Nowhere",\n'
+    )
+    archive = tmp_path / "API_PA.NUS.PPPC.RF_en_csv_v2.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("API_PA.NUS.PPPC.RF_DS57_en_csv_v2_370312.csv", api)
+        z.writestr("Metadata_Country_API_PA.NUS.PPPC.RF_DS57_en_csv_v2_370312.csv", meta)
+        z.writestr("Metadata_Indicator_API_PA.NUS.PPPC.RF_DS57_en_csv_v2_370312.csv", '"INDICATOR_CODE","INDICATOR_NAME"\n')
+    ratios, regions = icp.read_wdi_zip(archive)
+    assert "EAS" not in set(ratios.loc[ratios["Country Code"].isin(regions), "Country Code"])
+    household = pd.DataFrame({"iso_a3": ["FRA", "DEU"], "iso_a2": ["FR", "DE"], "pli_household": [110.0, 120.0], "year": [2021, 2021]})
+    out = icp.prepare_gdp(ratios, regions, household, this_year=2026).set_index("iso_a2")
+    # the WDI series is a ratio with the US = 1; it is rescaled onto the ICP world base through
+    # the countries both cover (here 110 / 1.1 = 120 / 1.2 = 100), so Iceland lands on 150
+    assert out.loc["IS", "pli_gdp"] == pytest.approx(150.0) and out.loc["IS", "year"] == 2024
+    assert out.loc["FR", "pli_gdp"] == pytest.approx(110.0)
+    assert not {"EAS", "XXX"} & set(out["iso_a3"])  # aggregate and all-blank rows are dropped, never 0
+
+
+def test_wdi_calibration_refuses_when_nothing_overlaps():
+    ratios = pd.DataFrame({"Country Name": ["Iceland"], "Country Code": ["ISL"], "Indicator Name": ["x"], "Indicator Code": ["PA.NUS.PPPC.RF"], "2024": [1.5]})
+    household = pd.DataFrame({"iso_a3": ["FRA"], "iso_a2": ["FR"], "pli_household": [110.0], "year": [2021]})
+    with pytest.raises(RuntimeError, match="no country"):
+        icp.prepare_gdp(ratios, {"ISL"}, household, this_year=2026)
+
+
+# ---- HUD fair market rents (rent) ------------------------------------------------------------
+
+
+def test_hud_prepare_prefers_the_whole_county_row_and_medians_town_rows():
+    fmr = pd.DataFrame(
+        {
+            "fips2010": ["0100199999", "2500100120", "2500100380", "2500100460", "0600799999", "0800199999"],
+            "state": ["AL", "MA", "MA", "MA", "CA", "CO"],
+            "countyname": ["Autauga County", "Barnstable County", "Barnstable County", "Barnstable County", "Butte County", "Adams County"],
+            "metro": [1, 1, 1, 1, 1, 1],
+            "fmr_0": [800, 1200, 1300, 1250, 900, 1000],
+            "fmr_1": [900, 1300, 1400, 1350, 1000, 1100],
+            "fmr_2": [1000, 1500, 1700, 1600, "(NA)", 1450],
+            "fmr_3": [1300, 1900, 2100, 2000, 1500, 1800],
+            "fmr_4": [1500, 2200, 2400, 2300, 1700, 2100],
+        }
+    )
+    out = hud.prepare(fmr).set_index("GEOID")
+    assert out.loc["01001", "fmr_2br"] == 1000.0
+    assert out.loc["25001", "fmr_2br"] == 1600.0  # median of the three New England town rows
+    assert "06007" not in out.index  # missing rent stays missing, never 0
+    assert out.loc["08001", "fmr_2br"] == 1450.0
+
+
+def test_hud_prepare_pads_integer_fips_and_accepts_the_older_column_names():
+    fmr = pd.DataFrame({"fips": [100199999, 401399999], "fmr2": [1000, 1450]})  # leading zero lost by Excel (01001, 04013)
+    out = hud.prepare(fmr).set_index("GEOID")
+    assert list(out.index) == ["01001", "04013"] and out.loc["04013", "fmr_2br"] == 1450.0

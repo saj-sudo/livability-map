@@ -84,7 +84,9 @@ source, bivariate class); `hazards` scores itself, `score` does composites and l
 (everything a person can weight, incl. hazards and wellbeing; `kind` is `score | signed |
 composition`; each has ordered `joiners`). `fetch` refuses any source whose `license` or direct
 `url` is `VERIFY` (invariant 4). `manual` sources (Aqueduct Floods via Earth Engine, see
-`docs/gee-export.md`; GDL SHDI via registration) are checked for presence, not downloaded.
+`docs/gee-export.md`; GDL SHDI via registration; HUD FMR because huduser.gov's WAF answers
+non-browser clients with an empty 202) are checked for presence, not downloaded. A present file
+with no CHECKSUMS entry is recorded, not re-downloaded; an empty body is an error.
 
 **Raster to H3.** `pipeline/h3util.aggregate_raster` rasterizes hex ids into each raster window
 and groups pixels with `np.bincount` (exact sums/means/fraction-above). h3ronpy was evaluated and
@@ -94,16 +96,24 @@ EPSG:4326.
 
 **Joiners** (`pipeline/joiners/`): `polygon_centroid`, `iso_lookup`, `area_weighted_overlay`
 (population-weighted via `weight_field`, equal-area CRS 6933, `min_coverage` guard),
-`point_density`. All return a Series aligned to the hexes index with NaN for missing, never 0.
-`admin` already uses `polygon_centroid`; the `dims` stage (Session 4) will drive them from
-`dimensions.yaml`.
+`point_density`, and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
+rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
+(weighted mean of points per hex). All return a Series aligned to the hexes index with NaN for
+missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
+through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
+sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `basin`, `admin1`,
+`county`, `tract`, `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
+(present-day environment, never part of `exposure`, SPEC §13.28).
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 4): a 4°x4° synthetic region
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 6): a 4°x4° synthetic region
 (countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`, five admin1
 regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress
 inputs, tabular wellbeing, and stand-ins for every life-dimension source (GSAP, OECD TL2,
-ILOSTAT, ACS-like tracts, SLD block groups, districts, counties). Regeneration is
-content-deterministic; bump `VERSION` when the world changes. Tests get a temp run dir from
+ILOSTAT, ACS-like tracts, SLD block groups, districts, counties, BEA-like states, ICP / WDI
+price levels, HUD-like rents) and rasters / point sets for the hex-level layers (travel time,
+PM2.5, 0.002° tree cover, 0.25° burned area, Ookla-like speed points). Regeneration is
+content-deterministic; bump `VERSION` when the world changes (a regenerated fixture file is
+re-copied by `fetch` even when `_run/` has an older copy). Tests get a temp run dir from
 `tests/conftest.py`.
 
 **Web** (`web/`, Next.js 16 static export): `src/lib/` holds pure, vitest-covered logic (URL

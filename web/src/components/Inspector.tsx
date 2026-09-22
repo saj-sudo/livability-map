@@ -8,12 +8,13 @@
 import { useMemo } from "react";
 import type { SelectedHex } from "./MapView";
 import { useTheme } from "./useTheme";
+import type { Theme } from "../lib/theme";
 import { priorityBars, type Bar } from "../lib/chart";
 import type { ClientManifest } from "../lib/clientManifest";
 import { shortName, type DimInfo } from "../lib/dims";
 import { formatScore } from "../lib/format";
-import { describeHex } from "../lib/inspect";
-import { paletteFor, SHARE_COLORS } from "../lib/palette";
+import { describeHex, type LifeRow } from "../lib/inspect";
+import { paletteFor, SHARE_COLORS, type Palette } from "../lib/palette";
 import { summarize } from "../lib/summary";
 import type { AppState } from "../lib/url";
 
@@ -28,7 +29,7 @@ interface Props {
   embedded?: boolean;
 }
 
-const RES_WORDS: Record<string, string> = { tract: "tract level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
+const RES_WORDS: Record<string, string> = { hex: "this hex", basin: "sub-basin", tract: "tract level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
 const SOURCE_WORDS: Record<string, string> = { shdi: "Subnational HDI", whr: "World Happiness Report" };
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -68,6 +69,38 @@ export function PriorityBars({ bars, hatchColor, barColor, track }: { bars: Bar[
         </li>
       ))}
     </ul>
+  );
+}
+
+/** One environment or life dimension: value with unit, score bar, coverage chip, resolution. */
+function DimRow({ row, theme, pal, track }: { row: LifeRow; theme: Theme; pal: Palette; track: string }) {
+  return (
+    <li key={row.id}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate" title={row.name}>
+          {shortName(row.name)}
+          {row.chip && <span className="ml-1.5 text-[11px] text-muted">{row.chip}</span>}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted">{RES_WORDS[row.res] ?? row.res}</span>
+      </div>
+      {row.res !== "none" && (
+        <div className="flex items-baseline justify-between gap-2 text-muted">
+          <span className="min-w-0">{row.value ?? <NoData />}</span>
+          {row.score !== null && (
+            <span className="shrink-0 whitespace-nowrap tabular-nums text-ink">
+              <ScoreBar value={row.score} color={pal.rampGood[1]} track={track} /> {formatScore(row.score)}
+            </span>
+          )}
+        </div>
+      )}
+      {row.shares && row.res !== "none" && (
+        <div className="mt-1 flex h-2 w-full gap-px overflow-hidden rounded-[2px]" role="img" aria-label={row.shares.map((s) => `${s.label} ${s.pct}%`).join(", ")}>
+          {row.shares.map((s, i) => (
+            <span key={s.key} title={`${s.label} ${s.pct}%`} style={{ width: `${s.pct}%`, background: SHARE_COLORS[theme][i] }} />
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -151,35 +184,21 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
         <p className="mt-1 text-[12px]">Combined: {m.bivar}.</p>
       </Section>
 
+      {m.env.length > 0 && (
+        <Section title="Environment today">
+          <p className="mb-1 text-[11px] text-muted">Observed, not projected; not part of the exposure score.</p>
+          <ul className="space-y-1.5 text-[12px]">
+            {m.env.map((row) => (
+              <DimRow key={row.id} row={row} theme={theme} pal={pal} track={track} />
+            ))}
+          </ul>
+        </Section>
+      )}
+
       <Section title="Life dimensions">
         <ul className="space-y-1.5 text-[12px]">
           {m.life.map((row) => (
-            <li key={row.id}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate" title={row.name}>
-                  {shortName(row.name)}
-                  {row.chip && <span className="ml-1.5 text-[11px] text-muted">{row.chip}</span>}
-                </span>
-                <span className="shrink-0 text-[11px] text-muted">{RES_WORDS[row.res] ?? row.res}</span>
-              </div>
-              {row.res !== "none" && (
-                <div className="flex items-baseline justify-between gap-2 text-muted">
-                  <span className="min-w-0">{row.value ?? <NoData />}</span>
-                  {row.score !== null && (
-                    <span className="shrink-0 whitespace-nowrap tabular-nums text-ink">
-                      <ScoreBar value={row.score} color={pal.rampGood[1]} track={track} /> {formatScore(row.score)}
-                    </span>
-                  )}
-                </div>
-              )}
-              {row.shares && row.res !== "none" && (
-                <div className="mt-1 flex h-2 w-full gap-px overflow-hidden rounded-[2px]" role="img" aria-label={row.shares.map((s) => `${s.label} ${s.pct}%`).join(", ")}>
-                  {row.shares.map((s, i) => (
-                    <span key={s.key} title={`${s.label} ${s.pct}%`} style={{ width: `${s.pct}%`, background: SHARE_COLORS[theme][i] }} />
-                  ))}
-                </div>
-              )}
-            </li>
+            <DimRow key={row.id} row={row} theme={theme} pal={pal} track={track} />
           ))}
         </ul>
       </Section>

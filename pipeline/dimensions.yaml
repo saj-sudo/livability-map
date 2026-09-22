@@ -12,6 +12,8 @@
   name: Extreme heat (days > 35C)
   group: hazard
   kind: score
+  unit: "days/yr above 35 °C"
+  decimals: 0
   higher_is: worse
   coverage: [global]
   sources: [cckp_hd35]
@@ -19,6 +21,9 @@
   name: Riverine flood (1-in-100)
   group: hazard
   kind: score
+  unit: "% of area in a 1-in-100-year flood"
+  multiply: 100
+  decimals: 1
   higher_is: worse
   coverage: [global]
   sources: [aqueduct_floods_river]
@@ -26,6 +31,9 @@
   name: Coastal flood (1-in-100)
   group: hazard
   kind: score
+  unit: "% of area in a 1-in-100-year flood"
+  multiply: 100
+  decimals: 1
   higher_is: worse
   coverage: [global]
   sources: [aqueduct_floods_coast]
@@ -33,6 +41,8 @@
   name: Water stress (2050)
   group: hazard
   kind: score
+  unit: "water stress category (0-4)"
+  decimals: 0
   higher_is: worse
   coverage: [global]
   sources: [aqueduct_water_stress]
@@ -47,8 +57,8 @@
   coverage: [global]
   sources: [gdl_shdi, gdl_shdi_regions, whr_ladder]
   joiners:
-    - {source: gdl_shdi_regions, joiner: polygon_centroid, res: admin1, field: shdi, id_field: GDLCODE, domain: global, label: shdi}
-    - {source: whr_ladder, joiner: iso_lookup, res: national, field: ladder, domain: global, label: whr}
+    - {source: gdl_shdi_regions, joiner: polygon_centroid, res: admin1, field: shdi, id_field: GDLCODE, domain: global, label: shdi, unit: "on the Subnational HDI (0-1)", decimals: 3}
+    - {source: whr_ladder, joiner: iso_lookup, res: national, field: ladder, domain: global, label: whr, unit: "/ 10 life evaluation", decimals: 2}
   note: "min-max within source, never mixed (SPEC §8.3); SHDI 0-1, WHR life evaluation 0-10"
 
 # ---- life dimensions (§20.6) ----------------------------------------------------------------
@@ -60,9 +70,9 @@
   coverage: [global, oecd, us]
   sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence, ilostat_youth_unemp]
   joiners:
-    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29, weight_field: pop_16_29, domain: us, label: acs}
-    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score, domain: oecd, label: oecd}
-    - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: youth_employment_rate, domain: global, label: ilostat}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29, weight_field: pop_16_29, domain: us, label: acs, unit: "% employed (ages 16-29)", multiply: 100, decimals: 0}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score, domain: oecd, label: oecd, unit: "/ 10 (OECD jobs score)", decimals: 1}
+    - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: youth_employment_rate, domain: global, label: ilostat, unit: "% of 15-24s employed", decimals: 0}
   note: "US: employment rate of civilians aged 16-29 (ACS B23001). OECD: Jobs well-being score 0-10 (TL2). Global: 100 - youth (15-24) unemployment rate (ILOSTAT). Different constructs, labeled; all higher = better"
 
 - id: transit
@@ -73,7 +83,7 @@
   coverage: [us]
   sources: [epa_sld]
   joiners:
-    - {source: epa_sld, joiner: area_weighted_overlay, res: tract, field: D4C, weight_field: TotPop, domain: us, label: sld}
+    - {source: epa_sld, joiner: area_weighted_overlay, res: tract, field: D4C, weight_field: TotPop, domain: us, label: sld, unit: "transit trips/hour nearby", decimals: 1}
   note: "EPA SLD v3 D4C: transit trips per hour within 0.25 mi of the block group, evening peak; block groups are tagged tract (finest §6.1 tag). Global OSM/Mobility Database layer is v2 (ODbL share-alike)"
 
 - id: school
@@ -84,7 +94,7 @@
   coverage: [us]
   sources: [urban_edu_districts, nces_district_boundaries]
   joiners:
-    - {source: urban_edu_districts, joiner: area_weighted_overlay, res: county, field: grad_rate_midpt, weight_field: cohort_num, domain: us, label: edfacts}
+    - {source: urban_edu_districts, joiner: area_weighted_overlay, res: county, field: grad_rate_midpt, weight_field: cohort_num, domain: us, label: edfacts, unit: "% graduate on time", decimals: 0}
   note: "EDFacts adjusted-cohort graduation rate (all students, 2019) by school district, tagged county (a district is closer to county than tract scale); attainment/outcome, not school quality. SEDA excluded (non-transferable)"
 
 - id: lgbtq
@@ -95,27 +105,31 @@
   coverage: [us]
   sources: [acs_summary, cb_tracts]
   joiners:
-    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: ss_couples_per_1k, weight_field: households, domain: us, label: acs}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: ss_couples_per_1k, weight_field: households, domain: us, label: acs, unit: "same-sex couples per 1,000 households", decimals: 1}
   note: "proxy: same-sex spouses + same-sex unmarried partners (ACS B09019, SPEC §13.20) per 1,000 households; state policy tallies (MAP) added once permission is granted"
 
 - id: pol
   name: Political lean
   group: life
   kind: signed
+  unit: "two-party margin (D+ / R-)"
+  decimals: 0
   coverage: [us]
   sources: [medsl_county_pres, cb_counties]
   joiners:
-    - {source: medsl_county_pres, joiner: polygon_centroid, res: county, field: margin_2024, domain: us, label: medsl}
+    - {source: medsl_county_pres, joiner: polygon_centroid, res: county, field: margin_2024, domain: us, label: medsl, unit: "two-party margin (D+ / R-)", decimals: 0}
   note: "-100 (all Republican) .. +100 (all Democratic) two-party margin, 2024 presidential; the person picks a preference"
 
 - id: race
   name: Racial and ethnic composition
   group: life
   kind: composition
+  unit: "% of residents"
+  decimals: 0
   coverage: [us]
   sources: [acs_summary, cb_tracts]
   joiners:
-    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, fields: {w: pct_white, b: pct_black, h: pct_hisp, a: pct_asian, o: pct_other}, weight_field: pop_total, domain: us, label: acs}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, fields: {w: pct_white, b: pct_black, h: pct_hisp, a: pct_asian, o: pct_other}, weight_field: pop_total, domain: us, label: acs, unit: "% of residents", decimals: 0}
   note: "shares from ACS B03002: non-Hispanic white, non-Hispanic Black, Hispanic or Latino (any race), non-Hispanic Asian + Pacific Islander, everyone else; never scored (invariant 8)"
 
 - id: incmix
@@ -126,8 +140,8 @@
   coverage: [global, us]
   sources: [acs_summary, cb_tracts, wb_gsap, wb_gsap_regions]
   joiners:
-    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: income_entropy, weight_field: households, domain: us, label: acs}
-    - {source: wb_gsap, joiner: polygon_centroid, res: admin1, field: nonpoor_share, domain: global, label: gsap}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: income_entropy, weight_field: households, domain: us, label: acs, unit: "income mix (0-1)", decimals: 2}
+    - {source: wb_gsap, joiner: polygon_centroid, res: admin1, field: nonpoor_share, domain: global, label: gsap, unit: "% above the $4.20/day line", multiply: 100, decimals: 0}
   note: "US: within-area income diversity (entropy of the 16 ACS B19001 brackets, 0-1). Global: share of people above the $4.20/day (2021 PPP) poverty line (GSAP 2023), a level not a mix. Different constructs, labeled"
 
 - id: house
@@ -138,8 +152,8 @@
   coverage: [oecd, us]
   sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
-    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: rent_share_income, weight_field: renter_households, domain: us, label: acs}
-    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: housing_burden, domain: oecd, label: oecd}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: rent_share_income, weight_field: renter_households, domain: us, label: acs, unit: "% of income on rent", decimals: 0}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: housing_burden, domain: oecd, label: oecd, unit: "/ 10 (OECD, higher = worse)", decimals: 1}
   note: "US: median gross rent as % of household income (ACS B25071). OECD: 10 - Housing well-being score (rooms per person, affordability satisfaction), so higher = worse housing conditions"
 
 - id: health
@@ -150,6 +164,97 @@
   coverage: [oecd, us]
   sources: [hrsa_ahrf, cb_counties, acs_summary, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
-    - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us, label: hrsa}
-    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_score, domain: oecd, label: oecd}
+    - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us, label: hrsa, unit: "physicians per 10,000", decimals: 1}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_score, domain: oecd, label: oecd, unit: "/ 10 (OECD health score)", decimals: 1}
   note: "US: active non-federal MDs per 10,000 residents (HRSA AHRF, county population from ACS). OECD: Health well-being score 0-10 (life expectancy, mortality), an outcome not access. Different constructs, labeled"
+
+- id: cost
+  name: Cost of living (price level)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global, us]
+  sources: [bea_rpp_metro, bea_rpp_state, cb_cbsa, cb_states, wb_icp_pli, wb_gdp_pli]
+  joiners:
+    - {source: bea_rpp_metro, joiner: polygon_centroid, res: county, field: rpp_all, domain: us, label: bea, unit: "index (US = 100)", decimals: 0}
+    - {source: bea_rpp_state, joiner: polygon_centroid, res: admin1, field: rpp_all, domain: us, label: bea, unit: "index (US = 100)", decimals: 0}
+    - {source: wb_icp_pli, joiner: iso_lookup, res: national, field: pli_household, domain: global, label: icp, unit: "index (world = 100)", decimals: 0}
+    - {source: wb_gdp_pli, joiner: iso_lookup, res: national, field: pli_gdp, domain: global, label: wdi, unit: "index (world = 100)", decimals: 0}
+  note: "US: BEA regional price parity, all items (US = 100), metro area first (tagged county, the finest tag a CBSA fits) then state. Elsewhere: World Bank ICP 2021 household-consumption price level (World = 100); where ICP has no row, the WDI GDP price-level ratio rescaled onto the same world base through the countries both cover. Different bases, labeled"
+
+- id: rent
+  name: Housing cost (rent level)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [us]
+  sources: [hud_fmr, cb_counties]
+  joiners:
+    - {source: hud_fmr, joiner: polygon_centroid, res: county, field: fmr_2br, domain: us, label: hud, unit: "USD/month (2-bedroom FMR)", decimals: 0}
+  note: "HUD Fair Market Rent for a 2-bedroom unit, FY2026, USD per month, by county (the whole-county row or the median of New England town rows); the OECD/EU rent level is v2"
+
+# ---- hex-level extras (added 2026-09-22, SPEC §20.6): computed per hex from a global raster or
+# point set, resolution tag `hex` (or `basin` for Aqueduct sub-basins). `env` is present-day
+# environment; it is shown beside the 2050 hazards but never enters `exposure` / `coverage`
+# (decision §13.28).
+- id: care
+  name: Travel time to healthcare
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_healthcare]
+  joiners:
+    - {source: map_healthcare, joiner: raster_mean, res: hex, field: value, domain: global, label: map, unit: "min to the nearest health facility", decimals: 0}
+  note: "Minutes by motorized transport to the nearest healthcare facility (Weiss et al. 2020, Malaria Atlas Project, 1 km, 2019), mean over the hex"
+- id: air
+  name: Air quality (fine particulate matter)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [acag_pm25]
+  joiners:
+    - {source: acag_pm25, joiner: raster_mean, res: hex, field: value, domain: global, label: acag, unit: "µg/m³ PM2.5 (WHO guideline 5)", decimals: 1}
+  note: "Annual mean PM2.5 in micrograms per cubic metre, 2024 (satellite-derived, WashU ACAG SatPM2.5 V6.GL.03, 0.01 degree), mean over the hex; the WHO guideline is 5"
+- id: trees
+  name: Tree cover
+  group: env
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [cgls_tree_cover]
+  joiners:
+    - {source: cgls_tree_cover, joiner: raster_mean, res: hex, field: value, domain: global, label: cgls, decimate: 10, unit: "% tree cover", decimals: 0}
+  note: "Percent of the hex under tree cover (Copernicus Global Land Cover 100 m, 2019), block-averaged to 1 km then averaged over the hex; water and permanent ice are excluded, deserts are honest zeros"
+- id: net
+  name: Internet speed
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [ookla_fixed, ookla_mobile]
+  joiners:
+    - {source: ookla_fixed, joiner: point_mean, res: hex, field: d_mbps, weight_field: tests, domain: global, label: fixed, unit: "Mbps download", decimals: 0}
+    - {source: ookla_mobile, joiner: point_mean, res: hex, field: d_mbps, weight_field: tests, domain: global, label: mobile, unit: "Mbps download (mobile)", decimals: 0}
+  note: "Average Speedtest download speed in Mbps, 2026 Q2, weighted by tests: fixed broadband where anyone tested it, mobile where only mobile tests exist (labeled); CC BY-NC-SA 4.0, so the net_* attributes carry that licence"
+- id: fire
+  name: Wildfire (burned area)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [gfed5_ba]
+  joiners:
+    - {source: gfed5_ba, joiner: raster_mean, res: hex, field: value, domain: global, label: gfed5, sample: centroid, unit: "% of the area burns per year (2001-2020)", decimals: 2}
+  note: "Percent of the area burned per year, mean of 2001-2020 (GFED5 burned area, 0.25 degree): observed, not a 2050 projection, sampled at the hex centroid because the grid is coarser than the hex; cropland burning is included"
+- id: drought
+  name: Drought risk
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [aqueduct_water_stress]
+  joiners:
+    - {source: aqueduct_water_stress, joiner: polygon_centroid, res: basin, field: drr_cat, domain: global, label: aqueduct, unit: "drought risk category (0-4)", decimals: 0}
+  note: "WRI Aqueduct drought risk category 0 (low) to 4 (high) of the sub-basin under the hex centroid; baseline from Aqueduct 3.0 carried into 4.0, no future-scenario drought exists; a quarter of sub-basins have no data"

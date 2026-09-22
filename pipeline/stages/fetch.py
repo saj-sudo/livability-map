@@ -102,6 +102,9 @@ def _download(url: str, dest: Path, root: Path) -> None:
             with open(tmp, "wb") as fh:
                 for chunk in resp.iter_content(CHUNK):
                     fh.write(chunk)
+    if tmp.stat().st_size == 0:
+        tmp.unlink()
+        raise RuntimeError("the server answered with an empty body (a bot check such as HUD's 202 challenge?); nothing was saved")
     if is_lfs_pointer(tmp):
         tmp.unlink()
         raise RuntimeError("downloaded a Git LFS pointer instead of the file; use a /raw/ URL that redirects to media.githubusercontent.com")
@@ -154,14 +157,23 @@ def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str
         key = (src.id, fname)
         if dest.exists():
             digest = sha256_of(dest)
-            if checksums.get(key) == digest:
+            # a file:// source (fixtures) that was regenerated since the last run is stale even
+            # when it matches the recorded checksum; the source is local, so comparing is free
+            local_src = _resolve_file_url(_file_url_for(src, fname), settings.root) if src.url and src.url.startswith("file://") else None
+            stale = local_src is not None and local_src.exists() and sha256_of(local_src) != digest
+            if stale:
+                checksums.pop(key, None)  # fall through to the copy below
+            elif checksums.get(key) == digest:
                 results.append(FetchResult(src.id, fname, "cached", digest[:12]))
                 continue
-            if src.access in ("manual", "dataverse"):
+            elif src.access in ("manual", "dataverse") or checksums.get(key) is None:
+                # A file with no recorded checksum is complete (downloads land under a .part name
+                # and are renamed only when finished), so record it instead of pulling multi-GB
+                # rasters a second time. A recorded checksum that differs still re-downloads.
                 checksums[key] = digest
                 results.append(FetchResult(src.id, fname, "ok", f"present ({src.access}), recorded {digest[:12]}"))
                 continue
-            # checksum mismatch or unknown: re-download below
+            # else: checksum mismatch -> re-download below
         if src.access == "manual":
             results.append(FetchResult(src.id, fname, "missing", f"manual source; expected at {dest}"))
             continue
@@ -201,7 +213,9 @@ def run(settings: Settings, only: list[str] | None = None) -> list[FetchResult]:
             print(f"fetch  {r.status:8s} {r.source}/{r.file}  {r.detail}")
             if r.status == "missing" and src.recipe:
                 print("       recipe:\n" + "\n".join("         " + line for line in src.recipe.strip().splitlines()))
-    write_checksums(checksums_path, checksums)
+    # merge with whatever another fetch process recorded meanwhile (large sources are fetched in
+    # parallel on the laptop); this run's entries win for the files it handled
+    write_checksums(checksums_path, {**read_checksums(checksums_path), **checksums})
     n = {s: sum(1 for r in results if r.status == s) for s in ("ok", "cached", "missing", "refused", "error")}
     print(f"fetch  summary: {n}")
     if n["refused"] or n["error"]:

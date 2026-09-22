@@ -21,7 +21,7 @@ const base: HexModel = {
   wellbeing: { value: "life evaluation 6.82 / 10", score: 85, source: "whr", res: "national" },
   bivar: "high exposure, high wellbeing",
   bivarClass: 9,
-  life: [],
+  env: [], life: [],
   sources: [],
 };
 

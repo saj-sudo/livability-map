@@ -23,7 +23,7 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 4
+PREP_VERSION = 6
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {
@@ -37,6 +37,24 @@ LOADERS: dict[str, str] = {
     "epa_sld": "pipeline.prep.epa_sld:load",
     "urban_edu_districts": "pipeline.prep.urban_edu:load",
     "hrsa_ahrf": "pipeline.prep.hrsa:load",
+    # cost of living (§20.6 cost / rent): BEA price parities, World Bank price levels, HUD rents
+    "bea_rpp_metro": "pipeline.prep.bea:load_metro",
+    "bea_rpp_state": "pipeline.prep.bea:load_state",
+    "wb_icp_pli": "pipeline.prep.icp:load_household",
+    "wb_gdp_pli": "pipeline.prep.icp:load_gdp",
+    "hud_fmr": "pipeline.prep.hud:load",
+    # hex-level extras (§20.6): Ookla speed tiles as points, Aqueduct baseline drought polygons
+    "ookla_fixed": "pipeline.prep.ookla:load",
+    "ookla_mobile": "pipeline.prep.ookla:load",
+    "aqueduct_water_stress": "pipeline.prep.aqueduct:load",
+}
+
+# raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read
+# them: source id -> "module:function(raw_path, out_path) -> out_path" (see prep/rasters.py).
+# Plain GeoTIFF sources (travel time, tree cover) need no entry: rawfiles.resolve_raster suffices.
+RASTER_LOADERS: dict[str, str] = {
+    "acag_pm25": "pipeline.prep.rasters:pm25_geotiff",
+    "gfed5_ba": "pipeline.prep.rasters:gfed5_burned_fraction",
 }
 
 
@@ -111,3 +129,33 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
     stage_cache.record(out, inputs, params, {"rows": int(len(df)), "columns": list(map(str, df.columns))})
     print(f"prep   {source_id}: {len(df)} rows -> {out.relative_to(settings.data_dir)}")
     return df
+
+
+def load_raster(settings: Settings, source_id: str, sources: dict[str, Source] | None = None) -> Path:
+    """The EPSG:4326 raster for ``source_id`` that ``raster_mean`` reads: the raw file (or the
+    member of a zip) for GeoTIFF sources, or a GeoTIFF built once by ``RASTER_LOADERS`` and
+    cached under data/interim/prep/<source_id>.tif. Fixture sources point straight at the
+    synthetic GeoTIFF. Missing downloads raise FileNotFoundError with the recipe."""
+    from .. import rawfiles
+
+    sources = sources or load_sources(settings.sources_path)
+    if source_id not in sources:
+        raise KeyError(f"unknown source {source_id!r} (not in {settings.sources_path.name})")
+    source = sources[source_id]
+    inputs = raw_inputs(settings, source, sources)
+    missing = [q for q in inputs if not q.exists()]
+    if missing:
+        raise FileNotFoundError(_missing_message(source, missing))
+    spec = RASTER_LOADERS.get(source_id)
+    if source.access == "fixture" or spec is None:
+        return rawfiles.resolve_raster(settings, source)
+    out = settings.cache_dir / "prep" / f"{source_id}.tif"
+    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster"}
+    if stage_cache.is_fresh(out, inputs, params, settings.force):
+        return out
+    module_name, func_name = spec.split(":")
+    build = getattr(importlib.import_module(module_name), func_name)
+    build(rawfiles.resolve_raster(settings, source) if source.format != "netcdf-zip" else inputs[0], out)
+    stage_cache.record(out, inputs, params, {"kind": "raster"})
+    print(f"prep   {source_id}: raster -> {out.relative_to(settings.data_dir)}")
+    return out

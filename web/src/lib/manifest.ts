@@ -2,9 +2,12 @@
 // components. The manifest is the single source for /methodology, the inspector's sources list
 // and the dimension registry the panel renders.
 
-export type ResTag = "admin1" | "county" | "tract" | "national" | "none";
+// hex = computed per hex from a raster or point set; basin = Aqueduct sub-basin at the centroid
+export type ResTag = "hex" | "basin" | "admin1" | "county" | "tract" | "national" | "none";
 export type DimKind = "score" | "signed" | "composition";
-export type DimGroup = "hazard" | "wellbeing" | "life";
+// env = present-day environment (air, trees, fire, drought): shown beside the 2050 hazards but
+// never part of exposure / coverage (SPEC §13.28)
+export type DimGroup = "hazard" | "wellbeing" | "life" | "env";
 export type Domain = "global" | "oecd" | "us";
 
 export interface ManifestSource {
@@ -34,6 +37,10 @@ export interface ManifestJoiner {
   label: string;
   weight_field?: string;
   fields?: Record<string, string>;
+  /** how to print the raw value: text after the number, factor applied first, decimals shown */
+  unit?: string;
+  multiply?: number;
+  decimals?: number;
 }
 
 export interface ManifestDimension {
@@ -51,6 +58,10 @@ export interface ManifestDimension {
   coverage_by_res?: Record<string, Record<string, number>>;
   domains?: Record<string, Record<string, number>>;
   raw?: string;
+  /** dimension-level unit (hazards; the default for joiners without their own) */
+  unit?: string;
+  multiply?: number;
+  decimals?: number;
 }
 
 export interface Manifest {

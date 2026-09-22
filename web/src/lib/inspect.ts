@@ -43,6 +43,8 @@ export interface HexModel {
   bivar: string;
   /** bivariate class 1-9, 0 when unclassified */
   bivarClass: number;
+  /** present-day environment (group `env`): shown beside the hazards, never part of exposure */
+  env: LifeRow[];
   life: LifeRow[];
   sources: ClientSource[];
 }
@@ -84,9 +86,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     res: str(p.wb_res) ?? "none",
   };
   const bivar = num(p.bivar) ?? 0;
-  const life: LifeRow[] = dims
-    .filter((d) => d.group === "life")
-    .map((d) => {
+  const rowFor = (d: DimInfo): LifeRow => {
       const res = str(p[`${d.id}_res`]) ?? "none";
       const row: LifeRow = { id: d.id, name: d.name, kind: d.kind, value: null, score: null, res, chip: d.chip };
       if (res === "none") return row;
@@ -103,12 +103,14 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
         row.value = row.majority ? `largest group: ${row.majority}` : "shares below";
       }
       return row;
-    });
+  };
+  const life: LifeRow[] = dims.filter((d) => d.group === "life").map(rowFor);
+  const env: LifeRow[] = dims.filter((d) => d.group === "env").map(rowFor);
   const usedIds = new Set<string>(["natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop"]);
   for (const h of hazards) if (h.ok) for (const s of manifest.dimensionSources[h.id] ?? []) usedIds.add(s);
   if (wbSource === "shdi") ["gdl_shdi", "gdl_shdi_regions"].forEach((s) => usedIds.add(s));
   if (wbSource === "whr") usedIds.add("whr_ladder");
-  for (const row of life) if (row.res !== "none") for (const s of manifest.dimensionSources[row.id] ?? []) usedIds.add(s);
+  for (const row of [...env, ...life]) if (row.res !== "none") for (const s of manifest.dimensionSources[row.id] ?? []) usedIds.add(s);
   return {
     title: admin1 ?? countryName(iso),
     subtitle: admin1 ? countryName(iso) : "",
@@ -122,6 +124,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     wellbeing,
     bivar: BIVAR_WORDS[bivar] ?? BIVAR_WORDS[0],
     bivarClass: BIVAR_WORDS[bivar] ? bivar : 0,
+    env,
     life,
     sources: manifest.sources.filter((s) => usedIds.has(s.id)),
   };

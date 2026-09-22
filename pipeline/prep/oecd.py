@@ -120,6 +120,11 @@ def build_tl2_geometry(corr: pd.DataFrame, adm1: gpd.GeoDataFrame, overrides: pd
 
 
 def read_correspondence(path: Path, sheet: str, header_row: int) -> pd.DataFrame:
+    """The TL2024 sheet has title rows above the header; locate the row that holds ISO3 / REG_ID
+    instead of trusting a fixed row number (it moved between file versions)."""
+    raw = pd.read_excel(path, sheet_name=sheet, header=None, nrows=12, engine="openpyxl")
+    hits = [i for i in range(len(raw)) if {"ISO3", "REG_ID"} <= {str(v).strip() for v in raw.iloc[i].tolist()}]
+    header_row = (hits[0] + 1) if hits else header_row
     df = read_xlsx(path, sheet, header_row)
     iso = find_column(df.columns, "ISO3")
     reg = find_column(df.columns, "REG_ID")

@@ -76,11 +76,24 @@ def pad_degrees(res: int) -> float:
     return 4.5 * edge_km / 111.0
 
 
+MAX_FILL_LNG_SPAN = 90.0  # h3.geo_to_cells follows great circles: a box wider than 180 degrees folds up
+
+
 def cells_overlapping_bbox(bbox: BBox, res: int) -> list[str]:
+    """Cells whose centre lies in ``bbox`` padded by two hex diameters. Wide boxes (full-width
+    raster strips span 360 degrees) are filled in longitude slices of at most 90 degrees because
+    H3 traces polygon edges along great circles and a -180..180 edge has zero length."""
     minlng, minlat, maxlng, maxlat = bbox
     pad = pad_degrees(res)
-    padded = box(max(-180.0, minlng - pad), max(-90.0, minlat - pad), min(180.0, maxlng + pad), min(90.0, maxlat + pad))
-    return cells_for_geometry(padded, res)
+    lng0, lng1 = max(-180.0, minlng - pad), min(180.0, maxlng + pad)
+    lat0, lat1 = max(-90.0, minlat - pad), min(90.0, maxlat + pad)
+    if lng1 - lng0 <= MAX_FILL_LNG_SPAN:
+        return cells_for_geometry(box(lng0, lat0, lng1, lat1), res)
+    cells: set[str] = set()
+    edges = np.arange(lng0, lng1, MAX_FILL_LNG_SPAN).tolist() + [lng1]
+    for a, b in zip(edges[:-1], edges[1:], strict=True):
+        cells.update(cells_for_geometry(box(a, lat0, b, lat1), res))
+    return sorted(cells)
 
 
 # ---- raster aggregation ---------------------------------------------------------------------

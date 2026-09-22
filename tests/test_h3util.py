@@ -101,3 +101,10 @@ def test_aggregate_rasters_rejects_misaligned(stacked_rasters, tmp_path):
         dst.write(np.ones((100, 100), dtype="float32"), 1)
     with pytest.raises(ValueError, match="aligned"):
         h3util.aggregate_rasters([stacked_rasters[0], p], 5, "mean")
+
+
+def test_cells_overlapping_bbox_handles_full_width_strips():
+    # a full-width raster strip must not fold up into nothing (h3.geo_to_cells follows great circles)
+    cells = h3util.cells_overlapping_bbox((-180.0, 40.0, 180.0, 41.0), 4)
+    assert len(cells) > 500
+    assert set(h3util.cells_overlapping_bbox((10.0, 40.0, 11.0, 41.0), 4)) <= set(cells)

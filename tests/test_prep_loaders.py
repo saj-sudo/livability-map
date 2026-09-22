@@ -128,9 +128,9 @@ def test_epa_sld_sentinel_becomes_nan():
 
 
 def test_urban_all_students_filter():
-    df = pd.DataFrame({"leaid": ["100005", "100005"], "race": [99, 1], "lep": [99, 99], "homeless": [99, 99], "disability": [99, 99], "econ_disadvantaged": [99, 99], "foster_care": [99, 99], "cohort_num": [500, 20], "grad_rate_midpt": [88.5, 70.0]})
+    df = pd.DataFrame({"leaid": ["100005", "100005", "100006"], "race": [99, 1, 99], "lep": [99, 99, 99], "homeless": [99, 99, 99], "disability": [99, 99, 99], "econ_disadvantaged": [99, 99, 99], "foster_care": [99, 99, 99], "cohort_num": [500, 20, 30], "grad_rate_midpt": [88.5, 70.0, -3.0]})
     out = urban_edu.prepare(df)
-    assert len(out) == 1 and out.loc[0, "LEAID"] == "0100005" and out.loc[0, "grad_rate_midpt"] == 88.5
+    assert len(out) == 1 and out.loc[0, "LEAID"] == "0100005" and out.loc[0, "grad_rate_midpt"] == 88.5  # -3 is a suppression code
 
 
 def test_hrsa_per_10k_uses_newest_physician_column():

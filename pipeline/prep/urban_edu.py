@@ -26,7 +26,9 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
             mask &= pd.to_numeric(df[col], errors="coerce") == ALL_STUDENTS
     out = df[mask].copy()
     out["LEAID"] = out["leaid"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(7)
-    out["grad_rate_midpt"] = pd.to_numeric(out["grad_rate_midpt"], errors="coerce")
+    # EDFacts uses negative codes for suppressed / not-applicable cells; a rate is 0..100
+    rate = pd.to_numeric(out["grad_rate_midpt"], errors="coerce")
+    out["grad_rate_midpt"] = rate.where((rate >= 0) & (rate <= 100))
     out["cohort_num"] = pd.to_numeric(out["cohort_num"], errors="coerce")
     out = out.dropna(subset=["grad_rate_midpt"]).drop_duplicates("LEAID")
     return out[["LEAID", "grad_rate_midpt", "cohort_num"]].reset_index(drop=True)

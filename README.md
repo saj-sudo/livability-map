@@ -42,7 +42,7 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |  grid      Natural Earth land -> H3 cells at H3_RES (drop ocean) -> data/interim/hexes_r{res}.parquet |
   |  pop       GHSL 1 km -> sum per hex -> population, inhabited flag (pop >= POP_MIN)                    |
   |  admin     hex centroid -> geoBoundaries admin0/admin1 -> iso_a2, admin1_id, admin1_name              |
-  |  hazards   for each raster: windowed read -> raster_to_h3 -> aggregate per hex (§8.1)      [Session 2]|
+  |  hazards   for each raster: windowed read -> raster_to_h3 -> aggregate per hex (§8.1)                 |
   |            -> per-hazard 0-100 percentile score + *_ok flag                                           |
   |  dims      for each dimension in pipeline/dimensions.yaml, run its joiners (§20.3):        [Session 4]|
   |            polygon_centroid | iso_lookup | area_weighted_overlay | point_density                      |

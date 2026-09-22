@@ -302,7 +302,7 @@ def build(out: Path) -> dict[str, str]:
     transit.to_file(out / "transit_stops.gpkg", driver="GPKG")
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
-    (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2))
+    (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")
     return digests
 
 
@@ -310,7 +310,7 @@ def ensure(out: Path) -> Path:
     marker = out / "fixtures.json"
     if marker.exists():
         try:
-            if json.loads(marker.read_text()).get("version") == VERSION:
+            if json.loads(marker.read_text(encoding="utf-8")).get("version") == VERSION:
                 return out
         except json.JSONDecodeError:
             pass

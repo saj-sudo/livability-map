@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from ..config import Settings
-from . import PLANNED
-
-
-class NotImplementedStage(RuntimeError):
-    pass
+from . import PLANNED, NotImplementedStage
 
 
 def run(settings: Settings) -> None:

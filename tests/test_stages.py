@@ -5,7 +5,7 @@ import pandas as pd
 
 from pipeline import sanity
 from pipeline.fixtures import make_fixtures
-from pipeline.stages import admin, fetch, grid, pop
+from pipeline.stages import admin, fetch, grid, hazards, pop
 
 
 def _run_all(settings):
@@ -13,6 +13,7 @@ def _run_all(settings):
     grid.run(settings)
     pop.run(settings)
     admin.run(settings)
+    hazards.run(settings)
 
 
 def test_grid_pop_admin_on_fixture_world(settings, capsys):
@@ -43,8 +44,9 @@ def test_stages_are_idempotent(settings, capsys):
     grid.run(settings)
     pop.run(settings)
     admin.run(settings)
+    hazards.run(settings)
     out = capsys.readouterr().out
-    assert out.count("up to date") == 3
+    assert out.count("up to date") == 4
 
 
 def test_force_recomputes(settings, capsys):

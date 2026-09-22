@@ -13,7 +13,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from .. import h3util, stage_cache
+from .. import h3util, rawfiles, stage_cache
 from ..config import Settings
 from ..registry import load_sources
 
@@ -21,15 +21,14 @@ POP_SOURCE = "ghsl_pop"
 
 
 def pop_path(settings: Settings):
+    """The GeoTIFF to read; the real GHSL download is a zip and is extracted once (rawfiles)."""
     src = load_sources(settings.sources_path)[POP_SOURCE]
-    return settings.raw(src.id) / src.files[0]
+    return rawfiles.resolve_raster(settings, src)
 
 
 def run(settings: Settings) -> dict[int, int]:
     settings.ensure_dirs()
-    raster = pop_path(settings)
-    if not raster.exists():
-        raise FileNotFoundError(f"population raster not fetched: {raster} (run `fetch` first)")
+    raster = pop_path(settings)  # raises a plain FileNotFoundError when `fetch` has not run
     counts: dict[int, int] = {}
     for res in settings.res:
         hexes_path = settings.hexes_path(res)

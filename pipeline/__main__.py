@@ -14,7 +14,7 @@ from pathlib import Path
 import typer
 
 from .config import Settings, find_root, parse_bbox
-from .stages import PLANNED, STAGE_ORDER
+from .stages import PLANNED, STAGE_ORDER, NotImplementedStage
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help=__doc__)
 
@@ -49,12 +49,10 @@ def _run_stage(name: str, settings: Settings, **kwargs) -> bool:
     """Run one stage. Returns False if the stage is still planned."""
     import importlib
 
-    from .stages.hazards import NotImplementedStage as _NI  # same class shape in every stub
-
     mod = importlib.import_module(f"pipeline.stages.{name}")
     try:
         mod.run(settings, **kwargs)
-    except _NI as exc:
+    except NotImplementedStage as exc:
         print(f"{name:6s} {exc}")
         return False
     except RuntimeError as exc:
@@ -93,6 +91,12 @@ def admin(ctx: typer.Context) -> None:
     _run_stage("admin", _settings(ctx))
 
 
+@app.command()
+def hazards(ctx: typer.Context) -> None:
+    """Heat, riverine and coastal flood, water stress per hex with scores (SPEC §8.1-8.2)."""
+    _run_stage("hazards", _settings(ctx))
+
+
 def _planned_command(name: str):
     def cmd(ctx: typer.Context) -> None:
         if not _run_stage(name, _settings(ctx)):
@@ -103,7 +107,7 @@ def _planned_command(name: str):
     return cmd
 
 
-for _name in ("hazards", "dims", "score", "export", "tiles", "publish"):
+for _name in ("dims", "score", "export", "tiles", "publish"):
     app.command(name=_name)(_planned_command(_name))
 
 

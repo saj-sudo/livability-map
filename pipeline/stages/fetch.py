@@ -55,7 +55,7 @@ def read_checksums(path: Path) -> dict[tuple[str, str], str]:
     out: dict[tuple[str, str], str] = {}
     if not path.exists():
         return out
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -72,7 +72,7 @@ def write_checksums(path: Path, entries: dict[tuple[str, str], str]) -> None:
     for (sid, fname), digest in sorted(entries.items()):
         lines.append(f"{digest}  {sid}  {fname}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _resolve_file_url(url: str, root: Path) -> Path:

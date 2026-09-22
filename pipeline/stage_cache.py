@@ -35,7 +35,7 @@ def is_fresh(output: Path, inputs: list[Path], params: dict[str, Any], force: bo
     if not mp.exists():
         return False
     try:
-        recorded = json.loads(mp.read_text())
+        recorded = json.loads(mp.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return False
     return recorded.get("fingerprint") == fingerprint(inputs, params)
@@ -45,4 +45,4 @@ def record(output: Path, inputs: list[Path], params: dict[str, Any], extra: dict
     payload = {"fingerprint": fingerprint(inputs, params), "params": params}
     if extra:
         payload.update(extra)
-    meta_path(output).write_text(json.dumps(payload, indent=2, sort_keys=True, default=str))
+    meta_path(output).write_text(json.dumps(payload, indent=2, sort_keys=True, default=str), encoding="utf-8")

@@ -419,3 +419,111 @@
   attribution: "HRSA, Area Health Resources Files 2024-2025"
   processing: "total active non-federal MDs (md_nf_activ_23) per 10k residents at county (polygon_centroid)"
   files: [AHRF_2024-2025_CSV.zip]
+
+# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
+# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
+# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
+- id: bea_rpp_metro
+  name: BEA Regional Price Parities by metropolitan statistical area (MARPP), all items
+  group: life
+  access: direct
+  url: https://apps.bea.gov/regional/zip/MARPP.zip
+  format: csv-zip
+  member: MARPP_MSA_2008_2024.csv
+  geometry: cb_cbsa
+  license: Public domain (US federal work; BEA statistics carry no copyright)
+  verified: confirmed
+  vintage: "2024 statistics (released 2026-02-19); table covers 2008-2024"
+  attribution: "US Bureau of Economic Analysis, Regional Price Parities (MARPP)"
+  processing: "LineCode 1 (RPPs: All items, US = 100) for the latest year; GeoFIPS is the 5-digit CBSA code, joined to the Census CBSA polygons (polygon_centroid). BEA publishes no county table"
+  files: [MARPP.zip]
+
+- id: bea_rpp_state
+  name: BEA Regional Price Parities by state (SARPP), all items
+  group: life
+  access: direct
+  url: https://apps.bea.gov/regional/zip/SARPP.zip
+  format: csv-zip
+  member: SARPP_STATE_2008_2024.csv
+  geometry: cb_states
+  license: Public domain (US federal work; BEA statistics carry no copyright)
+  verified: confirmed
+  vintage: "2024 statistics (released 2026-02-19); table covers 2008-2024"
+  attribution: "US Bureau of Economic Analysis, Regional Price Parities (SARPP)"
+  processing: "LineCode 1 (RPPs: All items, US = 100) for the latest year; GeoFIPS ' SS000' -> 2-digit state FIPS, joined to the Census state polygons (polygon_centroid); the fallback where a hex is outside any priced metro area"
+  files: [SARPP.zip]
+
+- id: cb_cbsa
+  name: US Census cartographic boundary core based statistical areas 2025 (1:500k)
+  group: life
+  access: direct
+  url: https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_cbsa_500k.zip
+  format: shapefile-zip
+  crs: EPSG:4269
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "2025 (file dated 2026-04-23, 4.7 MB; HEAD 200 on 2026-09-22)"
+  attribution: "US Census Bureau, cartographic boundary files"
+  processing: "geometry for bea_rpp_metro (GEOID = 5-digit CBSA code); micropolitan areas are present but unpriced by BEA"
+  files: [cb_2025_us_cbsa_500k.zip]
+
+- id: cb_states
+  name: US Census cartographic boundary states 2025 (1:500k)
+  group: life
+  access: direct
+  url: https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_state_500k.zip
+  format: shapefile-zip
+  crs: EPSG:4269
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "2025 (file dated 2026-04-23, 3.2 MB; HEAD 200 on 2026-09-22)"
+  attribution: "US Census Bureau, cartographic boundary files"
+  processing: "geometry for bea_rpp_state (GEOID = 2-digit state FIPS)"
+  files: [cb_2025_us_state_500k.zip]
+
+- id: wb_icp_pli
+  name: World Bank ICP 2021, household consumption price level index (World = 100), all countries and years
+  group: life
+  access: direct
+  # source 90 = ICP 2021; series 9100000 = households and NPISHs final consumption expenditure;
+  # classification PX.WL = price level index, World = 100. The `all` country selector works
+  # (1,449 records on one page, probed 2026-09-22); the loader refuses a paginated answer.
+  url: "https://api.worldbank.org/v2/sources/90/Country/all/Series/9100000/Classification/PX.WL/Time/all/data?format=json&per_page=20000"
+  format: json
+  license: CC BY 4.0 (World Bank open data terms)
+  verified: confirmed
+  vintage: "ICP 2021 cycle (API lastupdated 2024-08-04); latest year with a value per country"
+  attribution: "World Bank, International Comparison Program (ICP) 2021"
+  processing: "latest non-null year per ISO3 -> iso_a2, pli_household (World = 100); aggregates without an ISO2 code are dropped (iso_lookup)"
+  files: [icp2021_household_pli.json]
+
+- id: wb_gdp_pli
+  name: World Bank WDI PA.NUS.PPPC.RF, price level ratio of the PPP conversion factor (GDP) to the market exchange rate
+  group: life
+  access: direct
+  # the served file name carries a changing suffix (API_PA.NUS.PPPC.RF_DS57_en_csv_v2_370312.zip
+  # on 2026-09-22, 98 KB, HTTP 200); fetch saves it under the stable name in `files`
+  url: "https://api.worldbank.org/v2/en/indicator/PA.NUS.PPPC.RF?downloadformat=csv"
+  format: csv-zip
+  also_needs: [wb_icp_pli]
+  license: CC BY 4.0 (World Bank open data terms)
+  verified: confirmed
+  vintage: "WDI (latest broad year 2024); latest year with a value per country"
+  attribution: "World Bank, World Development Indicators (PA.NUS.PPPC.RF)"
+  processing: "a ratio with the US = 1, rescaled onto the ICP world base by the median of ICP / ratio over the countries both cover -> pli_gdp; aggregates (blank Region in Metadata_Country) dropped; fills only where ICP has no row (iso_lookup)"
+  files: [API_PA.NUS.PPPC.RF_en_csv_v2.zip]
+
+- id: hud_fmr
+  name: HUD Fair Market Rents FY2026 (county / FMR area)
+  group: life
+  access: direct
+  # a HEAD request answers 202; GET serves the workbook
+  url: https://www.huduser.gov/portal/datasets/fmr/fmr2026/FY26_FMRs.xlsx
+  format: xlsx
+  geometry: cb_counties
+  license: Public domain (US federal)
+  verified: confirmed
+  vintage: "FY2026 (effective 2025-10-01)"
+  attribution: "US Department of Housing and Urban Development, Fair Market Rents FY2026"
+  processing: "2-bedroom FMR (fmr_2, USD/month) per county: the whole-county row (10-digit fips ending 99999) or the median of its New England town rows; joined to the Census counties on the 5-digit GEOID (polygon_centroid)"
+  files: [FY26_FMRs.xlsx]

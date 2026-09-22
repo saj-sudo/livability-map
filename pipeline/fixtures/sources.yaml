@@ -240,6 +240,59 @@
   verified: confirmed
   vintage: "fixture"
   files: [districts.gpkg]
+- id: bea_rpp_metro
+  name: fixture county polygons with a metro price parity on the Cedar metro only (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
+- id: bea_rpp_state
+  name: fixture BEA-like state price parities (B-North and B-Mid only)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/states.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [states.gpkg]
+- id: wb_icp_pli
+  name: fixture ICP-like national household price level (XA only)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/icp.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [icp.csv]
+- id: wb_gdp_pli
+  name: fixture WDI-like national GDP price level on the world base (both countries)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/gdp_pli.csv
+  format: csv
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [gdp_pli.csv]
+- id: hud_fmr
+  name: fixture county polygons with a 2-bedroom rent (same file as fixture_counties)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/counties.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [counties.gpkg]
 - id: dataverse_example
   name: example of a Dataverse guestbook-gated source (fetch reports missing without .env)
   group: life

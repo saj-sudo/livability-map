@@ -23,7 +23,7 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 4
+PREP_VERSION = 5
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {
@@ -37,6 +37,12 @@ LOADERS: dict[str, str] = {
     "epa_sld": "pipeline.prep.epa_sld:load",
     "urban_edu_districts": "pipeline.prep.urban_edu:load",
     "hrsa_ahrf": "pipeline.prep.hrsa:load",
+    # cost of living (§20.6 cost / rent): BEA price parities, World Bank price levels, HUD rents
+    "bea_rpp_metro": "pipeline.prep.bea:load_metro",
+    "bea_rpp_state": "pipeline.prep.bea:load_state",
+    "wb_icp_pli": "pipeline.prep.icp:load_household",
+    "wb_gdp_pli": "pipeline.prep.icp:load_gdp",
+    "hud_fmr": "pipeline.prep.hud:load",
 }
 
 

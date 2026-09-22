@@ -8,8 +8,12 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
 - global life-dimension stand-ins: GSAP regions (all five admin1), OECD TL2 (XKA only), ILOSTAT
-- US-like detail layers over XKB: tracts (ACS-like fields), counties (margin, physicians),
-  block groups (EPA SLD-like), school districts, transit stops (for joiner and dims tests)
+- US-like detail layers over XKB: tracts (ACS-like fields), counties (margin, physicians,
+  2-bedroom rent, metro price parity), block groups (EPA SLD-like), school districts, transit
+  stops (for joiner and dims tests)
+- cost-of-living stand-ins: states (BEA-like price parity for two of the three XKB regions, so
+  the third falls through to the national fallback), ICP-like (XA only) and WDI-like (both)
+  national price levels
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -34,7 +38,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 4  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 5  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -263,6 +267,11 @@ def us_like_layers(land, rng: np.random.Generator):
             "name": ["Cedar Co", "North Co", "Desert Co", "Coast Co"],
             "margin_2024": [35.0, -20.0, -60.0, 5.0],
             "physicians_per_10k": [35.0, 18.0, 5.0, 12.0],
+            # HUD-like 2-bedroom rent (USD/month) for every county ...
+            "fmr_2br": [1450.0, 980.0, 700.0, 1120.0],
+            # ... but a BEA-like metro price parity (US = 100) only for the Cedar metro: the
+            # other counties are NULL so the cost dimension falls through to the state layer
+            "rpp_all": [108.5, np.nan, np.nan, np.nan],
         },
         geometry=[
             box(12.0, 41.5, 14.0, 43.0).intersection(land),
@@ -344,6 +353,27 @@ def global_life_layers(adm1: gpd.GeoDataFrame):
     return gsap, oecd, ilostat
 
 
+def cost_layers(adm1: gpd.GeoDataFrame):
+    """Stand-ins for the cost-of-living sources (SPEC §20.6 cost).
+
+    - ``states``: BEA-like state price parities (US = 100) as polygons keyed like the Census
+      state file (``GEOID``). Only B-North and B-Mid are priced; B-South is left out so one XKB
+      region exercises the national fallback in the fixture world.
+    - ``icp``: ICP-like household price level (World = 100) for XA only.
+    - ``gdp``: WDI-like GDP price level already rescaled to the world base, for both countries,
+      so it is the last-resort fill for XB's B-South (and never wins for XA, where ICP comes first).
+    """
+    xkb = adm1[adm1["shapeGroup"] == "XKB"].set_index("shapeName")
+    states = gpd.GeoDataFrame(
+        {"GEOID": ["XB1", "XB2"], "name": ["B-North", "B-Mid"], "rpp_all": [97.0, 104.0], "year": [2024, 2024]},
+        geometry=[xkb.loc["B-North", "geometry"], xkb.loc["B-Mid", "geometry"]],
+        crs=4326,
+    )
+    icp = pd.DataFrame({"iso_a3": ["XKA"], "iso_a2": ["XA"], "pli_household": [88.0], "year": [2021]})
+    gdp = pd.DataFrame({"iso_a3": ["XKA", "XKB"], "iso_a2": ["XA", "XB"], "pli_gdp": [85.0, 121.0], "pli_ratio_us": [0.85, 1.21], "year": [2024, 2024]})
+    return states, icp, gdp
+
+
 def _content_digest(path: Path) -> str:
     """sha256 of file bytes, or of WKB + attributes for vector files (GeoPackage is not byte-stable)."""
     if path.suffix in (".gpkg", ".fgb", ".shp"):
@@ -388,6 +418,10 @@ def build(out: Path) -> dict[str, str]:
     gsap.to_file(out / "gsap_regions.gpkg", driver="GPKG")
     oecd.to_file(out / "oecd_tl2.gpkg", driver="GPKG")
     ilostat.to_csv(out / "ilostat.csv", index=False)
+    states, icp, gdp = cost_layers(adm1)
+    states.to_file(out / "states.gpkg", driver="GPKG")
+    icp.to_csv(out / "icp.csv", index=False)
+    gdp.to_csv(out / "gdp_pli.csv", index=False)
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
     (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")

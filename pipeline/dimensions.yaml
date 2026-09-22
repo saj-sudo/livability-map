@@ -153,3 +153,28 @@
     - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us, label: hrsa}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_score, domain: oecd, label: oecd}
   note: "US: active non-federal MDs per 10,000 residents (HRSA AHRF, county population from ACS). OECD: Health well-being score 0-10 (life expectancy, mortality), an outcome not access. Different constructs, labeled"
+
+- id: cost
+  name: Cost of living (price level)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global, us]
+  sources: [bea_rpp_metro, bea_rpp_state, cb_cbsa, cb_states, wb_icp_pli, wb_gdp_pli]
+  joiners:
+    - {source: bea_rpp_metro, joiner: polygon_centroid, res: county, field: rpp_all, domain: us, label: bea}
+    - {source: bea_rpp_state, joiner: polygon_centroid, res: admin1, field: rpp_all, domain: us, label: bea}
+    - {source: wb_icp_pli, joiner: iso_lookup, res: national, field: pli_household, domain: global, label: icp}
+    - {source: wb_gdp_pli, joiner: iso_lookup, res: national, field: pli_gdp, domain: global, label: wdi}
+  note: "US: BEA regional price parity, all items (US = 100), metro area first (tagged county, the finest tag a CBSA fits) then state. Elsewhere: World Bank ICP 2021 household-consumption price level (World = 100); where ICP has no row, the WDI GDP price-level ratio rescaled onto the same world base through the countries both cover. Different bases, labeled"
+
+- id: rent
+  name: Housing cost (rent level)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [us]
+  sources: [hud_fmr, cb_counties]
+  joiners:
+    - {source: hud_fmr, joiner: polygon_centroid, res: county, field: fmr_2br, domain: us, label: hud}
+  note: "HUD Fair Market Rent for a 2-bedroom unit, FY2026, USD per month, by county (the whole-county row or the median of New England town rows); the OECD/EU rent level is v2"

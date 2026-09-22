@@ -97,6 +97,12 @@ def hazards(ctx: typer.Context) -> None:
     _run_stage("hazards", _settings(ctx))
 
 
+@app.command()
+def dims(ctx: typer.Context) -> None:
+    """Wellbeing and life dimensions via the registry joiners (SPEC §20.2-20.3)."""
+    _run_stage("dims", _settings(ctx))
+
+
 def _planned_command(name: str):
     def cmd(ctx: typer.Context) -> None:
         if not _run_stage(name, _settings(ctx)):
@@ -107,7 +113,7 @@ def _planned_command(name: str):
     return cmd
 
 
-for _name in ("dims", "score", "export", "tiles", "publish"):
+for _name in ("score", "export", "tiles", "publish"):
     app.command(name=_name)(_planned_command(_name))
 
 

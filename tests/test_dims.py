@@ -57,7 +57,7 @@ def test_life_dims_global_fallbacks(settings):
     assert (xb["jobs_res"] == "tract").all() and (xb["jobs_dom"] == "us").all()
     # incmix: ACS entropy in XKB, GSAP share above the poverty line in XKA
     assert (xb["incmix_res"] == "tract").all()
-    assert (xa["incmix_res"] == "admin1").all() and set(xa["incmix_raw"].round(2)) <= {0.95, 0.85}
+    assert (xa["incmix_res"] == "admin1").all() and (np.isclose(xa["incmix_raw"], 0.95) | np.isclose(xa["incmix_raw"], 0.85)).all()
     # house / health: OECD in XKA, ACS / HRSA in XKB
     assert (xa["house_res"] == "admin1").all() and (xb["house_res"] == "tract").all()
     assert (xa["health_res"] == "admin1").all() and (xb["health_res"] == "county").all()

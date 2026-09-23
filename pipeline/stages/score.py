@@ -111,6 +111,9 @@ def run(settings: Settings) -> dict[int, dict]:
         ref = reference.reference_frame(settings, res)  # SPEC §13.32
         reference.require(ref, f"{WB_ID}_raw", "dims", settings, res)
         reference.require(ref, "bivar", "score", settings, res)
+        for dim in dims:
+            if dim.kind == "score":
+                reference.require(ref, f"{dim.id}_raw", "dims", settings, res)
         df = _load(settings, res)
         result = composites(df)
         domains: dict[str, dict[str, int]] = {}

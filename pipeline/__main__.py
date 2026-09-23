@@ -131,7 +131,7 @@ def tiles(
     ctx: typer.Context,
     backend: str = typer.Option("auto", "--backend", help="auto | python | tippecanoe (SPEC §13.18)."),
     workers: int = typer.Option(None, "--workers", help="Encoder processes (default: cores - 1; 0 = in-process)."),
-    archive: str = typer.Option(None, "--archive", help="Build only this plan archive (hexes | hexes_fine)."),
+    archive: str = typer.Option(None, "--archive", help="Build only this plan archive (hexes | hexes_nbhd | hexes_city)."),
 ) -> None:
     """hexes_r{res}.parquet -> one PMTiles archive per resolution-plan archive; zooms from the manifest (SPEC §9.1)."""
     _run_stage("tiles", _settings(ctx), backend=backend, workers=workers, archive=archive)

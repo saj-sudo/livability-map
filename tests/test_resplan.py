@@ -20,8 +20,8 @@ def _write(tmp_path: Path, entries) -> Path:
 GOOD = [
     {"res": 4, "fill": "land", "zooms": [2, 4], "archive": "hexes", "slim_below_zoom": 3},
     {"res": 5, "fill": "land", "zooms": [5, 7], "archive": "hexes"},
-    {"res": 6, "fill": "children", "parent": 5, "where": {"countries": ["XA"], "urban": "cluster"}, "zooms": [8, 9], "archive": "hexes_fine"},
-    {"res": 7, "fill": "children", "parent": 6, "where": {"urban": "centre"}, "zooms": [10, 13], "archive": "hexes_fine"},
+    {"res": 6, "fill": "children", "parent": 5, "where": {"countries": ["XA"], "urban": "cluster"}, "zooms": [8, 9], "archive": "hexes_nbhd"},
+    {"res": 7, "fill": "children", "parent": 6, "where": {"urban": "centre"}, "zooms": [10, 13], "archive": "hexes_city"},
 ]
 
 
@@ -31,7 +31,7 @@ def test_plan_loads_and_answers_questions(tmp_path):
     assert plan.entry(6).parent == 5 and plan.entry(6).where["countries"] == ["XA"]
     assert plan.reference_res(7) == 5 and plan.reference_res(6) == 5 and plan.reference_res(5) is None
     assert plan.next_finer(5).res == 6 and plan.next_finer(7) is None
-    assert plan.archives() == {"hexes": [4, 5], "hexes_fine": [6, 7]}
+    assert plan.archives() == {"hexes": [4, 5], "hexes_nbhd": [6], "hexes_city": [7]}
     assert plan.to_manifest()[2]["where"] == {"countries": ["XA"], "urban": "cluster"}
     assert plan.entry(4).complete and not plan.entry(6).complete
     assert plan.entry(4).slim_below_zoom == 3 and plan.entry(5).slim_below_zoom is None
@@ -88,3 +88,15 @@ def test_settings_default_res_comes_from_the_plan(settings):
     assert fresh.res == fresh.plan.resolutions() == [4, 5, 6, 7]
     assert fresh.plan_path.name == "resolution_plan.yaml" and "fixtures" in str(fresh.plan_path)
     assert fresh.urban_path.name == "urban.parquet"
+
+
+def test_a_layer_that_overzooms_must_close_its_archive(tmp_path):
+    # MapLibre overzooms per source, not per layer: hex6 sharing an archive with hex7 would vanish at
+    # hex7's zooms wherever no res-7 cell exists (final review C1)
+    bad = [dict(e) for e in GOOD]
+    bad[2]["archive"] = bad[3]["archive"] = "hexes_fine"
+    with pytest.raises(ValueError, match="own archive"):
+        resplan.load_plan(_write(tmp_path, bad))
+    ok = [dict(e) for e in GOOD]
+    ok[1]["archive"] = "hexes"  # hex4 + hex5 share an archive: hex4 is followed by a complete layer
+    assert resplan.load_plan(_write(tmp_path, ok)).archives()["hexes"] == [4, 5]

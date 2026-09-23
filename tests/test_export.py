@@ -73,6 +73,20 @@ def test_export_marks_refined_parents_and_writes_the_plan(settings):
     assert r7["ref"].isna().all()  # nothing finer than res 7 in the plan
     m = json.loads((settings.out_dir / "manifest.json").read_text(encoding="utf-8"))
     assert [e["res"] for e in m["resolution_plan"]] == [4, 5, 6, 7]
-    assert m["resolution_plan"][3]["cells"] == len(r7) and m["resolution_plan"][3]["archive"] == "hexes_fine"
+    assert m["resolution_plan"][3]["cells"] == len(r7) and m["resolution_plan"][3]["archive"] == "hexes_city"
     assert m["resolution_plan"][1]["complete"] is True and m["resolution_plan"][2]["complete"] is False
     assert m["h3_res"] == [4, 5, 6, 7]
+
+
+def test_ref_is_refreshed_when_a_finer_resolution_is_added_later(settings):
+    # final review I2: export res 5 first, add res 6 later with `--res 6`: res 5's ref must follow
+    settings.res = [4, 5]
+    _run_all(settings)
+    r5 = pd.read_parquet(settings.out_dir / "hexes_r5.parquet")
+    assert r5["ref"].isna().all()
+    settings.res = [6]
+    for stage in (grid, pop, admin, hazards, dims, score, export):
+        stage.run(settings)
+    r5 = pd.read_parquet(settings.out_dir / "hexes_r5.parquet")
+    r6 = pd.read_parquet(settings.hexes_path(6))
+    assert set(r5.loc[r5["ref"].fillna(False).astype(bool), "h3"]) == set(r6["parent"])

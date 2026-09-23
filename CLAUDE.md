@@ -33,7 +33,7 @@ uv run python -m pipeline --res 4 --bbox 89.5,23,91.5,25 hazards   # subregion r
 uv run python -m pipeline --res 5 dims --only care --only net     # add layers without redoing the tract overlays
 uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
-uv run python -m pipeline tiles --archive hexes_fine             # one archive of the resolution plan
+uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```
@@ -68,7 +68,7 @@ stage. Paths depend on `fixtures`: real runs use `data/{raw,interim,out}` and
 `resplan.py`, SPEC §9.1, §13.31-34). `land` entries (res 4, 5) cover every land cell; `children`
 entries (res 6: US/EU/UK/EFTA or near urban clusters; res 7: urban centres) are H3 children of
 matching parents from `urban.parquet` (the `urban` stage, GHS-SMOD) and adm0. Each entry names its
-zooms and PMTiles archive (`hexes`, `hexes_fine`); the tiler and web read them via the manifest.
+zooms and PMTiles archive (`hexes`, `hexes_nbhd`, `hexes_city`); the tiler and web read them via the manifest.
 Derived resolutions are scored against res-5 distributions (`reference.py`); `export` sets `ref`
 on refined parents so the web hides them under the finer layer. Raster aggregation takes a cell
 set (`h3util.CellSet`) so derived resolutions cost what their cells cost.

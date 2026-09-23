@@ -141,22 +141,36 @@ def test_tiles_build_one_archive_per_plan_entry(settings):
     _run_all(settings)
     tiles.run(settings, backend="python", workers=0)
     m = manifest.load(settings)
-    assert set(m["tiles"]) == {"hexes", "hexes_fine"}
-    fine = {L["name"]: L for L in m["tiles"]["hexes_fine"]["layers"]}
+    assert set(m["tiles"]) == {"hexes", "hexes_nbhd", "hexes_city"}
+    fine = {L["name"]: L for a in ("hexes_nbhd", "hexes_city") for L in m["tiles"][a]["layers"]}
     assert fine["hex6"]["minzoom"] == 8 and fine["hex6"]["maxzoom"] == 9 and fine["hex6"]["res"] == 6
     assert fine["hex7"]["overzoom"] is True and fine["hex6"]["overzoom"] is True and fine["hex6"]["complete"] is False
     coarse = {L["name"]: L for L in m["tiles"]["hexes"]["layers"]}
     assert coarse["hex5"]["overzoom"] is True and coarse["hex4"]["overzoom"] is False and coarse["hex4"]["complete"] is True
-    assert m["tiles"]["hexes_fine"]["key"] == "hexes_fine.pmtiles" and m["tiles"]["hexes_fine"]["minzoom"] == 8 and m["tiles"]["hexes_fine"]["maxzoom"] == 13
-    assert (settings.out_dir / "hexes_fine.pmtiles").stat().st_size > 1000
+    assert m["tiles"]["hexes_nbhd"]["maxzoom"] == 9 and [L["name"] for L in m["tiles"]["hexes_nbhd"]["layers"]] == ["hex6"]
+    assert m["tiles"]["hexes_city"]["minzoom"] == 10 and m["tiles"]["hexes_city"]["maxzoom"] == 13
+    assert (settings.out_dir / "hexes_nbhd.pmtiles").stat().st_size > 1000
     # the z7 tile over Alder carries hex5 features with ref true; the z10 tile carries hex7 features without ref
     assert any(f["properties"].get("ref") is True for f in _features(settings, "hexes.pmtiles", 7, 11.0, 43.0, "hex5"))
-    assert all("ref" not in f["properties"] for f in _features(settings, "hexes_fine.pmtiles", 10, 11.0, 43.0, "hex7"))
+    assert all("ref" not in f["properties"] for f in _features(settings, "hexes_city.pmtiles", 10, 11.0, 43.0, "hex7"))
 
 
 def test_tiles_archive_option_builds_one_archive(settings, capsys):
     settings.res = [4, 5, 6, 7]
     _run_all(settings)
-    info = tiles.run(settings, backend="python", workers=0, archive="hexes_fine")
-    assert set(info) == {"hexes_fine"} and (settings.out_dir / "hexes_fine.pmtiles").exists()
+    info = tiles.run(settings, backend="python", workers=0, archive="hexes_nbhd")
+    assert set(info) == {"hexes_nbhd"} and (settings.out_dir / "hexes_nbhd.pmtiles").exists()
     assert not (settings.out_dir / "hexes.pmtiles").exists()
+
+
+def test_a_subset_run_keeps_every_archive(settings):
+    # final review I2: adding res 6/7 with `--res 6 --res 7` must not drop hexes.pmtiles from the manifest
+    settings.res = [4, 5, 6, 7]
+    _run_all(settings)
+    tiles.run(settings, backend="python", workers=0)
+    settings.res = [6, 7]
+    export.run(settings)
+    tiles.run(settings, backend="python", workers=0)
+    m = manifest.load(settings)
+    assert set(m["tiles"]) == {"hexes", "hexes_nbhd", "hexes_city"}
+    assert [L["name"] for L in m["tiles"]["hexes"]["layers"]] == ["hex4", "hex5"]

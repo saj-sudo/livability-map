@@ -12,7 +12,7 @@ import { INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/c
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
 import { paletteFor } from "../lib/palette";
-import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, type TileLayer, type ViewOptions } from "../lib/style";
+import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, pickVisible, type TileLayer, type ViewOptions } from "../lib/style";
 import { basemapStyleFor, THEME_EVENT, type Theme } from "../lib/theme";
 import type { AppState } from "../lib/url";
 import { getDomTheme } from "./useTheme";
@@ -138,7 +138,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
         if (!loadedRef.current || raf) return;
         raf = window.requestAnimationFrame(() => {
           raf = 0;
-          const f = map.queryRenderedFeatures(e.point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
+          const f = pickVisible(map.queryRenderedFeatures(e.point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) }), map.getZoom(), tileLayers);
           if (!f) {
             if (hovered) clearHover();
             return;
@@ -180,7 +180,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
 
     // select the hex under a screen point (a click, or the target of a search fly-to)
     const selectAt = (point: maplibregl.PointLike): boolean => {
-      const f = map.queryRenderedFeatures(point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
+      const f = pickVisible(map.queryRenderedFeatures(point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) }), map.getZoom(), tileLayers);
       if (selectedRef.current) {
         map.setFeatureState({ source: selectedRef.current.source, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
         selectedRef.current = null;

@@ -5,7 +5,7 @@ import type { DimInfo } from "./dims";
 import { hatchImage } from "./hatch";
 import { TILES } from "./layers.test";
 import { tileLayersFrom } from "./layers";
-import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChange, SOURCE_ID } from "./style";
+import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChange, pickVisible, SOURCE_ID } from "./style";
 
 const dim = (id: string, group: DimInfo["group"], higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name: id, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "hazard", "worse"), dim("wb", "wellbeing"), dim("jobs", "life")];
@@ -15,7 +15,7 @@ const KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"];
 
 function styleWith(layers: ReturnType<typeof buildLayers>): StyleSpecification {
   const vector = { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] };
-  return { version: 8 as const, sources: { [SOURCE_ID]: vector, hexes_fine: vector }, layers };
+  return { version: 8 as const, sources: { [SOURCE_ID]: vector, hexes_nbhd: vector, hexes_city: vector }, layers };
 }
 
 describe("layer stack (SPEC §9.3)", () => {
@@ -48,13 +48,24 @@ describe("layer stack (SPEC §9.3)", () => {
     expect(get("fill-hex5").maxzoom).toBeUndefined();
     expect(get("fill-hex6").maxzoom).toBeUndefined();
     expect(get("fill-hex5").source).toBe("hexes");
-    expect(get("fill-hex6").source).toBe("hexes_fine");
+    expect(get("fill-hex6").source).toBe("hexes_nbhd");
     expect(get("fill-hex5").paint["fill-opacity"]).toEqual(["step", ["zoom"], 0.85, 8, ["case", ["==", ["get", "ref"], true], 0, 0.85]]);
     expect(get("fill-hex6").paint["fill-opacity"]).toEqual(["step", ["zoom"], 0.85, 10, ["case", ["==", ["get", "ref"], true], 0, 0.85]]);
     expect(get("fill-hex4").paint["fill-opacity"]).toBe(0.85); // hex4 stops before a finer layer starts drawing over it
     expect(get("fill-hex7").paint["fill-opacity"]).toBe(0.85);
     expect(get("selected-hex5").paint["line-opacity"]).toEqual(["step", ["zoom"], 1, 8, ["case", ["==", ["get", "ref"], true], 0, 1]]);
     expect(validateStyleMin(styleWith(layers) as never).map((e) => e.message)).toEqual([]);
+  });
+
+  it("never picks a hidden refined parent on hover or click (final review I1)", () => {
+    const L = tileLayersFrom(TILES);
+    const parent = { sourceLayer: "hex5", properties: { h3: "p", ref: true } };
+    const child = { sourceLayer: "hex6", properties: { h3: "c" } };
+    const plain5 = { sourceLayer: "hex5", properties: { h3: "q" } };
+    expect(pickVisible([parent, plain5], 9, L)).toBe(plain5); // parent hidden from z8: skip it
+    expect(pickVisible([parent], 9, L)).toBeUndefined(); // nothing visible under the pointer
+    expect(pickVisible([parent, child], 7, L)).toBe(parent); // below z8 the parent is still drawn
+    expect(pickVisible([child], 9, L)).toBe(child);
   });
 
   it("hides the hatch when confidence is off and the national outline outside wellbeing views", () => {
@@ -103,9 +114,9 @@ describe("theme change keeps the hex stack (setStyle transformStyle)", () => {
   it("carries every hex source when layers come from two archives", () => {
     const vector = { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] };
     const layers = buildLayers({ view: "bivar", dims: DIMS, weights: {}, picks: PICKS }, false, true, tileLayersFrom(TILES));
-    const two: StyleSpecification = { version: 8, sources: { [SOURCE_ID]: vector, hexes_fine: vector }, layers };
+    const two: StyleSpecification = { version: 8, sources: { [SOURCE_ID]: vector, hexes_nbhd: vector, hexes_city: vector }, layers };
     const merged = mergeStyleOnThemeChange(two, next);
-    expect(Object.keys(merged.sources).sort()).toEqual(["basemap", "hexes", "hexes_fine"]);
+    expect(Object.keys(merged.sources).sort()).toEqual(["basemap", "hexes", "hexes_city", "hexes_nbhd"]);
     expect(validateStyleMin(merged as never).map((e) => e.message)).toEqual([]);
   });
 

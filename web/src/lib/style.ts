@@ -48,6 +48,20 @@ function hideRefinedFrom(layer: TileLayer, layers: TileLayer[]): number | undefi
   return finer.length ? Math.min(...finer) : undefined;
 }
 
+/**
+ * The first feature under the pointer that is actually drawn. `queryRenderedFeatures` ignores
+ * paint opacity, so a refined parent (`ref`, faded to 0 from the finer layer's first zoom) would
+ * otherwise answer hover and click over an empty spot or the sea.
+ */
+export function pickVisible<F extends { sourceLayer?: string; properties: Record<string, unknown> }>(features: F[], zoom: number, layers: TileLayer[]): F | undefined {
+  return features.find((f) => {
+    if (f.properties.ref !== true) return true;
+    const layer = layers.find((l) => l.name === f.sourceLayer);
+    const from = layer ? hideRefinedFrom(layer, layers) : undefined;
+    return from === undefined || zoom < from;
+  });
+}
+
 /** Opacity that drops to 0 for refined cells (`ref`) from zoom `from` on (SPEC §9.1). */
 function refinedOpacity(base: number, from: number | undefined): number | Expr {
   if (from === undefined) return base;

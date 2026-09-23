@@ -36,7 +36,7 @@ class ResEntry:
     res: int
     fill: str  # land | children
     zooms: tuple[int, int]  # (minzoom, maxzoom) of this resolution's tile layer
-    archive: str = "hexes"  # PMTiles archive name (hexes.pmtiles, hexes_fine.pmtiles, ...)
+    archive: str = "hexes"  # PMTiles archive name (hexes.pmtiles, hexes_nbhd.pmtiles, ...)
     parent: int | None = None  # for children fills: the resolution whose cells are refined
     where: dict = field(default_factory=dict)  # countries: [ISO2...] and/or urban: centre|cluster
     slim_below_zoom: int | None = None  # ship the slim attribute set below this zoom (hex4 at z2)
@@ -157,4 +157,14 @@ def load_plan(path: Path) -> ResolutionPlan:
         entries.append(_entry(item, entries))
     if not entries:
         raise ValueError(f"resolution plan {path} has no `resolutions` entries")
+    # MapLibre overzooms per *source*, not per layer: inside one archive, a layer drawn past its
+    # last zoom (any layer not followed by a complete one) must be the archive's last layer, or it
+    # vanishes at the next layer's zooms wherever that finer layer has no cells
+    for i, e in enumerate(entries[:-1]):
+        nxt = entries[i + 1]
+        if nxt.archive == e.archive and not nxt.complete:
+            raise ValueError(
+                f"resolution plan: res {e.res} keeps drawing under res {nxt.res} (which is not complete), "
+                f"so it needs its own archive; give res {nxt.res} a different `archive` than {e.archive!r}"
+            )
     return ResolutionPlan(tuple(entries))

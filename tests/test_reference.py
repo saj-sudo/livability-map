@@ -54,3 +54,16 @@ def test_empty_reference_domain_leaves_scores_missing(settings):
     assert (r6["jobs_dom"] == "uk").any()
     assert r6.loc[r6["jobs_dom"] == "uk", "jobs_score"].isna().all()
     assert r6.loc[(r6["jobs_dom"] != "uk") & r6["jobs_raw"].notna(), "jobs_score"].notna().any()
+
+
+def test_reference_without_a_new_dimension_is_a_plain_error(settings):
+    # a dims_r5 written before a dimension existed: say which stage to rerun, not a KeyError
+    settings.res = [4, 5, 6]
+    _run(settings, fetch, urban, grid, pop, admin, hazards, dims)
+    settings.res = [4, 5]
+    score.run(settings)
+    p5 = settings.stage_path("dims", 5)
+    pd.read_parquet(p5).drop(columns=["air_raw", "air_dom"]).to_parquet(p5, index=False)
+    settings.res = [6]
+    with pytest.raises(FileNotFoundError, match="run dims for res 5 first"):
+        score.run(settings)

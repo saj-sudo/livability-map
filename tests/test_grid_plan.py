@@ -75,3 +75,17 @@ def test_downstream_stages_run_on_a_derived_resolution(settings):
     assert p7["population"].sum() > 0 and p7["inhabited"].any()
     a7 = pd.read_parquet(settings.stage_path("admin", 7))
     assert a7["iso_a2"].notna().all()
+
+
+def test_changing_zooms_or_archive_keeps_the_grid_cached(settings, capsys):
+    # final review I4: zooms / archive are tile presentation; re-gridding would cascade to hours of dims
+    import dataclasses
+
+    from pipeline.resplan import ResolutionPlan
+
+    _prepare(settings, [4, 5, 6])
+    plan = settings.plan
+    settings._plan = ResolutionPlan(tuple(dataclasses.replace(e, zooms=(e.zooms[0], e.zooms[1] + 0), archive="other", slim_below_zoom=None) for e in plan.entries))
+    capsys.readouterr()
+    grid.run(settings)
+    assert capsys.readouterr().out.count("up to date") == 3

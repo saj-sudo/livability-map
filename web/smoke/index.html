@@ -55,13 +55,13 @@
     map.on("error", e => log("map error: " + (e.error && e.error.message || e.error || e), "err"));
     map.on("load", () => {
       map.addSource("hexes", { type: "vector", url: "pmtiles://" + url, promoteId: "h3" });
-      for (const layer of ["hex4", "hex5", "hex6", "hex7"]) {
+      for (const layer of ["hex4", "hex5"]) { // base archive only; the app itself reads every archive from the manifest
         map.addLayer({ id: layer + "-fill", type: "fill", source: "hexes", "source-layer": layer,
           filter: ["==", ["get", "inhabited"], true],
           paint: { "fill-color": bivar, "fill-opacity": 0.8, "fill-outline-color": "rgba(0,0,0,0.1)" } });
       }
       map.on("click", e => {
-        const f = map.queryRenderedFeatures(e.point, { layers: ["hex4-fill", "hex5-fill", "hex6-fill", "hex7-fill"].filter((id) => map.getLayer(id)) })[0];
+        const f = map.queryRenderedFeatures(e.point, { layers: ["hex4-fill", "hex5-fill"] })[0];
         log(f ? JSON.stringify(f.properties) : "no hex here");
       });
       map.on("sourcedata", e => { if (e.sourceId === "hexes" && e.isSourceLoaded && !window._loaded) { window._loaded = true; log("hexes source loaded"); } });

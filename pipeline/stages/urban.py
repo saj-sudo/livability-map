@@ -40,11 +40,13 @@ def _empty(kind: str) -> gpd.GeoDataFrame:
 
 def polygons_from_raster(path: Path, bbox: BBox | None = None, nodata: float | None = None, window_size: int = 2048) -> gpd.GeoDataFrame:
     """Urban centre and cluster polygons from a GHS-SMOD class raster (EPSG:4326)."""
+    pixel = 0.0
     inner: dict[str, list] = {k: [] for k in KINDS}  # pieces wholly inside their window: final
     edge: dict[str, list] = {k: [] for k in KINDS}  # pieces touching a window edge: may continue next door
     with rasterio.open(path) as src:
         nd = nodata if nodata is not None else src.nodata
-        tol = abs(src.transform.a) / 2
+        pixel = abs(src.transform.a)
+        tol = pixel / 2
         for window in h3util.iter_windows(src, bbox, window_size):
             arr = src.read(1, window=window)
             valid = h3util._mask_valid(arr.astype("float64"), nd)
@@ -68,7 +70,9 @@ def polygons_from_raster(path: Path, bbox: BBox | None = None, nodata: float | N
         # the global run to seconds (a single union of all ~230k pieces ran for over half an hour)
         polys = list(inner[kind])
         if edge[kind]:
-            merged = shapely.unary_union(edge[kind])
+            # neighbouring windows compute a shared edge through different transforms, so it can
+            # differ by an ulp; a sub-pixel precision grid makes those edges coincide and merge
+            merged = shapely.unary_union(edge[kind], grid_size=pixel / 1000)
             polys += list(merged.geoms) if merged.geom_type == "MultiPolygon" else [merged]
         gdf = gpd.GeoDataFrame({"kind": [kind] * len(polys)}, geometry=polys, crs=4326)
         gdf["area_km2"] = gdf.to_crs(6933).area / 1e6

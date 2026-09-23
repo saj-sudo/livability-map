@@ -117,3 +117,15 @@ def test_grid_tag_allowed_only_for_hex_joiners(tmp_path):
     with pytest.raises(ValueError, match="grid"):
         load_dimensions(p, sources)
     assert "grid" in RES_TAGS
+
+
+def test_joiner_higher_is_is_refused_on_minmax_dimensions(tmp_path):
+    import yaml
+
+    root = find_root()
+    sources = load_sources(root / "pipeline" / "sources.yaml")
+    d = {"id": "w", "name": "w", "group": "wellbeing", "kind": "score", "scale": "minmax", "sources": ["whr_ladder"], "joiners": [{"source": "whr_ladder", "joiner": "iso_lookup", "res": "national", "field": "ladder", "higher_is": "worse"}]}
+    p = tmp_path / "dims.yaml"
+    p.write_text(yaml.safe_dump([d]), encoding="utf-8")
+    with pytest.raises(ValueError, match="minmax"):
+        load_dimensions(p, sources)

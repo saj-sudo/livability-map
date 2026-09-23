@@ -83,5 +83,5 @@ def test_local_publish_ships_every_archive(settings, tmp_path):
     _run_all(settings)
     dest = tmp_path / "data"
     publish.run(settings, target="local", local_dir=dest)
-    assert {p.name for p in dest.iterdir()} == {"hexes.pmtiles", "hexes_fine.pmtiles", "manifest.json"}
-    assert publish.files_to_ship(json.loads((dest / "manifest.json").read_text(encoding="utf-8"))) == ["manifest.json", "hexes.pmtiles", "hexes_fine.pmtiles"]
+    assert {p.name for p in dest.iterdir()} == {"hexes.pmtiles", "hexes_nbhd.pmtiles", "hexes_city.pmtiles", "manifest.json"}
+    assert publish.files_to_ship(json.loads((dest / "manifest.json").read_text(encoding="utf-8"))) == ["manifest.json", "hexes.pmtiles", "hexes_city.pmtiles", "hexes_nbhd.pmtiles"]

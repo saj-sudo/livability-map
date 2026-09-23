@@ -1,8 +1,8 @@
-"""``publish`` stage (SPEC §5, §6.3, decision §13.24, §15.14): ship ``hexes.pmtiles`` and
-``manifest.json``.
+"""``publish`` stage (SPEC §5, §6.3, decision §13.24, §15.14): ship every tile archive the
+manifest lists (``hexes.pmtiles``, ``hexes_nbhd.pmtiles``, ``hexes_city.pmtiles``) and ``manifest.json``.
 
 Targets:
-- ``local``  copy both files into ``web/public/data/`` so the Next.js app reads them from the
+- ``local``  copy them into ``web/public/data/`` so the Next.js app reads them from the
              same origin during development.
 - ``r2``     upload to the Cloudflare R2 bucket with S3-compatible credentials from ``.env``
              (``R2_ACCOUNT_ID``, ``R2_ACCESS_KEY_ID``, ``R2_SECRET_ACCESS_KEY``, ``R2_BUCKET``,

@@ -240,6 +240,8 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                 raise ValueError(f"{did}: sample must be mean or centroid: {j}")
             if j.get("higher_is") not in (None, "better", "worse"):
                 raise ValueError(f"{did}: a joiner's higher_is must be better or worse: {j}")
+            if j.get("higher_is") and raw.get("scale", "percentile") == "minmax":
+                raise ValueError(f"{did}: a joiner's higher_is only applies to percentile scores, not scale: minmax: {j}")
             if sources is not None and j.get("joiner") == "raster_mean" and sources[j["source"]].format not in RASTER_FORMATS:
                 raise ValueError(f"{did}: raster_mean needs a raster source (format {RASTER_FORMATS}); {j['source']} is {sources[j['source']].format}")
             joiners.append(

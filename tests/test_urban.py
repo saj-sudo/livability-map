@@ -37,3 +37,21 @@ def test_urban_is_cached(settings, capsys):
     capsys.readouterr()
     urban.run(settings)
     assert "up to date" in capsys.readouterr().out
+
+
+def test_pieces_merge_across_seams_on_a_non_round_grid(tmp_path):
+    # final review I3: the real GHS-SMOD origin (-180.0079...) and 30 arc-second pixels make
+    # window_transform edges differ by an ulp between neighbouring windows
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    arr = np.full((300, 300), 11, dtype="int16")
+    arr[40:260, 40:260] = 30  # one big centre crossing several 64-pixel seams
+    path = tmp_path / "smod.tif"
+    t = from_origin(-180.00791593130032, 89.10012949387116, 0.008333333333333333, 0.008333333333333333)
+    with rasterio.open(path, "w", driver="GTiff", height=300, width=300, count=1, dtype="int16", crs="EPSG:4326", transform=t, nodata=-200, tiled=True, blockxsize=64, blockysize=64) as dst:
+        dst.write(arr, 1)
+    for size in (64, 37):
+        gdf = urban.polygons_from_raster(path, window_size=size)
+        assert (gdf["kind"] == "centre").sum() == 1, size

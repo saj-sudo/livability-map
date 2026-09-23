@@ -144,7 +144,10 @@ def run(settings: Settings) -> dict[int, int]:
                 if not adm0_path.exists():
                     raise FileNotFoundError(f"boundaries not fetched: {adm0_path} (run `fetch` first)")
                 inputs.append(adm0_path)
-        params = {"res": res, "bbox": settings.bbox, "stage": "grid", "plan": entry.to_manifest(), "iso_overrides": settings.iso_overrides}
+        # only what decides which cells exist: zooms / archive are tile presentation, and a new
+        # hexes parquet would cascade into hours of pop -> hazards -> dims recomputation
+        rule = {"fill": entry.fill, "parent": entry.parent, "where": entry.where}
+        params = {"res": res, "bbox": settings.bbox, "stage": "grid", "plan": rule, "iso_overrides": settings.iso_overrides}
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             n = len(pd.read_parquet(out, columns=["h3"]))
             print(f"grid   res {res}: up to date ({n} hexes), skipping")

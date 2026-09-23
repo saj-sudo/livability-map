@@ -63,15 +63,15 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
-  |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_fine.pmtiles          |
-  |            (hex6 z8-9, hex7 z10-13, where built) (§9.1, §13.18, §13.33)                               |
+  |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
+  |            z8-9) + hexes_city.pmtiles (hex7 z10-13), where built (§9.1, §13.18, §13.33)               |
   |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes.pmtiles  hexes_fine.pmtiles       |
+  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
   |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+

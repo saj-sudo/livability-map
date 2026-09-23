@@ -1,6 +1,8 @@
 """``tiles`` stage (SPEC §5, §9.1, §9.2, decisions §13.18, §13.32): ``data/out/hexes_r{res}.parquet``
 -> one PMTiles archive per plan ``archive`` (``hexes.pmtiles`` with hex4 z2-4 and hex5 z5-7,
-``hexes_fine.pmtiles`` with hex6 z8-9 and hex7 z10-13 where built).
+``hexes_nbhd.pmtiles`` with hex6 z8-9 and ``hexes_city.pmtiles`` with hex7 z10-13, where built).
+A layer that keeps drawing past its last zoom must close its archive, because MapLibre overzooms
+per source (``resplan`` enforces this).
 
 Zoom ranges, archives and the slim-attribute zoom come from ``manifest["resolution_plan"]``
 (written by ``export`` from ``pipeline/resolution_plan.yaml``), never from a table here, so a
@@ -41,9 +43,11 @@ def layer_specs(settings: Settings) -> dict[str, list[tiler.LayerSpec]]:
         raise FileNotFoundError("manifest.json has no resolution_plan: run `export` first")
     dims = load_dimensions(settings.dimensions_path, load_sources(settings.sources_path))
     full, slim = tuple(attrs.tile_attrs(dims)), tuple(attrs.style_attrs(dims))
-    present = [r for r in plan_rows if r["res"] in settings.res and (settings.out_dir / f"hexes_r{r['res']}.parquet").exists()]
+    # every exported plan layer, not just this run's --res: an archive always holds all its layers
+    # and overzoom depends on the finer layers that exist (a `--res 6 --res 7` run must not drop hex4/5)
+    present = [r for r in plan_rows if (settings.out_dir / f"hexes_r{r['res']}.parquet").exists()]
     if not present:
-        raise FileNotFoundError(f"no data/out/hexes_r*.parquet for res {settings.res} (run `export` first)")
+        raise FileNotFoundError("no data/out/hexes_r*.parquet (run `export` first)")
     by_archive: dict[str, list[tiler.LayerSpec]] = {}
     for i, row in enumerate(present):
         finer = present[i + 1 :]

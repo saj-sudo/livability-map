@@ -15,9 +15,9 @@ Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScri
 Status (2026-09-23): every stage and the map app run end to end on real data at H3 res 4 and 5
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
 8, three PMTiles archives), with 18 dimensions incl. the Eurostat 1 km grid and England IoD 2025.
-Outstanding: the R2/Pages publish (needs `.env` credentials), three manual downloads (GDL SHDI,
-MEDSL county returns, HUD FMR workbook), and the other country sources (Zensus, CBS, IRIS, DAs,
-SA2; SPEC §13.34). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
+Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
+Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
+MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
 
 ## Commands
 

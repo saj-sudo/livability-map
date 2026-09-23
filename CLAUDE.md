@@ -119,7 +119,8 @@ EPSG:4326.
 (population-weighted via `weight_field`, equal-area CRS 6933, `min_coverage` guard),
 `point_density`, and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
 rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
-(weighted mean of points per hex). All return a Series aligned to the hexes index with NaN for
+(weighted mean of points per hex) and `point_radius` (mean or sum of points within a radius of
+the centre; `domain_by_country` ranks such values within each country). All return a Series aligned to the hexes index with NaN for
 missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
 sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km

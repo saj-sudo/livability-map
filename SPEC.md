@@ -604,6 +604,22 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     mostly empty cells; their data applies at every resolution anyway. The cluster rule stays at
     GHS-SMOD class >= 21: dense-only variants cut res 6 by only 8-18% (900k / 803k cells) while
     dropping the peri-urban neighbourhoods of 180-530 million people (measured 2026-09-23).
+36. **NGO hex layers** (2026-09-23): three open datasets from research groups fill gaps outside
+    the US, Europe, Canada and Australia, each a new `life` dimension at tag `hex`: travel time to
+    the nearest city of 50,000+ (`city`, Malaria Atlas Project 2015, CC BY 3.0 / 4.0), relative
+    wealth within the country (`wealth`, Meta Relative Wealth Index 2021, 93 low- and
+    middle-income countries, CC BY-NC 4.0) and organised-violence deaths per year within 25 km
+    (`conflict`, UCDP GED 26.1, 2016-2025, CC BY 4.0). A new joiner, `point_radius`, takes the
+    mean or sum of point values within a radius of the hex centre (never smaller than the hex
+    edge), because the wealth tiles (~2.4 km) are sparser than res-7 hexes and conflict needs a
+    neighbourhood, not a cell. `domain_by_country` ranks a joiner's values only against hexes of
+    the same country (`{id}_dom` = `country:<ISO2>`), since the wealth index is relative within
+    each country. For `conflict`, 0 is a real value (no recorded event within 25 km; the event
+    set is global); events placed only at an admin1 or country centroid are excluded so they do
+    not create hotspots. OPHI's subnational MPI was evaluated and not added: its survey regions
+    match the map's admin1 polygons for only 70% of regions (Tanzania, Uganda and Rwanda among
+    the structural mismatches), and World Bank GSAP already covers the same ground. Sources that
+    need a login, a key or permission are listed in `docs/manual-steps.md`.
 
 ## 14. VERIFY before code depends on it
 
@@ -673,6 +689,10 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-23 | INSEE IRIS 2021 + IGN Contours IRIS 2023 (FR) | **confirmed** by download: `base-ic-activite-residents-2021_csv.zip` (39.5 MB; 49,280 IRIS; `;`, decimal point; P21_POP1564, P21_ACTOCC1564; updated 2025-12-16), `BASE_TD_FILO_IRIS_2021_DISP_CSV.zip` (0.9 MB; 16,026 IRIS of communes with 5,000+ inhabitants; `;`, decimal comma; DISP_TP6021 poverty rate; ns / nd / s / so), and IGN `CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z` (34.2 MB; nine shapefiles in territory CRSs, 49,424 IRIS, CODE_IRIS). Every INSEE code matches the 2023 contours. Filosofi 2022 was not published at IRIS level. Licence Ouverte 2.0 (Etalab), 'Source : Insee'; IGN metadata: licence ouverte Etalab. | https://www.insee.fr/fr/statistiques/8268843 , https://www.insee.fr/fr/statistiques/8229323 , https://data.geopf.fr/telechargement/resource/CONTOURS-IRIS |
 | 2026-09-23 | StatCan 2021 Census Profile DA + boundaries (CA) | **confirmed** by download: 98-401-X2021006 (GetFile.cfm GEONO=006; 2.25 GB zip, six cp1252 CSVs ~26.6 GB, long format, 2,631 characteristics, 57,936 DAs; HEAD answers 302 -> 404, GET works). Used ids 1, 2223, 2229 (employment rate), 345 (LIM-AT %), 1465 / 1467 (all households, 30%+ on shelter). Suppression by blank + symbol (x, .., ..., F). Boundaries `lda_000b21a_e.zip` (197 MB, EPSG:3347, 57,932 DAs, DGUID matches). Statistics Canada Open Licence ('Adapted from Statistics Canada ...'). | https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/download-telecharger.cfm?Lang=E |
 | 2026-09-23 | ABS 2021 GCP DataPack SA2 + ASGS SA2 boundaries (AU) | **confirmed** by download: `2021_GCP_SA2_for_AUS_short-header.zip` (42.3 MB, Release 2; 2,472 rows per table; G01 Tot_P_P, G02 Median_rent_weekly / Median_tot_hhd_inc_weekly, G43 P_15_yrs_over_P / Percnt_Employment_to_populn_P; unavailable published as 0; pseudo-SA2s ending 97979799 / 99999499) and `SA2_2021_AUST_SHP_GDA2020.zip` (50.7 MB, EPSG:7844, 2,473 SA2, 19 without geometry, SA2_CODE21 matches). CC BY 4.0, 'Based on Australian Bureau of Statistics data'. | https://www.abs.gov.au/census/find-census-data/datapacks |
+| 2026-09-23 | MAP travel time to cities 2015 | **confirmed** by download via WCS (coverage `Accessibility__201501_Global_Travel_Time_to_Cities`, AccessConstraints NONE): 3.03 GB int32 GeoTIFF, 43200 x 17400, EPSG:4326, nodata -9999, minutes 0-41556. MAP open-access policy: CC BY 3.0 with citation; the Earth Engine catalog lists CC BY 4.0. The same policy page also answers the licence of `map_healthcare`. | https://malariaatlas.org/open-access-policy/ |
+| 2026-09-23 | Meta Relative Wealth Index (HDX) | **confirmed** by download: combined 93-country CSV with quadkeys (122 MB, 2,463,901 zoom-14 tiles; latitude / longitude = tile centre, rwi, error; no country column). HDX licence field quotes CC BY-NC 4.0 with the PNAS 2022 citation. Per-country files (110) also checked: the Moldova and North Macedonia resources have swapped URLs, and IND+PAK is one file; the combined file is used, ranked per hex country. | https://data.humdata.org/dataset/relative-wealth-index |
+| 2026-09-23 | UCDP GED 26.1 | **confirmed** by download: `ged261-csv.zip` (39 MB, `GEDEvent_v26_1.csv`, 417,968 events 1989-2025, 49 columns incl. latitude, longitude, best, year, where_prec 1-7 per the codebook). Licence on the downloads page: CC BY 4.0, cite Davies, Pettersson & Öberg (2026) and Sundberg & Melander (2013). | https://ucdp.uu.se/downloads/ |
+| 2026-09-23 | OPHI global MPI 2025 subnational (not used) | **confirmed** by download (`subnational-results-mpi.xlsx`, 1,359 regions in 101 countries; OPHI FAQ: CC BY 4.0, HDX: CC0). Name match to geoBoundaries ADM1 only 70% (survey regions differ from admin1); not added, §13.36. | https://data.humdata.org/dataset/global-mpi |
 
 ## 16. Phasing and session plan
 
@@ -849,8 +869,9 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `point_density` | points per hex, optionally per 10k residents | transit stops |
 | `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
 | `point_mean` | weighted mean of point values inside the hex (tag `hex`, or `grid` for statistical grid cells) | Ookla speed tiles at their centroids, weighted by tests; Eurostat 1 km census cells at their centres, weighted by 15-64 population |
+| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km) |
 
-All six are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
+All seven are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
 joins agree with `population`.
 
 ### 20.4 Scoring within a coverage domain
@@ -894,6 +915,9 @@ where the hovered or clicked hex has `_res = none`.
 | cost | Cost of living (price level) | World Bank ICP 2021 household price level CC BY 4.0 (national, World = 100); WDI GDP price level rescaled to it where ICP has no row | BEA Regional Price Parities 2024, metro area then state (US = 100), public domain | Numbeo (proprietary) |
 | rent | Housing cost (rent level) | OECD / Eurostat rent levels - v2; Germany: Zensus 2022 net cold rent per m² (100 m, `grid`); Netherlands: CBS average WOZ home value (100 m); Australia: ABS median weekly rent (SA2) | HUD Fair Market Rent, 2-bedroom, FY2026 (county / FMR area), public domain, manual download (§13.30) | Zillow ZORI (terms forbid redistribution) |
 | care | Travel time to healthcare | Malaria Atlas Project motorized travel time 2019, 1 km, CC BY 4.0 (`hex`) | same | - |
+| city | Access to a city | Malaria Atlas Project travel time to the nearest city of 50,000+, 2015, CC BY 3.0 (`hex`) | same | a proxy for access to jobs and services, not the job market |
+| wealth | Relative wealth within the country | Meta Relative Wealth Index 2021, 93 LMICs, CC BY-NC 4.0 (`hex`, ranked within each country) | - | relative, never compared across countries |
+| conflict | Armed conflict nearby | UCDP GED 26.1 deaths per year within 25 km, 2016-2025, CC BY 4.0 (`hex`) | same | ACLED excluded (no redistribution) |
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |

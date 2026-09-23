@@ -712,3 +712,103 @@
   attribution: "Office for National Statistics licensed under the Open Government Licence v.3.0; Contains OS data © Crown copyright and database right 2021"
   processing: "reprojected to WGS84 and joined to eng_imd_2025 on LSOA21CD (prep/imd.py)"
   files: [lsoa_2021_ew_bgc.geojson]
+
+- id: de_zensus_2022
+  name: Zensus 2022 Gitterzellen, average net cold rent per m² and dwellings, 100 m grid
+  group: life
+  access: direct
+  url: https://www.destatis.de/static/DE/zensus/gitterdaten/Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip
+  format: csv-zip
+  member: Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen/Zensus2022_Durchschn_Nettokaltmiete_Anzahl_der_Wohnungen_100m-Gitter.csv
+  crs: EPSG:3035
+  native_res_m: 100
+  license: Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0)
+  license_note: "Datensatzbeschreibung (Erläuterungen): data licensed under dl-de/by-2-0, http://www.govdata.de/dl-de/by-2-0; Impressum: © Statistische Ämter des Bundes und der Länder, 2024"
+  verified: confirmed
+  vintage: "Zensus 2022 (reference date 2022-05-15), file version 2 (2025-07-08); 11.0 MB zip, 100 m CSV 1,287,342 cells"
+  attribution: "Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0 (www.govdata.de/dl-de/by-2-0); Daten verändert (aggregated to H3)"
+  processing: "cell centres (x_mp_100m, y_mp_100m, EPSG:3035) -> WGS84 points; durchschnMieteQM (EUR/m², decimal comma) averaged per hex weighted by AnzahlWohnungen (prep/de_zensus.py); cells absent from the file stay missing"
+  files: [Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip]
+
+- id: nl_cbs_vierkant_100m
+  name: CBS Statistische gegevens per vierkant 2023 (complete), 100 m squares
+  group: life
+  access: direct
+  url: https://download.cbs.nl/vierkant/100/2026-cbs_vk100_2023_vol.zip
+  format: geopackage-zip
+  member: cbs_vk100_2023_vol.gpkg
+  layer: cbs_vk100_2023
+  crs: EPSG:28992
+  native_res_m: 100
+  license: CC BY 4.0
+  license_note: "CBS copyright page: Creative Commons Naamsvermelding (CC BY 4.0) unless stated otherwise; product description: source citation required, visualisations credit '© CBS'"
+  verified: confirmed
+  vintage: "reference date 2023-01-01, complete release (file dated 2026-06-10); 75.5 MB zip, 390,396 squares"
+  attribution: "© CBS, Statistische gegevens per vierkant 2023"
+  processing: "square centres -> WGS84 points; gemiddelde_woz_waarde_woning (thousand EUR) averaged per hex weighted by aantal_woningen; -99997 / -99995 -> missing (prep/nl_cbs.py)"
+  files: [2026-cbs_vk100_2023_vol.zip]
+
+- id: nl_cbs_vierkant_500m
+  name: CBS Statistische gegevens per vierkant 2023 (complete), 500 m squares
+  group: life
+  access: direct
+  url: https://download.cbs.nl/vierkant/500/2026-cbs_vk500_2023_vol.zip
+  format: geopackage-zip
+  member: cbs_vk500_2023_vol.gpkg
+  layer: cbs_vk500_2023
+  crs: EPSG:28992
+  native_res_m: 500
+  license: CC BY 4.0
+  license_note: "as nl_cbs_vierkant_100m"
+  verified: confirmed
+  vintage: "reference date 2023-01-01, complete release; 19.4 MB zip, 151,108 squares (16,260 with income)"
+  attribution: "© CBS, Statistische gegevens per vierkant 2023"
+  processing: "square centres -> WGS84 points; percentage_laag_inkomen_huishouden (households in the national bottom 40% of disposable income) averaged per hex weighted by aantal_part_huishoudens; sentinels -> missing (prep/nl_cbs.py)"
+  files: [2026-cbs_vk500_2023_vol.zip]
+
+- id: fr_insee_iris_2021
+  name: INSEE RP 2021 base infracommunale IRIS, Activité des résidents
+  group: life
+  access: direct
+  url: https://www.insee.fr/fr/statistiques/fichier/8268843/base-ic-activite-residents-2021_csv.zip
+  format: csv-zip
+  member: base-ic-activite-residents-2021.CSV
+  geometry: fr_ign_iris_contours
+  also_needs: [fr_insee_filosofi_iris_2021]
+  license: Licence Ouverte / Open Licence version 2.0 (Etalab)
+  license_note: "insee.fr/fr/information/2008466: public information on the site is made available under the Licence Ouverte / Open Licence 2.0 (Etalab), reuse including commercial with the source 'Source : Insee' and the date of last update"
+  verified: confirmed
+  vintage: "RP 2021 (geography of 2023-01-01), updated 2025-12-16; 39.5 MB zip, 49,280 IRIS"
+  attribution: "Source : Insee, RP 2021 (exploitation principale), mise à jour 16/12/2025"
+  processing: "P21_ACTOCC1564 / P21_POP1564 -> emp_rate per IRIS, joined to IGN IRIS 2023 contours on CODE_IRIS and population-weighted into hexes (prep/fr_iris.py)"
+  files: [base-ic-activite-residents-2021_csv.zip]
+
+- id: fr_insee_filosofi_iris_2021
+  name: INSEE Filosofi 2021 revenus disponibles par IRIS
+  group: life
+  access: direct
+  url: https://www.insee.fr/fr/statistiques/fichier/8229323/BASE_TD_FILO_IRIS_2021_DISP_CSV.zip
+  format: csv-zip
+  member: BASE_TD_FILO_IRIS_2021_DISP.csv
+  license: Licence Ouverte / Open Licence version 2.0 (Etalab)
+  license_note: "as fr_insee_iris_2021"
+  verified: confirmed
+  vintage: "Filosofi 2021 (geography of 2022-01-01; the latest IRIS-level edition: 2022 was not published at IRIS level); 0.9 MB zip, 16,026 IRIS of communes with 5,000+ inhabitants"
+  attribution: "Source : Insee-DGFiP-Cnaf-Cnav-CCMSA, Filosofi 2021"
+  processing: "DISP_TP6021 (poverty rate at 60% of the median, %; decimal comma; ns / nd / s / so -> missing) joined on IRIS code (prep/fr_iris.py)"
+  files: [BASE_TD_FILO_IRIS_2021_DISP_CSV.zip]
+
+- id: fr_ign_iris_contours
+  name: IGN Contours...IRIS® 3.0, edition 2023-01-01, all territories
+  group: reference
+  access: direct
+  url: https://data.geopf.fr/telechargement/download/CONTOURS-IRIS/CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01/CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z
+  format: shapefile-7z
+  crs: "EPSG:2154 (mainland) and one CRS per overseas territory"
+  license: Licence Ouverte (Etalab)
+  license_note: "ISO metadata: 'Base de données soumise aux conditions de la licence ouverte Etalab'"
+  verified: confirmed
+  vintage: "edition 2023-01-01 (metadata 2024-02-28); 34.2 MB .7z, 49,424 IRIS in nine shapefiles; every code of both INSEE files matches CODE_IRIS"
+  attribution: "IGN – INSEE, Contours…IRIS® 2023, Licence Ouverte Etalab"
+  processing: "extracted once with py7zr; each territory reprojected to WGS84 and concatenated (prep/fr_iris.py)"
+  files: [CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z]

@@ -91,4 +91,9 @@ describe("dimension registry from the manifest", () => {
     expect(resLabel("grid")).toBe("1 km grid");
     expect(resLabel("area")).toBe("small area");
   });
+
+  it("labels the country domains added after Session 8", () => {
+    const d = dim("rent", { domains: { "7": { us: 3, de: 4, nl: 2, fr: 1, ca: 1, au: 1 } } });
+    expect(chipFor(d)).toBe("US / Germany / Netherlands / France / Canada / Australia");
+  });
 });

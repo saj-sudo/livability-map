@@ -77,8 +77,9 @@ const FALLBACK: DimInfo[] = [
   F("drought", "Drought risk", "env", "score", "worse", "Global"),
 ];
 
-const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England" };
-const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk"];
+// scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country
+const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia" };
+const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk", "de", "nl", "fr", "ca", "au"];
 
 /**
  * Coverage chip. The manifest overwrites a dimension's `coverage` list with per-resolution

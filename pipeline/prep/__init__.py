@@ -23,7 +23,7 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 8
+PREP_VERSION = 9
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {
@@ -50,6 +50,11 @@ LOADERS: dict[str, str] = {
     # neighbourhood statistics (Session 8): Eurostat 1 km census grid, English IoD 2025 on LSOAs
     "eurostat_census_grid_2021": "pipeline.prep.eurostat_grid:load",
     "eng_imd_2025": "pipeline.prep.imd:load",
+    # country small areas and grids (after Session 8, SPEC §13.34)
+    "de_zensus_2022": "pipeline.prep.de_zensus:load",
+    "nl_cbs_vierkant_100m": "pipeline.prep.nl_cbs:load_100m",
+    "nl_cbs_vierkant_500m": "pipeline.prep.nl_cbs:load_500m",
+    "fr_insee_iris_2021": "pipeline.prep.fr_iris:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read

@@ -426,3 +426,69 @@
   verified: confirmed
   vintage: "fixture"
   files: [lsoa.gpkg]
+- id: de_zensus_2022
+  name: fixture Zensus-like rent grid point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/de_zensus.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [de_zensus.csv]
+- id: nl_cbs_vierkant_100m
+  name: fixture CBS-like 100 m square point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/nl_cbs_100m.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [nl_cbs_100m.csv]
+- id: nl_cbs_vierkant_500m
+  name: fixture CBS-like 500 m square point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/nl_cbs_500m.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [nl_cbs_500m.csv]
+- id: fr_insee_iris_2021
+  name: fixture IRIS-like polygon with activity and poverty (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]
+- id: fr_insee_filosofi_iris_2021
+  name: fixture Filosofi stand-in (same file as fr_insee_iris_2021)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]
+- id: fr_ign_iris_contours
+  name: fixture IRIS contours (same file as fr_insee_iris_2021)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]

@@ -73,4 +73,22 @@ describe("dimension registry from the manifest", () => {
     expect(resLabel("basin")).toBe("sub-basin");
     expect(resLabel("weird")).toBe("weird");
   });
+
+  it("gives the EU grid and the England small-area joiners their own chip and unit (Session 8)", () => {
+    const jobs = dim("jobs", {
+      domains: { "6": { us: 10, eu: 20, uk: 5 } },
+      joiners: [
+        { source: "acs_summary", joiner: "area_weighted_overlay", res: "tract", field: "f", domain: "us", label: "acs", unit: "% employed (ages 16-29)", multiply: 100, decimals: 0 },
+        { source: "eurostat_census_grid_2021", joiner: "point_mean", res: "grid", field: "f", domain: "eu", label: "eugrid", unit: "% employed (ages 15-64)", multiply: 100, decimals: 0 },
+        { source: "eng_imd_2025", joiner: "area_weighted_overlay", res: "area", field: "f", domain: "uk", label: "imd", unit: "% employment-deprived", multiply: 100, decimals: 0 },
+      ] as never,
+    });
+    expect(chipFor(jobs)).toBe("US / EU / England");
+    const u = unitsFrom(jobs);
+    expect(u.tract.unit).toContain("16-29");
+    expect(u.grid.unit).toContain("15-64");
+    expect(u.area.unit).toContain("deprived");
+    expect(resLabel("grid")).toBe("1 km grid");
+    expect(resLabel("area")).toBe("small area");
+  });
 });

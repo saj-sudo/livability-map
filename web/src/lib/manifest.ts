@@ -3,12 +3,12 @@
 // and the dimension registry the panel renders.
 
 // hex = computed per hex from a raster or point set; basin = Aqueduct sub-basin at the centroid
-export type ResTag = "hex" | "basin" | "admin1" | "county" | "tract" | "national" | "none";
+export type ResTag = "hex" | "grid" | "basin" | "admin1" | "county" | "tract" | "area" | "national" | "none";
 export type DimKind = "score" | "signed" | "composition";
 // env = present-day environment (air, trees, fire, drought): shown beside the 2050 hazards but
 // never part of exposure / coverage (SPEC §13.28)
 export type DimGroup = "hazard" | "wellbeing" | "life" | "env";
-export type Domain = "global" | "oecd" | "us";
+export type Domain = "global" | "oecd" | "us" | "eu" | "uk";
 
 export interface ManifestSource {
   id: string;
@@ -64,6 +64,27 @@ export interface ManifestDimension {
   decimals?: number;
 }
 
+/** One layer of a tile archive; the plan flags are absent in manifests from before Session 8. */
+export interface TileLayerEntry {
+  name: string;
+  minzoom: number;
+  maxzoom: number;
+  res?: number;
+  complete?: boolean;
+  overzoom?: boolean;
+  features?: number;
+  slim_below_zoom?: number | null;
+}
+
+export interface TileArchive {
+  key: string;
+  sha256: string;
+  bytes: number;
+  layers: TileLayerEntry[];
+  minzoom: number;
+  maxzoom: number;
+}
+
 export interface Manifest {
   built_at: string | null;
   h3_res: number[];
@@ -71,7 +92,8 @@ export interface Manifest {
   horizon: string;
   non_commercial: boolean;
   fixtures?: boolean;
-  tiles: { hexes?: { key: string; sha256: string; bytes: number; layers: { name: string; minzoom: number; maxzoom: number }[]; minzoom: number; maxzoom: number } };
+  tiles: Record<string, TileArchive>; // archive name -> archive (hexes, hexes_fine, ...)
+  resolution_plan?: { res: number; fill: string; zooms: number[]; archive: string; complete: boolean; cells?: number | null }[];
   sources: ManifestSource[];
   hazards: ManifestDimension[];
   dimensions: (ManifestDimension & { coverage: Record<string, Record<string, number>> | string[] })[];

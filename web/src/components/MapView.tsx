@@ -12,7 +12,7 @@ import { INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/c
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
 import { paletteFor } from "../lib/palette";
-import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, SOURCE_ID, type TileLayer, type ViewOptions } from "../lib/style";
+import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, type TileLayer, type ViewOptions } from "../lib/style";
 import { basemapStyleFor, THEME_EVENT, type Theme } from "../lib/theme";
 import type { AppState } from "../lib/url";
 import { getDomTheme } from "./useTheme";
@@ -49,7 +49,8 @@ function ensureProtocol() {
 }
 
 interface Props {
-  tilesKey: string;
+  /** one vector source per tile archive (manifest.tiles), id = archive name */
+  archives: { id: string; key: string }[];
   tileLayers?: TileLayer[];
   dims: DimInfo[];
   state: AppState;
@@ -60,11 +61,11 @@ interface Props {
   onHint: (text: string | null) => void;
 }
 
-export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint }: Props) {
+export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
-  const selectedRef = useRef<{ layer: string; id: string } | null>(null);
+  const selectedRef = useRef<{ source: string; layer: string; id: string } | null>(null);
   const selectAtRef = useRef<((point: maplibregl.PointLike) => boolean) | null>(null);
   const stateRef = useRef(state);
   const cbRef = useRef({ onMove, onSelect, onHover, onHint });
@@ -111,7 +112,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
 
     map.on("load", () => {
       addHatch();
-      map.addSource(SOURCE_ID, { type: "vector", url: `pmtiles://${tilesUrl(tilesKey)}`, promoteId: "h3" });
+      for (const a of archives) map.addSource(a.id, { type: "vector", url: `pmtiles://${tilesUrl(a.key)}`, promoteId: "h3" });
       const before = firstSymbolLayerId(map);
       const st = stateRef.current;
       for (const layer of buildLayers(options(st), st.inh, st.conf, tileLayers)) map.addLayer(layer, before);
@@ -125,10 +126,10 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     // hover readout: feature-state on the hex under the pointer, one query per frame at most;
     // pointer devices only (a touch device selects on tap instead)
     const hoverable = typeof window.matchMedia === "function" && !window.matchMedia("(hover: none)").matches;
-    let hovered: { layer: string; id: string } | null = null;
+    let hovered: { source: string; layer: string; id: string } | null = null;
     let raf = 0;
     const clearHover = () => {
-      if (hovered) map.setFeatureState({ source: SOURCE_ID, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
+      if (hovered) map.setFeatureState({ source: hovered.source, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
       hovered = null;
       cbRef.current.onHover?.(null);
     };
@@ -145,9 +146,9 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
           const h3 = String(f.properties.h3 ?? "");
           const sourceLayer = String(f.sourceLayer ?? "");
           if (!hovered || hovered.id !== h3) {
-            if (hovered) map.setFeatureState({ source: SOURCE_ID, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
-            hovered = { layer: sourceLayer, id: h3 };
-            map.setFeatureState({ source: SOURCE_ID, sourceLayer, id: h3 }, { hover: true });
+            if (hovered) map.setFeatureState({ source: hovered.source, sourceLayer: hovered.layer, id: hovered.id }, { hover: false });
+            hovered = { source: String(f.source), layer: sourceLayer, id: h3 };
+            map.setFeatureState({ source: String(f.source), sourceLayer, id: h3 }, { hover: true });
           }
           cbRef.current.onHover?.({ sourceLayer, h3, props: f.properties as Record<string, unknown>, x: e.point.x, y: e.point.y });
         });
@@ -181,7 +182,7 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
     const selectAt = (point: maplibregl.PointLike): boolean => {
       const f = map.queryRenderedFeatures(point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) })[0];
       if (selectedRef.current) {
-        map.setFeatureState({ source: SOURCE_ID, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
+        map.setFeatureState({ source: selectedRef.current.source, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
         selectedRef.current = null;
       }
       if (!f) {
@@ -191,8 +192,8 @@ export default function MapView({ tilesKey, tileLayers = DEFAULT_TILE_LAYERS, di
       const h3 = String(f.properties.h3 ?? "");
       const sourceLayer = String(f.sourceLayer ?? "");
       if (h3) {
-        map.setFeatureState({ source: SOURCE_ID, sourceLayer, id: h3 }, { selected: true });
-        selectedRef.current = { layer: sourceLayer, id: h3 };
+        map.setFeatureState({ source: String(f.source), sourceLayer, id: h3 }, { selected: true });
+        selectedRef.current = { source: String(f.source), layer: sourceLayer, id: h3 };
       }
       cbRef.current.onHint(null);
       cbRef.current.onSelect({ sourceLayer, h3, props: f.properties as Record<string, unknown> });

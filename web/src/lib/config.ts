@@ -18,10 +18,9 @@ export const GAZETTEER_URL = "/gazetteer.json";
 // hex4 tiles are slim (no raw values) below this zoom and hexes are ~2 px, so the inspector
 // asks the person to zoom in (SPEC §9.2, decision §13.18).
 export const INSPECT_MIN_ZOOM = 3;
-// hex4 layers stop and hex5 layers start here (SPEC §9.1)
-export const HEX_SPLIT_ZOOM = 5;
 export const MAP_MIN_ZOOM = 2;
-export const MAP_MAX_ZOOM = 12;
+// res-7 neighbourhood hexes are tiled to z13 (SPEC §9.1); one more zoom of overzoom for reading them
+export const MAP_MAX_ZOOM = 14;
 
 export function tilesUrl(key: string): string {
   // absolute pmtiles URLs are required by the pmtiles protocol; relative bases resolve at runtime

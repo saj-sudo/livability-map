@@ -75,6 +75,13 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(m.sources.map((s) => s.id).sort()).toEqual(["cckp_hd35", "ghsl_pop", "whr_ladder"]);
   });
 
+  it("labels the resolution from the res attribute, then the layer name", () => {
+    const props = { h3: "87y", iso_a2: "GB", inhabited: true, coverage: 4, wb_res: "none", wb_source: "none", bivar: 0 };
+    expect(describeHex({ ...props, res: 7 }, "hex7", DIMS, MANIFEST).resolution).toBe("H3 res 7 hex (~5.2 km²)");
+    expect(describeHex(props, "hex6", DIMS, MANIFEST).resolution).toBe("H3 res 6 hex (~36 km²)");
+    expect(describeHex(props, "hex4", DIMS, MANIFEST).resolution).toBe("H3 res 4 hex (~1,770 km²)");
+  });
+
   it("formats signed and composition dimensions", () => {
     const props = { h3: "85y", iso_a2: "US", admin1_name: "Arizona", population: 2413788, inhabited: true, coverage: 4, jobs_res: "tract", jobs_raw: 0.93, jobs_score: 71, pol_res: "county", pol_lean: -12, race_res: "tract", race_w: 55, race_b: 5, race_h: 31, race_a: 5, race_o: 4, race_maj: "w", wb_res: "none", wb_source: "none", bivar: 0 };
     const m = describeHex(props, "hex5", DIMS, MANIFEST);

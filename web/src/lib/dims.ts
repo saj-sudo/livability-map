@@ -77,8 +77,8 @@ const FALLBACK: DimInfo[] = [
   F("drought", "Drought risk", "env", "score", "worse", "Global"),
 ];
 
-const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US" };
-const DOMAIN_ORDER = ["global", "oecd", "us"];
+const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England" };
+const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk"];
 
 /**
  * Coverage chip. The manifest overwrites a dimension's `coverage` list with per-resolution
@@ -139,5 +139,5 @@ export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env"
 export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");
 
 /** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
-export const RES_LABELS: Record<string, string> = { hex: "this hex", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
+export const RES_LABELS: Record<string, string> = { hex: "this hex", grid: "1 km grid", area: "small area", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
 export const resLabel = (tag: string): string => RES_LABELS[tag] ?? tag;

@@ -65,6 +65,10 @@ export function countryName(iso2: string | null): string {
   }
 }
 
+// average H3 cell area per resolution (km², h3 v4), for the inspector's resolution line
+const HEX_AREA: Record<number, string> = { 4: "1,770", 5: "253", 6: "36", 7: "5.2", 8: "0.74", 9: "0.11", 10: "0.015" };
+const resolutionLabel = (r: number): string => `H3 res ${r} hex (~${HEX_AREA[r] ?? "?"} km²)`;
+
 export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], manifest: ClientManifest): HexModel {
   const iso = str(p.iso_a2);
   const admin1 = str(p.admin1_name);
@@ -115,7 +119,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     title: admin1 ?? countryName(iso),
     subtitle: admin1 ? countryName(iso) : "",
     population: formatPopulation(pop),
-    resolution: sourceLayer === "hex5" ? "H3 res 5 hex (~253 km²)" : "H3 res 4 hex (~1,770 km²)",
+    resolution: resolutionLabel(num(p.res) ?? (Number(sourceLayer.replace(/\D/g, "")) || 4)),
     inhabited,
     hazards,
     coverage: `${coverageN} of 4 hazard layers`,

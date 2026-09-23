@@ -144,5 +144,5 @@ def test_grid_and_imd_joiners_fill_the_fixture_regions(settings):
     assert (north["jobs_res"] == "grid").all() and (north["jobs_dom"] == "eu").all()
     assert d6.loc[d6["jobs_res"] == "grid", "jobs_raw"].between(0.3, 0.9).all()
     for dim in ("jobs", "health", "house"):  # IoD stand-in over south-east XKA
-        assert (south[f"{dim}_res"] == "tract").all() and (south[f"{dim}_dom"] == "uk").all(), dim
+        assert (south[f"{dim}_res"] == "area").all() and (south[f"{dim}_dom"] == "uk").all(), dim
     assert south["jobs_raw"].between(0.05, 0.25).all()  # the employment deprivation rate, not reflected in _raw

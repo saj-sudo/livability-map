@@ -48,6 +48,10 @@ class LayerSpec:
     slim_attrs: tuple[str, ...] = ()  # subset for zooms below slim_below_zoom
     slim_below_zoom: int | None = None
     description: str = ""
+    # resolution plan flags (SPEC §9.1): H3 res, every land cell present, keeps drawing past maxzoom
+    res: int = 0
+    complete: bool = True
+    overzoom: bool = False
 
 
 @dataclass
@@ -333,6 +337,8 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
         if len(bbox):
             all_bounds.append((bbox[:, 0].min(), bbox[:, 1].min(), bbox[:, 2].max(), bbox[:, 3].max()))
         for z in range(spec.minzoom, spec.maxzoom + 1):
+            if len(bbox) and (bbox[:, 2] - bbox[:, 0]).max() * (1 << z) > 2.0:
+                raise ValueError(f"{spec.name} at z{z}: a hex spans more than two tiles across; assign_tiles assumes at most 3x3 (build this resolution at a higher minzoom)")
             for (x, y), idx in assign_tiles(bbox, z).items():
                 tasks.append((zxy_to_tileid(z, x, y), spec.name, z, x, y, idx))
         full_df = pd.read_parquet(spec.parquet)

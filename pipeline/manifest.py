@@ -30,7 +30,7 @@ PROCESSING_NOTES = [
     "bivariate class: terciles of exposure and wellbeing over inhabited hexes; class = 1 + exposure tercile + 3 x wellbeing tercile (1 = low exposure, low wellbeing; 3 = high exposure, low wellbeing; 7 = low exposure, high wellbeing; 9 = high, high); 0 when either side is missing.",
     "uninhabited hexes (population below 100) keep their raw values and are scored against the inhabited distribution; the map hides them by default.",
     "population is the one attribute where no data is recorded as 0 (a count); hexes with no GHSL pixels are uninhabited.",
-    "grid: H3 cells whose centre lies on Natural Earth 1:10m land; small islands and thin coasts without a cell centre on land are absent (a known gap).",
+    "grid: H3 cells whose centre lies on Natural Earth 1:10m land; small islands and thin coasts without a cell centre on land are absent (a known gap). Res 6 and 7 (the resolution plan) are the H3 children of parent cells inside the listed countries or touching GHS-SMOD urban clusters / centres; a refined parent carries ref = true and is hidden where its children's layer is on screen.",
     "resolution: hazards are computed per hex; wellbeing and life dimensions are attached at the best available coarser resolution and tagged (admin1 | county | tract | national | none), never aggregated to hide within-region variation.",
 ]
 
@@ -101,6 +101,7 @@ def build(settings: Settings) -> dict:
     manifest: dict = {
         "built_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "h3_res": list(settings.res),
+        "resolution_plan": [{**e.to_manifest(), "cells": (int(len(pd.read_parquet(settings.hexes_path(e.res), columns=["h3"]))) if settings.hexes_path(e.res).exists() else None)} for e in settings.plan.entries],
         "scenario": settings.scenario,
         "horizon": settings.horizon,
         "non_commercial": NON_COMMERCIAL,

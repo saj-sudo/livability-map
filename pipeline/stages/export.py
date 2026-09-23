@@ -34,6 +34,17 @@ def _typed(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def refined_flag(h3s: pd.Series, child_path) -> pd.Series:
+    """``ref``: True for cells that a finer layer replaced (their children exist in ``child_path``),
+    missing otherwise (never False: a missing attribute costs nothing in a tile, invariant 3)."""
+    flags = pd.Series(pd.NA, index=h3s.index, dtype="boolean")
+    if child_path is None:
+        return flags
+    parents = set(pd.read_parquet(child_path, columns=["parent"])["parent"])
+    flags[h3s.isin(parents).to_numpy()] = True
+    return flags
+
+
 def _feature(row: dict, keep: list[str]) -> dict:
     props = {}
     for k in keep:
@@ -68,14 +79,23 @@ def run(settings: Settings, geojson: bool = False) -> dict[int, int]:
         for p in inputs:
             if not p.exists():
                 raise FileNotFoundError(f"{p} missing: run every stage up to `score` before `export`")
+        # SPEC §9.1: the next finer plan entry's cells mark which of these cells were refined
+        child = settings.plan.next_finer(res)
+        # only a children fill replaces some parents; a complete finer layer never overlaps (hex4 stops at z4)
+        child_path = settings.hexes_path(child.res) if child is not None and not child.complete else None
+        if child_path is not None and child_path.exists():
+            inputs.append(child_path)
+        else:
+            child_path = None
         out = settings.out_dir / f"hexes_r{res}.parquet"
-        params = {"res": res, "bbox": settings.bbox, "stage": "export", "geojson": geojson}
+        params = {"res": res, "bbox": settings.bbox, "stage": "export", "geojson": geojson, "child": child.res if child_path else None}
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             counts[res] = int(stage_cache.read_meta(out).get("rows", 0))
             print(f"export res {res}: up to date ({counts[res]} hexes), skipping")
             continue
         t0 = time.time()
         df = _typed(sanity.load_merged(settings, res))
+        df["ref"] = refined_flag(df["h3"], child_path)
         missing = [c for c in keep if c not in df.columns]
         if missing:
             raise RuntimeError(f"export res {res}: tile attributes missing from the interim stages: {missing}")

@@ -130,11 +130,11 @@ def export(ctx: typer.Context, geojson: bool = typer.Option(False, "--geojson", 
 def tiles(
     ctx: typer.Context,
     backend: str = typer.Option("auto", "--backend", help="auto | python | tippecanoe (SPEC §13.18)."),
-    maxzoom: int = typer.Option(7, "--maxzoom", help="Highest zoom built; MapLibre overzooms beyond it."),
     workers: int = typer.Option(None, "--workers", help="Encoder processes (default: cores - 1; 0 = in-process)."),
+    archive: str = typer.Option(None, "--archive", help="Build only this plan archive (hexes | hexes_fine)."),
 ) -> None:
-    """hexes_r{res}.parquet -> hexes.pmtiles (SPEC §9.2)."""
-    _run_stage("tiles", _settings(ctx), backend=backend, maxzoom=maxzoom, workers=workers)
+    """hexes_r{res}.parquet -> one PMTiles archive per resolution-plan archive; zooms from the manifest (SPEC §9.1)."""
+    _run_stage("tiles", _settings(ctx), backend=backend, workers=workers, archive=archive)
 
 
 @app.command()
@@ -143,7 +143,7 @@ def publish(
     target: str = typer.Option("auto", "--target", help="auto | local (web/public/data) | r2 (Cloudflare, .env credentials)."),
     local_dir: Path = typer.Option(None, "--local-dir", help="Override the local target directory."),
 ) -> None:
-    """Ship hexes.pmtiles + manifest.json (SPEC §6.3, §13.24)."""
+    """Ship every tile archive + manifest.json (SPEC §6.3, §13.24)."""
     _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir)
 
 

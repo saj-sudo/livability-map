@@ -10,13 +10,14 @@ import pytest
 from pmtiles.reader import MmapSource, Reader
 from pmtiles.tile import Compression, TileType
 
-from pipeline import attrs, tiler
+from pipeline import attrs, manifest, tiler
 from pipeline.registry import load_dimensions
-from pipeline.stages import admin, dims, export, fetch, grid, hazards, pop, score, tiles
+from pipeline.stages import admin, dims, export, fetch, grid, hazards, pop, score, tiles, urban
 
 
 def _run_all(settings):
     fetch.run(settings)
+    urban.run(settings)
     grid.run(settings)
     pop.run(settings)
     admin.run(settings)
@@ -104,9 +105,58 @@ def test_build_pmtiles_round_trips_fixture_hexes(settings):
 
 def test_tiles_stage_updates_manifest(settings):
     _run_all(settings)
-    info = tiles.run(settings, backend="python", maxzoom=5, workers=0)
+    info = tiles.run(settings, backend="python", workers=0)
     m = json.loads((settings.out_dir / "manifest.json").read_text(encoding="utf-8"))
-    assert m["tiles"]["hexes"]["sha256"] == info["sha256"] and m["tiles"]["hexes"]["layers"][0]["name"] == "hex4"
-    assert m["tiles"]["hexes"]["minzoom"] == 2 and m["tiles"]["hexes"]["maxzoom"] == 5
+    assert m["tiles"]["hexes"]["sha256"] == info["hexes"]["sha256"] and m["tiles"]["hexes"]["layers"][0]["name"] == "hex4"
+    assert m["tiles"]["hexes"]["minzoom"] == 2 and m["tiles"]["hexes"]["maxzoom"] == 4  # the plan's res-4 zooms
     with pytest.raises(RuntimeError, match="tippecanoe"):
-        tiles.run(settings, backend="tippecanoe", maxzoom=5)
+        tiles.run(settings, backend="tippecanoe")
+
+
+def test_only_res4_still_overzooms(settings):
+    _run_all(settings)
+    tiles.run(settings, backend="python", workers=0)
+    L = manifest.load(settings)["tiles"]["hexes"]["layers"]
+    assert len(L) == 1 and L[0]["overzoom"] is True and L[0]["complete"] is True and L[0]["res"] == 4
+
+
+def test_tiles_without_a_plan_in_the_manifest_is_a_plain_error(settings):
+    _run_all(settings)
+    m = manifest.load(settings)
+    m.pop("resolution_plan")
+    manifest.write(settings, m)
+    with pytest.raises(FileNotFoundError, match="run `export` first"):
+        tiles.run(settings, backend="python", workers=0)
+
+
+def _features(settings, archive, z, lng, lat, layer):
+    x, y = tiler.lnglat_to_tile(lng, lat, z)
+    with open(settings.out_dir / archive, "rb") as fh:
+        data = Reader(MmapSource(fh)).get(z, x, y)
+    return mapbox_vector_tile.decode(gzip.decompress(data))[layer]["features"]
+
+
+def test_tiles_build_one_archive_per_plan_entry(settings):
+    settings.res = [4, 5, 6, 7]
+    _run_all(settings)
+    tiles.run(settings, backend="python", workers=0)
+    m = manifest.load(settings)
+    assert set(m["tiles"]) == {"hexes", "hexes_fine"}
+    fine = {L["name"]: L for L in m["tiles"]["hexes_fine"]["layers"]}
+    assert fine["hex6"]["minzoom"] == 8 and fine["hex6"]["maxzoom"] == 9 and fine["hex6"]["res"] == 6
+    assert fine["hex7"]["overzoom"] is True and fine["hex6"]["overzoom"] is True and fine["hex6"]["complete"] is False
+    coarse = {L["name"]: L for L in m["tiles"]["hexes"]["layers"]}
+    assert coarse["hex5"]["overzoom"] is True and coarse["hex4"]["overzoom"] is False and coarse["hex4"]["complete"] is True
+    assert m["tiles"]["hexes_fine"]["key"] == "hexes_fine.pmtiles" and m["tiles"]["hexes_fine"]["minzoom"] == 8 and m["tiles"]["hexes_fine"]["maxzoom"] == 13
+    assert (settings.out_dir / "hexes_fine.pmtiles").stat().st_size > 1000
+    # the z7 tile over Alder carries hex5 features with ref true; the z10 tile carries hex7 features without ref
+    assert any(f["properties"].get("ref") is True for f in _features(settings, "hexes.pmtiles", 7, 11.0, 43.0, "hex5"))
+    assert all("ref" not in f["properties"] for f in _features(settings, "hexes_fine.pmtiles", 10, 11.0, 43.0, "hex7"))
+
+
+def test_tiles_archive_option_builds_one_archive(settings, capsys):
+    settings.res = [4, 5, 6, 7]
+    _run_all(settings)
+    info = tiles.run(settings, backend="python", workers=0, archive="hexes_fine")
+    assert set(info) == {"hexes_fine"} and (settings.out_dir / "hexes_fine.pmtiles").exists()
+    assert not (settings.out_dir / "hexes.pmtiles").exists()

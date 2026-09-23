@@ -27,7 +27,11 @@ from ..config import Settings
 from ..registry import load_dimensions, load_sources, used_source_ids
 
 TARGETS = ("auto", "local", "r2")
-FILES = ("hexes.pmtiles", "manifest.json")
+
+
+def files_to_ship(m: dict) -> list[str]:
+    """manifest.json plus every tile archive the manifest lists (SPEC §13.32: one per plan archive)."""
+    return ["manifest.json"] + sorted(t["key"] for t in m.get("tiles", {}).values())
 PMTILES_MAGIC = b"PMTiles"
 
 
@@ -110,9 +114,14 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None)
     if target not in TARGETS:
         raise ValueError(f"target must be one of {TARGETS}")
     out = settings.out_dir
-    for f in FILES:
+    if not (out / "manifest.json").exists():
+        raise FileNotFoundError(f"{out / 'manifest.json'} missing: run `export` and `tiles` first")
+    archives = files_to_ship(manifest.load(settings))[1:]
+    if not archives:
+        raise FileNotFoundError("manifest.json lists no tile archive: run `tiles` first")
+    for f in archives:
         if not (out / f).exists():
-            raise FileNotFoundError(f"{out / f} missing: run `tiles` (and `export`) first")
+            raise FileNotFoundError(f"{out / f} missing: run `tiles` first")
     bad = unverified_sources(settings)
     if bad:
         raise RuntimeError(f"publish refused: {', '.join(bad)} are not first-hand verified (set verified: confirmed after checking, SPEC §15, invariant 4)")
@@ -124,10 +133,12 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None)
     if target == "local":
         dest = local_dir or (settings.root / "web" / "public" / "data")
         dest.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(out / "hexes.pmtiles", dest / "hexes.pmtiles")
+        for f in archives:
+            shutil.copyfile(out / f, dest / f)
         stamp(m, "local", "/data")
         (dest / "manifest.json").write_text(manifest.json.dumps(m, indent=2, default=manifest._json_default, ensure_ascii=False), encoding="utf-8")
-        print(f"publish local: hexes.pmtiles ({(out / 'hexes.pmtiles').stat().st_size / 1e6:.1f} MB) and manifest.json -> {dest}")
+        sizes = ", ".join(f"{f} ({(out / f).stat().st_size / 1e6:.1f} MB)" for f in archives)
+        print(f"publish local: {sizes} and manifest.json -> {dest}")
         return {"target": "local", "dest": str(dest)}
     bucket = env.get("R2_BUCKET", "")
     base_url = (env.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
@@ -135,15 +146,16 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None)
     client = _client(env)
     stamp(m, "r2", base_url or None)
     manifest.write(settings, m)
-    client.upload_file(str(out / "hexes.pmtiles"), bucket, "hexes.pmtiles", ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "public, max-age=3600"})
+    for f in archives:
+        client.upload_file(str(out / f), bucket, f, ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "public, max-age=3600"})
     client.upload_file(str(out / "manifest.json"), bucket, "manifest.json", ExtraArgs={"ContentType": "application/json", "CacheControl": "public, max-age=300"})
     client.put_bucket_cors(Bucket=bucket, CORSConfiguration={"CORSRules": cors_rules(origins)})
-    print(f"publish r2: uploaded hexes.pmtiles and manifest.json to bucket {bucket}; CORS origins {origins or ['*']}")
+    print(f"publish r2: uploaded {', '.join(archives)} and manifest.json to bucket {bucket}; CORS origins {origins or ['*']}")
     result = {"target": "r2", "bucket": bucket, "base_url": base_url}
     if base_url:
-        check = _range_check(f"{base_url}/hexes.pmtiles")
+        check = _range_check(f"{base_url}/{archives[0]}")
         result["range_check"] = check
-        print(f"publish r2 range check at {base_url}/hexes.pmtiles: {_diagnose(check)}")
+        print(f"publish r2 range check at {base_url}/{archives[0]}: {_diagnose(check)}")
     else:
         print("publish r2: set R2_PUBLIC_BASE_URL to verify range requests from the public URL")
     return result

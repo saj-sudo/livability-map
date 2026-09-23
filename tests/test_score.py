@@ -78,3 +78,13 @@ def test_score_is_idempotent(settings, capsys):
     capsys.readouterr()
     score.run(settings)
     assert "up to date" in capsys.readouterr().out
+
+
+def test_opposite_direction_joiner_is_reflected():
+    from pipeline.registry import Dimension, JoinSpec
+
+    # a dimension where higher is better fed by a deprivation rate (higher = worse): raw 10 (worst) scores lowest
+    dim = Dimension(id="d", name="d", group="life", kind="score", higher_is="better", joiners=[JoinSpec(source="s", joiner="polygon_centroid", res="tract", field="f", domain="x", label="imd", higher_is="worse")])
+    df = pd.DataFrame({"d_raw": [1.0, 10.0, 5.0], "d_dom": ["x"] * 3, "d_lbl": ["imd"] * 3, "inhabited": [True] * 3})
+    s = score.score_dimension(dim, df)["d_score"].tolist()
+    assert s[0] > s[2] > s[1]

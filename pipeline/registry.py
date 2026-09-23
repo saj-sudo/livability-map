@@ -92,9 +92,15 @@ class JoinSpec:
     unit: str = ""
     multiply: float = 1.0
     decimals: int = 1
+    # SPEC §13.33: set when this joiner's raw value runs opposite to the dimension's `higher_is`
+    # (a deprivation rate feeding a "higher = better" dimension); the score stage reflects its
+    # percentile so every {id}_score obeys the dimension's direction
+    higher_is: str | None = None
 
     def to_manifest(self) -> dict[str, Any]:
         d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source, "unit": self.unit, "multiply": self.multiply, "decimals": self.decimals}
+        if self.higher_is:
+            d["higher_is"] = self.higher_is
         if self.weight_field:
             d["weight_field"] = self.weight_field
         if self.fields:
@@ -231,6 +237,8 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                 raise ValueError(f"{did}: only {HEX_JOINERS} may carry the `hex` resolution tag: {j}")
             if j.get("sample", "mean") not in ("mean", "centroid"):
                 raise ValueError(f"{did}: sample must be mean or centroid: {j}")
+            if j.get("higher_is") not in (None, "better", "worse"):
+                raise ValueError(f"{did}: a joiner's higher_is must be better or worse: {j}")
             if sources is not None and j.get("joiner") == "raster_mean" and sources[j["source"]].format not in RASTER_FORMATS:
                 raise ValueError(f"{did}: raster_mean needs a raster source (format {RASTER_FORMATS}); {j['source']} is {sources[j['source']].format}")
             joiners.append(
@@ -248,6 +256,7 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     band=int(j.get("band", 1)),
                     decimate=int(j.get("decimate", 1)),
                     sample=str(j.get("sample", "mean")),
+                    higher_is=j.get("higher_is"),
                     **dict(zip(("unit", "multiply", "decimals"), _unit_fields(did, j, unit, multiply, decimals), strict=True)),
                 )
             )

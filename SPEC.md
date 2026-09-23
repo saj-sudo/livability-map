@@ -462,6 +462,12 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   hexes.pmtiles 146.5 MB (10,984 tiles), hexes_nbhd.pmtiles 206.2 MB (30,430 tiles, 952 s),
   hexes_city.pmtiles 254.3 MB (128,730 tiles, 705 s). hex7 at z10-13 made a 531 MB archive (z13
   alone 276 MB), so hex7 is tiled z10-12 and overzoomed.
+- Country sources (2026-09-23): `dims --only jobs --only incmix --only house --only rent` at res
+  4-7 took 7,862 s / 5.7 GB (the StatCan profile is streamed once from its 2.25 GB zip into
+  `interim/prep/`), then score 14 s, export 30 s, tiles 2,778 s: hexes 148.1 MB, hexes_nbhd
+  207.3 MB, hexes_city 255.8 MB. Share of inhabited res-6 hexes carrying the country value: DE
+  rent 99%; NL rent 93%, incmix 90%; FR jobs 99%, incmix 18% (Filosofi covers communes of 5,000+
+  only); CA jobs / incmix / house 98%; AU jobs / house / rent 100%.
 - Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
   when one would pass that (§14.10).
 

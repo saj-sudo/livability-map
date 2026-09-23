@@ -7,8 +7,8 @@ export const TILES: Manifest["tiles"] = {
     { name: "hex4", minzoom: 2, maxzoom: 4, res: 4, complete: true, overzoom: false },
     { name: "hex5", minzoom: 5, maxzoom: 7, res: 5, complete: true, overzoom: true },
   ] },
-  hexes_city: { key: "hexes_city.pmtiles", sha256: "", bytes: 1, minzoom: 10, maxzoom: 13, layers: [
-    { name: "hex7", minzoom: 10, maxzoom: 13, res: 7, complete: false, overzoom: true },
+  hexes_city: { key: "hexes_city.pmtiles", sha256: "", bytes: 1, minzoom: 10, maxzoom: 12, layers: [
+    { name: "hex7", minzoom: 10, maxzoom: 12, res: 7, complete: false, overzoom: true },
   ] },
   hexes_nbhd: { key: "hexes_nbhd.pmtiles", sha256: "", bytes: 1, minzoom: 8, maxzoom: 9, layers: [
     { name: "hex6", minzoom: 8, maxzoom: 9, res: 6, complete: false, overzoom: true },

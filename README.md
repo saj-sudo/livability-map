@@ -64,7 +64,7 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
-  |            z8-9) + hexes_city.pmtiles (hex7 z10-13), where built (§9.1, §13.18, §13.33)               |
+  |            z8-9) + hexes_city.pmtiles (hex7 z10-12), where built (§9.1, §13.18, §13.33)               |
   |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only

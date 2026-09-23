@@ -21,7 +21,7 @@ GOOD = [
     {"res": 4, "fill": "land", "zooms": [2, 4], "archive": "hexes", "slim_below_zoom": 3},
     {"res": 5, "fill": "land", "zooms": [5, 7], "archive": "hexes"},
     {"res": 6, "fill": "children", "parent": 5, "where": {"countries": ["XA"], "urban": "cluster"}, "zooms": [8, 9], "archive": "hexes_nbhd"},
-    {"res": 7, "fill": "children", "parent": 6, "where": {"urban": "centre"}, "zooms": [10, 13], "archive": "hexes_city"},
+    {"res": 7, "fill": "children", "parent": 6, "where": {"urban": "centre"}, "zooms": [10, 12], "archive": "hexes_city"},
 ]
 
 

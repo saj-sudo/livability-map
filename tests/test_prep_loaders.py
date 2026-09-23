@@ -346,3 +346,19 @@ def test_imd_loader_names_a_missing_column(tmp_path):
     (tmp_path / "f7.csv").write_text('"LSOA code (2021)"\nE01000001\n', encoding="utf-8")
     with pytest.raises(KeyError, match="IoD2025 File 7"):
         imd.load_frames(tmp_path / "f7.csv", tmp_path / "nope.geojson")
+
+
+def test_eurostat_country_without_employment_counts_is_missing_not_zero():
+    # DE / FR / CH publish EMP as -9999 almost everywhere; a stray 0 there must not become "0% employed"
+    from pipeline.prep.eurostat_grid import load_frame
+
+    ids = [f"CRS3035RES1000mN{3000000 + 1000 * i}E4300000" for i in range(12)]
+    df = pd.DataFrame({
+        "GRD_ID": ids,
+        "T": [50] * 12, "Y_1564": [30] * 12, "Y_GE65": [10] * 12,
+        "EMP": [-9999] * 9 + [0] + [15, 15],
+        "CNTR_ID": ["DE"] * 10 + ["NL", "NL"],
+    })
+    out = load_frame(df)
+    assert out["emp_rate"].iloc[:10].isna().all()  # the whole country is missing
+    assert out["emp_rate"].iloc[10:].round(2).tolist() == [0.5, 0.5]

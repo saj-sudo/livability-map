@@ -135,7 +135,7 @@ CORS). No database in the web app.
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
-  |            z8-9) + hexes_city.pmtiles (hex7 z10-13), where built (§9.1, §13.18, §13.33)               |
+  |            z8-9) + hexes_city.pmtiles (hex7 z10-12), where built (§9.1, §13.18, §13.33)               |
   |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
@@ -324,7 +324,7 @@ The resolutions, where each is built, its zooms and its archive live in
 | hex4 | 4 (1,770 km²) | all land | z2-4 (slim attributes at z2) | hexes.pmtiles |
 | hex5 | 5 (253 km²) | all land | z5-7, overzoomed beyond | hexes.pmtiles |
 | hex6 | 6 (36 km²) | children of res-5 cells whose centroid is in the US, EU-27, UK or EFTA, or that touch a GHS-SMOD urban cluster | z8-9, overzoomed | hexes_nbhd.pmtiles |
-| hex7 | 7 (5.2 km²) | children of res-6 cells that touch a GHS-SMOD urban centre | z10-13, overzoomed | hexes_city.pmtiles |
+| hex7 | 7 (5.2 km²) | children of res-6 cells that touch a GHS-SMOD urban centre | z10-12, overzoomed | hexes_city.pmtiles |
 
 `land` entries are complete (every land cell); `children` entries exist only where a rule matched
 and drop children whose centre is in the ocean. A layer keeps drawing past its last zoom unless
@@ -341,7 +341,7 @@ world tile would exceed 5 MB.
 Built by `pipeline/tiler.py` (pure Python: `mapbox-vector-tile` + the `pmtiles` writer, decision
 §13.18) with one layer per resolution and one archive per plan `archive` (§9.1): `hex4` for zoom
 2-4 (the slim attribute set at zoom 2, where a res-4 hex is about two pixels) and `hex5` for zoom
-5-7 in `hexes.pmtiles`, `hex6` z8-9 in `hexes_nbhd.pmtiles` and `hex7` z10-13 in `hexes_city.pmtiles`
+5-7 in `hexes.pmtiles`, `hex6` z8-9 in `hexes_nbhd.pmtiles` and `hex7` z10-12 in `hexes_city.pmtiles`
 (a layer drawn past its last zoom must close its archive: MapLibre overzooms per source); MapLibre overzooms
 beyond each layer's last zoom without further requests. Zooms come from the manifest, never a
 table in code. Each archive stays under ~300 MB (§14.10); past that, split by plan `archive`. tippecanoe (felt fork) remains an optional backend when it is on PATH

@@ -1,5 +1,5 @@
 // The hex layer stack (SPEC §9.1, §9.3): one vector source per tile archive and one layer group
-// per tile layer in the manifest (hex4 z2-4, hex5 z5-7, hex6 z8-9, hex7 z10-13 where built), in
+// per tile layer in the manifest (hex4 z2-4, hex5 z5-7, hex6 z8-9, hex7 z10-12 where built), in
 // resolution order. A layer that overzooms keeps drawing under the finer layers; its cells that a
 // finer layer replaced (`ref`) fade out from that layer's first zoom so colours never double up.
 // Each group has a fill per view, a hatch overlay for

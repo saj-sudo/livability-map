@@ -148,7 +148,7 @@ def test_tiles_build_one_archive_per_plan_entry(settings):
     coarse = {L["name"]: L for L in m["tiles"]["hexes"]["layers"]}
     assert coarse["hex5"]["overzoom"] is True and coarse["hex4"]["overzoom"] is False and coarse["hex4"]["complete"] is True
     assert m["tiles"]["hexes_nbhd"]["maxzoom"] == 9 and [L["name"] for L in m["tiles"]["hexes_nbhd"]["layers"]] == ["hex6"]
-    assert m["tiles"]["hexes_city"]["minzoom"] == 10 and m["tiles"]["hexes_city"]["maxzoom"] == 13
+    assert m["tiles"]["hexes_city"]["minzoom"] == 10 and m["tiles"]["hexes_city"]["maxzoom"] == 12
     assert (settings.out_dir / "hexes_nbhd.pmtiles").stat().st_size > 1000
     # the z7 tile over Alder carries hex5 features with ref true; the z10 tile carries hex7 features without ref
     assert any(f["properties"].get("ref") is True for f in _features(settings, "hexes.pmtiles", 7, 11.0, 43.0, "hex5"))

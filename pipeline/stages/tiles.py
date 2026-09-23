@@ -1,6 +1,6 @@
 """``tiles`` stage (SPEC §5, §9.1, §9.2, decisions §13.18, §13.32): ``data/out/hexes_r{res}.parquet``
 -> one PMTiles archive per plan ``archive`` (``hexes.pmtiles`` with hex4 z2-4 and hex5 z5-7,
-``hexes_nbhd.pmtiles`` with hex6 z8-9 and ``hexes_city.pmtiles`` with hex7 z10-13, where built).
+``hexes_nbhd.pmtiles`` with hex6 z8-9 and ``hexes_city.pmtiles`` with hex7 z10-12, where built).
 A layer that keeps drawing past its last zoom must close its archive, because MapLibre overzooms
 per source (``resplan`` enforces this).
 

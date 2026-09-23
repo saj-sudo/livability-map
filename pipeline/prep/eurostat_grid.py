@@ -22,6 +22,11 @@ from pyproj import Transformer
 
 _ID = r"CRS3035RES1000mN(\d+)E(\d+)"
 NEEDED = ["GRD_ID", "T", "Y_1564", "Y_GE65", "EMP"]
+OPTIONAL = ["CNTR_ID"]  # reporting country codes, e.g. "AT-CH-LI" on border cells
+# A country whose populated cells mostly lack EMP (-9999: DE, FR and CH publish none on the grid)
+# is treated as having no employment data at all: its few literal zeros are artefacts, and a hex
+# built from them would read "0% employed" (missing is never 0, invariant 3).
+EMP_MISSING_SHARE = 0.5
 SENTINELS = (-8888, -9999)
 HALF_CELL = 500.0
 
@@ -44,10 +49,17 @@ def load_frame(df: pd.DataFrame) -> pd.DataFrame:
     missing = [c for c in NEEDED if c not in df.columns]
     if missing:
         raise KeyError(f"Eurostat census grid: columns {missing} not found; the V3 layout may have changed (SPEC §15)")
-    df = df[NEEDED].copy()
+    df = df[NEEDED + [c for c in OPTIONAL if c in df.columns]].copy()
+    raw_emp = pd.to_numeric(df["EMP"], errors="coerce")
     for col in ("T", "Y_1564", "Y_GE65", "EMP"):
         v = pd.to_numeric(df[col], errors="coerce")
         df[col] = v.where(~v.isin(SENTINELS))
+    if "CNTR_ID" in df.columns:
+        country = df["CNTR_ID"].astype(str).str[:2]
+        populated = df["T"].fillna(0) > 0
+        share = (raw_emp == -9999)[populated].groupby(country[populated]).mean()
+        dropped = sorted(share[share > EMP_MISSING_SHARE].index)
+        df.loc[country.isin(dropped), "EMP"] = np.nan
     x, y = parse_grd_id(df["GRD_ID"])
     keep = np.isfinite(x) & np.isfinite(y)
     df, x, y = df[keep].reset_index(drop=True), x[keep], y[keep]
@@ -71,4 +83,4 @@ def load(settings, source, sources) -> pd.DataFrame:
     raw = settings.raw(source.id) / source.files[0]
     with zipfile.ZipFile(raw) as zf:
         data = zf.read(source.extra["member"])
-    return load_frame(pd.read_parquet(io.BytesIO(data), columns=NEEDED))
+    return load_frame(pd.read_parquet(io.BytesIO(data), columns=NEEDED + OPTIONAL))

@@ -14,5 +14,5 @@ resolutions:
     fill: children
     parent: 6
     where: {urban: centre}
-    zooms: [10, 13]
+    zooms: [10, 12]
     archive: hexes_city

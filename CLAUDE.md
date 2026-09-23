@@ -19,6 +19,10 @@ Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC 
 Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
 MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
 
+Manual steps only Saj can do (registrations, browser-only downloads, credentials, permission
+requests) live in `docs/manual-steps.md`: add an item there whenever a session hits one, and move
+it to Done when it is handled.
+
 ## Commands
 
 ```bash

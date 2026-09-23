@@ -1,6 +1,6 @@
 // Tile layers from the manifest (SPEC §9.1, §13.32). The pipeline builds one PMTiles archive per
 // resolution-plan archive (hexes.pmtiles: hex4 z2-4 + hex5 z5-7; hexes_nbhd.pmtiles: hex6 z8-9;
-// hexes_city.pmtiles: hex7 z10-12, where built) and records, per layer, its H3 resolution, whether every land cell
+// hexes_city.pmtiles: hex7 z10-11, where built) and records, per layer, its H3 resolution, whether every land cell
 // exists at it (`complete`) and whether it keeps drawing past its last zoom (`overzoom`). The map
 // adds one source per archive and one style-layer group per tile layer, in resolution order.
 

@@ -88,7 +88,8 @@ def run(settings: Settings) -> dict[str, int]:
     src = load_sources(settings.sources_path)[SMOD_SOURCE]
     raster = rawfiles.resolve_raster(settings, src)  # extracts the zip member once
     out = settings.urban_path
-    params = {"stage": "urban", "bbox": settings.bbox, "kinds": KINDS}
+    # `merge` names the seam-merge method so a change to it rebuilds the layer (code is not fingerprinted)
+    params = {"stage": "urban", "bbox": settings.bbox, "kinds": KINDS, "merge": "edge-pieces, grid_size pixel/1000"}
     if stage_cache.is_fresh(out, [raster], params, settings.force):
         counts = stage_cache.read_meta(out).get("counts", {})
         print(f"urban  up to date ({counts}), skipping")

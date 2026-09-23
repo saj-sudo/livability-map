@@ -45,6 +45,18 @@
   verified: confirmed
   vintage: "fixture"
   files: [pop.tif]
+- id: ghsl_smod
+  name: fixture GHS-SMOD-like degree of urbanisation classes
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/smod.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -200
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [smod.tif]
 - id: cckp_hd35
   name: fixture heat NetCDF
   group: hazard
@@ -381,3 +393,36 @@
   verified: none
   vintage: VERIFY
   files: [whr.csv]
+- id: eurostat_census_grid_2021
+  name: fixture 1 km statistical grid points (Eurostat-like, XKA)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/eurostat_grid.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [eurostat_grid.csv]
+- id: eng_imd_2025
+  name: fixture LSOA-like deprivation polygons (IoD-like, B-Mid) already joined to geometry
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/lsoa.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [lsoa.gpkg]
+- id: ons_lsoa_2021
+  name: fixture LSOA-like boundaries (same file as eng_imd_2025)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/lsoa.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [lsoa.gpkg]

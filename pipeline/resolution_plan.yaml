@@ -1,0 +1,30 @@
+# Resolution plan (SPEC §9.1, §13.32; loaded by pipeline/resplan.py).
+#
+# One entry per H3 resolution, ascending. `land` entries cover every land cell (complete);
+# `children` entries are the H3 children of every `parent` cell that matches any `where` rule:
+#   countries: ISO2 codes of the parent centroid's country (geoBoundaries ADM0)
+#   urban:     centre | cluster -> the parent polygon touches a GHS-SMOD polygon of that kind
+#              (written by the `urban` stage; centre = class 30, cluster = class >= 21)
+# `zooms` is the tile layer's zoom range, `archive` the PMTiles file it ships in. Coarser layers
+# keep drawing (overzoom) wherever no complete finer layer exists; a refined parent cell carries
+# `ref: true` and the web app hides it once its children's layer is on screen.
+#
+# Session 8 (2026-09-22): res 6 across the US, EU-27, UK and EFTA (and around every urban
+# cluster elsewhere, so res 7 always nests in res 6), res 7 inside urban centres.
+resolutions:
+  - {res: 4, fill: land, zooms: [2, 4], archive: hexes, slim_below_zoom: 3}
+  - {res: 5, fill: land, zooms: [5, 7], archive: hexes}
+  - res: 6
+    fill: children
+    parent: 5
+    where:
+      countries: [US, GB, IS, NO, CH, LI, AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
+      urban: cluster
+    zooms: [8, 9]
+    archive: hexes_fine
+  - res: 7
+    fill: children
+    parent: 6
+    where: {urban: centre}
+    zooms: [10, 13]
+    archive: hexes_fine

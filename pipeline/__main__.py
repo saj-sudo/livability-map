@@ -24,13 +24,16 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help=__doc__)
 def main(
     ctx: typer.Context,
     fixtures: bool = typer.Option(False, "--fixtures", help="Run against the synthetic fixture world (SPEC §11.1)."),
-    res: list[int] = typer.Option(None, "--res", help="H3 resolution(s); default from config (4, 5)."),
+    res: list[int] = typer.Option(None, "--res", help="H3 resolution(s) from pipeline/resolution_plan.yaml; default: all of them."),
     bbox: str = typer.Option(None, "--bbox", help="minlng,minlat,maxlng,maxlat to run a subregion."),
     force: bool = typer.Option(False, "--force", help="Ignore stage caches and recompute."),
     root: Path = typer.Option(None, "--root", help="Repo root (auto-detected)."),
 ) -> None:
     settings = Settings(root=root.resolve() if root else find_root(), fixtures=fixtures, force=force)
     if res:
+        unknown = sorted(set(res) - set(settings.plan.resolutions()))
+        if unknown:
+            raise typer.BadParameter(f"--res {unknown} is not in {settings.plan_path.name} (plan: {settings.plan.resolutions()})")
         settings.res = sorted(set(res))
     settings.bbox = parse_bbox(bbox)
     if fixtures:

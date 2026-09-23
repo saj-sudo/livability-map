@@ -85,3 +85,14 @@ def test_local_publish_ships_every_archive(settings, tmp_path):
     publish.run(settings, target="local", local_dir=dest)
     assert {p.name for p in dest.iterdir()} == {"hexes.pmtiles", "hexes_nbhd.pmtiles", "hexes_city.pmtiles", "manifest.json"}
     assert publish.files_to_ship(json.loads((dest / "manifest.json").read_text(encoding="utf-8"))) == ["manifest.json", "hexes.pmtiles", "hexes_city.pmtiles", "hexes_nbhd.pmtiles"]
+
+
+def test_local_publish_removes_archives_the_plan_no_longer_lists(settings, tmp_path):
+    _run_all(settings)
+    dest = tmp_path / "webdata"
+    dest.mkdir()
+    (dest / "hexes_fine.pmtiles").write_bytes(b"PMTiles old")  # an archive from an older plan
+    (dest / "gazetteer.json").write_text("{}", encoding="utf-8")  # not ours to touch
+    publish.run(settings, target="local", local_dir=dest)
+    assert not (dest / "hexes_fine.pmtiles").exists()
+    assert (dest / "gazetteer.json").exists() and (dest / "hexes.pmtiles").exists()

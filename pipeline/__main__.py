@@ -64,8 +64,23 @@ def _run_stage(name: str, settings: Settings, **kwargs) -> bool:
         if name in PLANNED and "planned for Session" in str(exc):
             print(f"{name:6s} {exc}")
             return False
-        raise
+        _fail(name, exc)
+    except (FileNotFoundError, ValueError, KeyError, OSError) as exc:
+        _fail(name, exc)
     return True
+
+
+def _fail(name: str, exc: Exception) -> None:
+    """Workspace rule: a failed stage prints what went wrong in a sentence, never a traceback.
+    Stage errors are written to be read (they name the missing file or the stage to run first);
+    set PIPELINE_TRACEBACK=1 to see the full stack when debugging."""
+    import os
+
+    if os.environ.get("PIPELINE_TRACEBACK"):
+        raise exc
+    message = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
+    print(f"{name:6s} stopped: {message}", file=sys.stderr)
+    raise typer.Exit(code=1)
 
 
 @app.command()

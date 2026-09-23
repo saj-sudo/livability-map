@@ -174,3 +174,11 @@ def test_a_subset_run_keeps_every_archive(settings):
     m = manifest.load(settings)
     assert set(m["tiles"]) == {"hexes", "hexes_nbhd", "hexes_city"}
     assert [L["name"] for L in m["tiles"]["hexes"]["layers"]] == ["hex4", "hex5"]
+
+
+def test_span_guard_checks_height_as_well_as_width():
+    # a hex taller than two tiles (possible near the poles) breaks assign_tiles just like a wide one
+    tall = np.array([[0.100, 0.100, 0.101, 0.110]])  # 0.001 wide, 0.01 tall in unit-square coordinates
+    tiler.check_span(tall, 7, "hexN")  # 0.01 * 128 = 1.28 tiles: fine
+    with pytest.raises(ValueError, match="hexN at z9"):
+        tiler.check_span(tall, 9, "hexN")  # 0.01 * 512 = 5.1 tiles tall

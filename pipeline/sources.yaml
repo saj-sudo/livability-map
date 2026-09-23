@@ -87,6 +87,23 @@
   processing: "persons per pixel summed per hex; inhabited = population >= POP_MIN (100)"
   files: [GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.zip]
 
+- id: ghsl_smod
+  name: JRC GHSL GHS-SMOD R2023A degree of urbanisation, epoch 2025, 30 arc-second WGS84
+  group: reference
+  access: direct
+  url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_SMOD_GLOBE_R2023A/GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss/V2-0/GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.zip
+  format: geotiff-zip
+  member: GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.tif
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -200
+  license: CC BY 4.0
+  verified: confirmed
+  vintage: "R2023A V2.0 (2025-01-27), epoch 2025 (projection); 34 MB zip, 43202 x 21384 int16 GeoTIFF, nodata -200"
+  attribution: "European Commission, Joint Research Centre (JRC), GHSL GHS-SMOD R2023A (Degree of Urbanisation, level 2)"
+  processing: "class 30 (urban centre) and classes >= 21 (urban cluster) polygonised by the urban stage into data/interim/urban.parquet; the resolution plan refines hexes that touch them (SPEC §9.1, §13.31)"
+  files: [GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.zip]
+
 # ---------------------------------------------------------------- hazards -------------------
 - id: cckp_hd35
   name: World Bank CCKP CMIP6, hot days Tmax > 35C (hd35), SSP2-4.5, 2040-2059 ensemble median
@@ -647,3 +664,51 @@
   attribution: "Chen, Y. et al. (2023) Multi-decadal trends and variability in burned area from the fifth version of the Global Fire Emissions Database (GFED5). Earth System Science Data 15, 5227-5259"
   processing: "monthly Total burned area per cell summed per year, averaged over 2001-2020, divided by the cell's area -> percent of area burned per year, written once to a 0.25 degree GeoTIFF (prep/rasters.py) and sampled at the hex centroid (coarser than the hex)"
   files: [BA.zip]
+
+# ---------------------------------------------------------------- neighbourhood statistics (§20.6, Session 8) ---
+- id: eurostat_census_grid_2021
+  name: Eurostat Census 2021 population grid, 1 km (GISCO, V3)
+  group: life
+  access: direct
+  url: https://gisco-services.ec.europa.eu/census/2021/Eurostat_Census-GRID_2021_V3.zip
+  format: parquet-zip
+  member: Eurostat_Census-GRID_2021_V3/ESTAT_Census_2021_V3.parquet
+  crs: EPSG:3035
+  native_res_m: 1000
+  license: "Copyright European Union; reuse authorised for commercial or non-commercial purposes provided the source is indicated and modifications are stated (Eurostat copyright notice, Commission Decision 2011/833/EU)"
+  license_note: "https://ec.europa.eu/eurostat/web/main/help/copyright-notice; Iceland not available, French overseas regions excluded"
+  verified: confirmed
+  vintage: "2021 census round, grid V3 (2026-05-30, data received 2025-01-22); 566 MB zip, parquet member 76 MB, 4,595,932 cells"
+  attribution: "© Eurostat / GISCO, Census 2021 1 km population grid (EU-27 and EFTA)"
+  processing: "parquet member: GRD_ID (CRS3035RES1000mN{y}E{x}) -> cell centre in EPSG:3035 -> WGS84 point; -8888 (confidential) and -9999 (not available) -> missing; emp_rate = EMP / Y_1564 where both are known and Y_1564 > 0; weighted into hexes by point_mean (prep/eurostat_grid.py)"
+  files: [Eurostat_Census-GRID_2021_V3.zip]
+
+- id: eng_imd_2025
+  name: English Indices of Deprivation 2025, File 7 (all ranks, scores, deciles and population denominators by LSOA 2021)
+  group: life
+  access: direct
+  url: https://assets.publishing.service.gov.uk/media/691ded56d140bbbaa59a2a7d/File_7_IoD2025_All_Ranks_Scores_Deciles_Population_Denominators.csv
+  format: csv
+  geometry: ons_lsoa_2021
+  license: Open Government Licence v3.0
+  license_note: "gov.uk: all content is available under the Open Government Licence v3.0, except where otherwise stated"
+  verified: confirmed
+  vintage: "IoD2025 (published 2025-10-30), 33,755 LSOA 2021 rows, 9.9 MB CSV; denominators mid 2022"
+  attribution: "Ministry of Housing, Communities and Local Government, English Indices of Deprivation 2025"
+  processing: "Employment / Health / Barriers-to-Housing domain scores joined to ONS LSOA 2021 boundaries on LSOA21CD and population-weighted into hexes (prep/imd.py); England only, Welsh LSOAs stay missing"
+  files: [File_7_IoD2025_All_Ranks_Scores_Deciles_Population_Denominators.csv]
+
+- id: ons_lsoa_2021
+  name: ONS Lower layer Super Output Areas (December 2021) Boundaries EW BGC (V5), generalised 20 m, clipped to the coastline
+  group: reference
+  access: direct
+  url: https://open-geography-portalx-ons.hub.arcgis.com/api/download/v1/items/68515293204e43ca8ab56fa13ae8a547/geojson?layers=0
+  format: geojson
+  crs: EPSG:27700
+  license: Open Government Licence v3.0
+  license_note: "Source: Office for National Statistics licensed under the Open Government Licence v.3.0; Contains OS data © Crown copyright and database right 2021"
+  verified: confirmed
+  vintage: "December 2021 boundaries, BGC V5 (item modified 2025-08-11); 35,672 features (England and Wales), 66 MB GeoJSON in British National Grid"
+  attribution: "Office for National Statistics licensed under the Open Government Licence v.3.0; Contains OS data © Crown copyright and database right 2021"
+  processing: "reprojected to WGS84 and joined to eng_imd_2025 on LSOA21CD (prep/imd.py)"
+  files: [lsoa_2021_ew_bgc.geojson]

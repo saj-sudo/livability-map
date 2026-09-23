@@ -285,7 +285,7 @@ def _unit_fields(did: str, raw: dict[str, Any], unit: str, multiply: float, deci
     return unit, multiply, decimals
 
 
-REFERENCE_SOURCE_IDS = ("natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop")
+REFERENCE_SOURCE_IDS = ("natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop", "ghsl_smod")
 
 
 def used_source_ids(sources: dict[str, Source], dims: dict[str, Dimension]) -> set[str]:

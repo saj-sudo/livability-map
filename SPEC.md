@@ -58,7 +58,7 @@ dimension, and the map renders low-confidence areas visibly differently.
 | Non-goal | Why |
 |---|---|
 | Telling anyone where to move | The map shows evidence and lets the person weigh it. No recommendations, no "top 10 places" feed. |
-| Property-level or street-level resolution | H3 hexes at tens of km. Insurers and Climate Central do parcel-level; that is not this. |
+| Property-level or street-level resolution (v1) | H3 hexes at tens of km in v1. Roadmap (§16, decided 2026-09-22): neighbourhood hexes in cities (Session 8), then property-level *readouts* of the physical layers under a clicked point (Session 10) and block-level hexes inside urban centres (Session 11). Socioeconomic layers never go below the block group, and nothing is scored per property: a per-property score built on race or income is steering. |
 | Real-time hazard monitoring | GloFAS and GWIS already do that. This is about projected exposure. |
 | Any paid or scrape-restricted data | No EIU full dataset, no Maplecroft, no Numbeo scraping, no Walk Score, no Cook PVI. |
 | Multiple scenarios and horizons in v1 | One moderate pathway, one horizon (§13.3). Toggles are v2. |
@@ -590,6 +590,28 @@ embeddable iframe.
 **Later.** Downloadable hex data with attribution bundle; plain-language place summaries
 (clearly labeled); time-slider across horizons.
 
+**Finer resolution (decided 2026-09-22).** Three tiers, physical layers first:
+
+- *Session 8, neighbourhood:* H3 res 7 inside urban footprints (GHSL urban centres), res 6 across
+  the US and Europe, res 5 elsewhere; statistical grids (Eurostat 1 km, UK LSOA, German and
+  Dutch 100 m, French IRIS, Canadian DAs, Australian SA2). The `urban` mask and the resolution
+  plan are designed to be reused by the two tiers below.
+- *Session 10, point readouts:* property-level evidence without property-level hexes. The
+  finest rasters (FEMA NFHL and EA flood zones, Copernicus DEM 30 m with a sea-level bathtub,
+  Landsat land-surface temperature, WorldCover 10 m or Meta canopy height 1 m, EU and BTS
+  noise maps, SILVIS WUI) are published as cloud-optimized GeoTIFFs on R2 and the web app reads
+  the pixel under a click with range requests (geotiff.js), the same way it reads PMTiles.
+  No server (invariant 5), no score at that level, only values with sources. US and EU first
+  (storage: ~100 GB per global 10 m layer).
+- *Session 11, block hexes:* res 9 or 10 inside urban centres, physical layers and distances
+  only (walking time to transit stops from GTFS, parks, groceries, clinics via a self-hosted
+  OSM router; ODbL makes the derived table share-alike, a licence decision like Ookla's), one
+  region at a time as its own PMTiles archive with a size cap in §11. New tags `block` and
+  `street`, zoom plan z14-16. Needs a build machine bigger than the laptop for whole countries.
+
+Never per property: census counts below the block group, racial composition, income, politics.
+The Fair Housing Act and its EU equivalents are the reason, not just taste.
+
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |
@@ -602,6 +624,9 @@ embeddable iframe.
 | 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
 | 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
 | 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
+| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Planned; prompt in docs/superpowers/plans/2026-09-22-next-sessions-neighborhood-and-design.md |
+| 10 | acceptEdits | Python + TypeScript | Point readouts: COGs on R2 for the physical layers, geotiff.js reads under a click, "what is here" panel | Planned after Session 8 (see "Finer resolution" above) |
+| 11 | acceptEdits | Python | Block hexes (res 9/10) inside urban centres, physical layers and OSM/GTFS distances, per-region archives | Planned after Session 10; needs a larger build machine |
 | 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); Session 8 (neighbourhood resolution) is still outlined only, in `docs/superpowers/plans/` on the cost/rent branch |
 
 ## 17. Acceptance criteria (v1)

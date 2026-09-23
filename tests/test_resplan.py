@@ -54,6 +54,19 @@ def test_plan_validation_speaks_plain_english(tmp_path, bad, message):
         resplan.load_plan(_write(tmp_path, bad))
 
 
+def test_unquoted_norway_is_caught(tmp_path):
+    # YAML 1.1 reads a bare NO as false: the plan must refuse it rather than drop Norway silently
+    p = tmp_path / "plan.yaml"
+    p.write_text(
+        "resolutions:\n"
+        "  - {res: 4, fill: land, zooms: [2, 4]}\n"
+        "  - {res: 5, fill: children, parent: 4, where: {countries: [GB, NO]}, zooms: [5, 7]}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="quote"):
+        resplan.load_plan(p)
+
+
 def test_missing_plan_file_is_a_plain_error(tmp_path):
     with pytest.raises(FileNotFoundError, match="resolution plan"):
         resplan.load_plan(tmp_path / "nope.yaml")
@@ -63,7 +76,7 @@ def test_real_and_fixture_plans_are_valid():
     root = Path(__file__).resolve().parents[1]
     real = resplan.load_plan(root / "pipeline" / "resolution_plan.yaml")
     assert real.resolutions() == [4, 5, 6, 7]
-    assert "US" in real.entry(6).where["countries"] and real.entry(7).where == {"urban": "centre"}
+    assert "US" in real.entry(6).where["countries"] and "NO" in real.entry(6).where["countries"] and real.entry(7).where == {"urban": "centre"}
     fixture = resplan.load_plan(root / "pipeline" / "fixtures" / "resolution_plan.yaml")
     assert fixture.entry(6).where["countries"] == ["XA"]
     assert [e.zooms for e in fixture.entries] == [e.zooms for e in real.entries]

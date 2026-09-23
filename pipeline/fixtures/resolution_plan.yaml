@@ -7,7 +7,7 @@ resolutions:
   - res: 6
     fill: children
     parent: 5
-    where: {countries: [XA], urban: cluster}
+    where: {countries: ['XA'], urban: cluster}
     zooms: [8, 9]
     archive: hexes_fine
   - res: 7

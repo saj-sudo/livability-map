@@ -130,7 +130,12 @@ def _entry(raw: dict, previous: list[ResEntry]) -> ResEntry:
     if "urban" in where and where["urban"] not in URBAN_KINDS:
         raise ValueError(f"resolution plan res {res}: urban must be one of {URBAN_KINDS}, got {where['urban']!r}")
     if "countries" in where:
-        where["countries"] = [str(c).upper() for c in where["countries"] or []]
+        codes = where["countries"] or []
+        bad = [c for c in codes if not isinstance(c, str) or len(c) != 2]
+        if bad:
+            # YAML 1.1 reads a bare NO (Norway) as false, ON / OFF / YES likewise
+            raise ValueError(f"resolution plan res {res}: countries must be two-letter ISO codes, got {bad}; quote them in the yaml ('NO', not NO)")
+        where["countries"] = [c.upper() for c in codes]
     slim = raw.get("slim_below_zoom")
     return ResEntry(
         res=res,

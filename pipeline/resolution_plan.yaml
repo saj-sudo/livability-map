@@ -18,7 +18,8 @@ resolutions:
     fill: children
     parent: 5
     where:
-      countries: [US, GB, IS, NO, CH, LI, AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV, LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
+      # quoted: YAML reads a bare NO (Norway) as false
+      countries: ['US', 'GB', 'IS', 'NO', 'CH', 'LI', 'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']
       urban: cluster
     zooms: [8, 9]
     archive: hexes_fine

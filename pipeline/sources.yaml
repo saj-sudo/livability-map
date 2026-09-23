@@ -922,3 +922,35 @@
   attribution: "Davies, Pettersson & Öberg (2026) Organized violence 1989-2025, and violent political protests. Journal of Peace Research; Sundberg & Melander (2013) Introducing the UCDP Georeferenced Event Dataset. JPR 50(4)"
   processing: "events 2016-2025 with where_prec 1-3; best fatality estimate / 10 years summed within 25 km of the hex centre (point_radius sum); 0 = no recorded event within 25 km (prep/ucdp_ged.py)"
   files: [ged261-csv.zip]
+
+- id: map_walking_healthcare
+  name: Malaria Atlas Project, walking-only travel time to healthcare 2020 (Weiss et al. 2020), 30 arc-second
+  group: life
+  access: direct
+  url: https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare&format=image/geotiff
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -9999
+  license: CC BY 3.0 (MAP open-access policy); the Earth Engine catalog lists the same layer as CC BY 4.0
+  license_note: "malariaatlas.org/open-access-policy: 'Our maps are available to all users under the Creative Commons Attribution 3.0 Unported License ... We ask that any use of these maps provides the correct citation.'"
+  verified: confirmed
+  vintage: "facilities extracted mid-2019, published 2020; 3.03 GB float32 GeoTIFF, 43200 x 17400, minutes (walking 5 km/h on roads, 1 km/h on water)"
+  attribution: "Weiss, D.J. et al. (2020) Global maps of travel time to healthcare facilities. Nature Medicine 26, 1835-1838. Malaria Atlas Project"
+  processing: "mean walking-only travel time (minutes) to the nearest hospital or clinic over the hex's 1 km pixels (raster_mean)"
+  files: [Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare.tif]
+
+- id: wpdx_water_points
+  name: Water Point Data Exchange, WPdx+ (latest record per water point)
+  group: life
+  access: direct
+  url: https://data.waterpointdata.org/api/views/eqje-vguj/rows.csv?accessType=DOWNLOAD
+  format: csv
+  crs: EPSG:4326
+  license: CC BY-SA 4.0
+  license_note: "WPdx publishes its country sets on HDX as 'Creative Commons Attribution Share-Alike'; providers license their data to WPdx under CC BY 4.0 (waterpointdata.org/share-data). The global export itself states no user licence (asked in docs/manual-steps.md); derived water_* attributes are labelled share-alike, as for Ookla (§13.30)"
+  verified: confirmed
+  vintage: "export of 2026-09-23; 544 MB CSV, 440,270 points in 19 countries (incl. TZA, KEN, UGA, RWA, ETH, SSD), reports 2009-2025 (median 2015)"
+  attribution: "Water Point Data Exchange (WPdx), Global Water Challenge; data contributed by national governments and partners"
+  processing: "is_duplicate rows and status Unknown dropped; has_water = status_id Yes (1) / No (0), averaged within 5 km of the hex centre (point_radius mean); missing where no point is recorded (prep/wpdx.py)"
+  files: [wpdx_plus_eqje-vguj.csv]

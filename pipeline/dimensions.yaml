@@ -307,3 +307,25 @@
   joiners:
     - {source: ucdp_ged, joiner: point_radius, res: hex, field: fatal_per_year, radius_km: 25, agg: sum, domain: global, label: ucdp, unit: "conflict deaths per year within 25 km (2016-2025)", decimals: 1}
   note: "Organised-violence deaths per year within 25 km, 2016-2025 (UCDP GED 26.1: state-based, non-state and one-sided violence; events located to within 25 km or to a district). 0 means no recorded event nearby, not a guarantee of safety"
+
+- id: walkcare
+  name: Walking time to healthcare
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_walking_healthcare]
+  joiners:
+    - {source: map_walking_healthcare, joiner: raster_mean, res: hex, field: value, domain: global, label: map, unit: "minutes on foot to the nearest hospital or clinic", decimals: 0}
+  note: "Walking-only travel time to the nearest hospital or clinic (Malaria Atlas Project 2020), for people without motorised transport; the motorised time is the `care` dimension"
+
+- id: water
+  name: Working water points nearby
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [wpdx]
+  sources: [wpdx_water_points]
+  joiners:
+    - {source: wpdx_water_points, joiner: point_radius, res: hex, field: has_water, radius_km: 5, agg: mean, domain: global, label: wpdx, unit: "% of recorded water points within 5 km with water at the last visit", multiply: 100, decimals: 0}
+  note: "Share of the community water points recorded within 5 km (WPdx+, 19 countries in Africa and South Asia) that had water when last visited. Missing where no point is recorded, which is common in cities with piped water: no point never means no water. CC BY-SA 4.0"

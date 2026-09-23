@@ -36,3 +36,20 @@ def test_ged_loader_keeps_recent_precisely_located_events_as_deaths_per_year(tmp
     assert len(out) == 3
     assert out["fatal_per_year"].tolist() == pytest.approx([20 / len(YEARS), 5 / len(YEARS), 0.0])
     assert list(out.columns) == ["lat", "lng", "fatal_per_year"]
+
+
+def test_wpdx_loader_scores_water_present_and_drops_duplicates_and_unknowns(tmp_path):
+    from pipeline.prep.wpdx import load_csv
+
+    text = (
+        "#lat_deg,#lon_deg,#status_id,is_duplicate,#clean_country_id\n"
+        "-6.8,39.2,Yes,False,TZA\n"
+        "-6.9,39.3,No,False,TZA\n"
+        "-7.0,39.4,Unknown,False,TZA\n"
+        "-7.1,39.5,Yes,True,TZA\n"
+    )
+    path = tmp_path / "wpdx.csv"
+    path.write_text(text, encoding="utf-8")
+    out = load_csv(path)
+    assert list(out.columns) == ["lat", "lng", "has_water"]
+    assert out["has_water"].tolist() == [1.0, 0.0]  # Unknown -> dropped, duplicate -> dropped

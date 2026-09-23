@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DIM_ORDER, HAZARD_IDS } from "./lib/dims";
-import { PRESETS } from "./presets";
+import { PRESETS, presetById } from "./presets";
 
 describe("presets (SPEC §20.5)", () => {
   it("reference known dimensions with weights in 1..5", () => {
@@ -27,5 +27,13 @@ describe("presets (SPEC §20.5)", () => {
     const retiring = PRESETS.find((p) => p.id === "retiring")!;
     expect(retiring.weights.cost).toBe(2);
     expect(retiring.weights.rent).toBeUndefined();
+  });
+
+  it("use the NGO layers where they fit the persona", () => {
+    const w = (id: string) => presetById(id)!.weights;
+    expect(w("early").city).toBeGreaterThan(0);
+    expect(w("kids").conflict).toBeGreaterThan(0);
+    expect(w("kids").water).toBeGreaterThan(0);
+    expect(w("retiring").walkcare).toBeGreaterThan(0);
   });
 });

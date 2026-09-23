@@ -570,3 +570,26 @@
   verified: confirmed
   vintage: "fixture"
   files: [ged.csv]
+- id: map_walking_healthcare
+  name: fixture walking time to care (minutes)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/walkcare.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [walkcare.tif]
+- id: wpdx_water_points
+  name: fixture water points around Birch
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/wpdx.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [wpdx.csv]

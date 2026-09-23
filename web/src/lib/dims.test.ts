@@ -45,7 +45,7 @@ describe("dimension registry from the manifest", () => {
     expect(DIM_ORDER.slice(0, 14)).toEqual(["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"]);
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
     expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
-    expect(DIM_ORDER.slice(22)).toEqual(["city", "wealth", "conflict"]);
+    expect(DIM_ORDER.slice(22)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 

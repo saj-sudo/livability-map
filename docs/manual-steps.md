@@ -21,6 +21,7 @@ Last updated: 2026-09-23.
 | 8 | [Afrobarometer permission](#8-afrobarometer-permission) | LGBTQ+ tolerance by region in ~35 African countries | email + wait |
 | 9 | [UNICEF Giga API key](#9-unicef-giga-api-key) | school locations and school connectivity | 10 min |
 | 10 | [DHS modeled surfaces](#10-dhs-modeled-surfaces) | 5 km education, vaccination, wealth surfaces | 10 min + read terms |
+| 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
 
 Items 2-4 and 6 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
@@ -166,6 +167,15 @@ has 5 km surfaces for education, vaccination and wealth, behind an email form. T
 a README inside each download. Download one country, read the README, and note whether
 publishing derived values is allowed. If it is, save the surfaces under
 `data/raw/dhs_modeled_surfaces/` and ask Claude to wire them.
+
+### 11. WPdx licence confirmation
+
+The `water` layer uses the global WPdx+ export (https://data.waterpointdata.org/dataset/eqje-vguj),
+which states no licence for users. WPdx publishes the same country data on HDX as CC BY-SA, so the
+map records CC BY-SA 4.0 and labels the derived values share-alike (SPEC §13.37). Ask WPdx
+(https://www.waterpointdata.org/ , contact form) to confirm the licence for users of the global
+export. If they say CC BY 4.0, update `license` on `wpdx_water_points` in `pipeline/sources.yaml`
+and drop the share-alike label; nothing needs rebuilding.
 
 ---
 

@@ -620,6 +620,16 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     match the map's admin1 polygons for only 70% of regions (Tanzania, Uganda and Rwanda among
     the structural mismatches), and World Bank GSAP already covers the same ground. Sources that
     need a login, a key or permission are listed in `docs/manual-steps.md`.
+37. **Walking time to care, water points, presets** (2026-09-23): `walkcare` is MAP's walking-only
+    travel time to the nearest hospital or clinic (2020, CC BY 3.0), beside the motorised `care`,
+    because many people in Sub-Saharan Africa have no motorised transport. `water` is the share of
+    WPdx+ community water points within 5 km that had water at the last visit (19 countries, incl.
+    all of East Africa); it is missing where no point is recorded, since WPdx covers community
+    points and a city on piped water has few. WPdx's global export states no user licence; the
+    data is recorded as CC BY-SA 4.0, as WPdx publishes it on HDX, with the derived attributes
+    labelled share-alike (confirmation requested in docs/manual-steps.md). The presets use the new
+    layers where they fit: Early career weights `city`, Raising kids `conflict` and `water`,
+    Retiring `walkcare`.
 
 ## 14. VERIFY before code depends on it
 
@@ -693,6 +703,8 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-23 | Meta Relative Wealth Index (HDX) | **confirmed** by download: combined 93-country CSV with quadkeys (122 MB, 2,463,901 zoom-14 tiles; latitude / longitude = tile centre, rwi, error; no country column). HDX licence field quotes CC BY-NC 4.0 with the PNAS 2022 citation. Per-country files (110) also checked: the Moldova and North Macedonia resources have swapped URLs, and IND+PAK is one file; the combined file is used, ranked per hex country. | https://data.humdata.org/dataset/relative-wealth-index |
 | 2026-09-23 | UCDP GED 26.1 | **confirmed** by download: `ged261-csv.zip` (39 MB, `GEDEvent_v26_1.csv`, 417,968 events 1989-2025, 49 columns incl. latitude, longitude, best, year, where_prec 1-7 per the codebook). Licence on the downloads page: CC BY 4.0, cite Davies, Pettersson & Öberg (2026) and Sundberg & Melander (2013). | https://ucdp.uu.se/downloads/ |
 | 2026-09-23 | OPHI global MPI 2025 subnational (not used) | **confirmed** by download (`subnational-results-mpi.xlsx`, 1,359 regions in 101 countries; OPHI FAQ: CC BY 4.0, HDX: CC0). Name match to geoBoundaries ADM1 only 70% (survey regions differ from admin1); not added, §13.36. | https://data.humdata.org/dataset/global-mpi |
+| 2026-09-23 | MAP walking-only travel time to healthcare 2020 | **confirmed** by download via WCS (`Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare`): 3.03 GB float32 GeoTIFF, nodata -9999, minutes 0-138,745 (median 798 over land pixels). CC BY 3.0 per the MAP open-access policy (no layer exceptions); Earth Engine lists CC BY 4.0. | https://malariaatlas.org/open-access-policy/ |
+| 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 
 ## 16. Phasing and session plan
 
@@ -918,6 +930,8 @@ where the hovered or clicked hex has `_res = none`.
 | city | Access to a city | Malaria Atlas Project travel time to the nearest city of 50,000+, 2015, CC BY 3.0 (`hex`) | same | a proxy for access to jobs and services, not the job market |
 | wealth | Relative wealth within the country | Meta Relative Wealth Index 2021, 93 LMICs, CC BY-NC 4.0 (`hex`, ranked within each country) | - | relative, never compared across countries |
 | conflict | Armed conflict nearby | UCDP GED 26.1 deaths per year within 25 km, 2016-2025, CC BY 4.0 (`hex`) | same | ACLED excluded (no redistribution) |
+| walkcare | Walking time to healthcare | MAP walking-only travel time to the nearest facility, 2020, CC BY 3.0 (`hex`) | same | the motorised time is `care` |
+| water | Working water points nearby | WPdx+ share of water points within 5 km with water, 19 countries, CC BY-SA 4.0 (`hex`) | - | missing where no point is recorded |
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |

@@ -38,7 +38,7 @@ export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multi
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -78,6 +78,8 @@ const FALLBACK: DimInfo[] = [
   F("city", "Access to a city", "life", "score", "worse", "Global"),
   F("wealth", "Relative wealth", "life", "score", "better", "Within country"),
   F("conflict", "Armed conflict nearby", "life", "score", "worse", "Global"),
+  F("walkcare", "Walking time to healthcare", "life", "score", "worse", "Global"),
+  F("water", "Working water points nearby", "life", "score", "better", "Global"),
 ];
 
 // scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country

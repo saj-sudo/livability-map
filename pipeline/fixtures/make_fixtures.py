@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 10  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 11  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -562,6 +562,14 @@ def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
     rwi = np.where(west, (glng - 11.0), (glng - 13.0))  # -1..1 within each country
     pd.DataFrame({"lat": np.round(glat[on], 4), "lng": np.round(glng[on], 4), "rwi": np.round(rwi[on], 3)}).to_csv(out / "rwi.csv", index=False)
     pd.DataFrame({"lat": [42.52, 42.45, 42.6], "lng": [13.02, 12.95, 13.1], "fatal_per_year": [3.0, 1.5, 0.5]}).to_csv(out / "ged.csv", index=False)
+    # walking time to care: three times the motorised stand-in; water points around Birch only (so
+    # other places are missing, as outside WPdx coverage), with water at most of them
+    walk = np.where(land, 30.0 + 1800.0 * dist, -9999.0)
+    _write_tif(out / "walkcare.tif", walk, transform, -9999.0)
+    wl = np.linspace(11.3, 11.7, 9)
+    wlng, wlat = np.meshgrid(wl, np.linspace(40.8, 41.2, 9))
+    has = (np.arange(wlng.size) % 4 != 0).astype(float)
+    pd.DataFrame({"lat": wlat.ravel().round(4), "lng": wlng.ravel().round(4), "has_water": has}).to_csv(out / "wpdx.csv", index=False)
 
 
 def build(out: Path) -> dict[str, str]:

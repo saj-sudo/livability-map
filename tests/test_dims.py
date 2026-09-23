@@ -170,3 +170,7 @@ def test_ngo_hex_layers_on_fixtures(settings):
     assert (inh["conflict_res"] == "hex").all() and (inh["conflict_raw"] == 0).any()  # a real zero: no event nearby
     cedar = df.set_index("h3").loc[_cell(42.5, 13.0)]
     assert cedar["conflict_raw"] > 0
+    # walking time to care (raster) and working water points within 5 km (missing where none recorded)
+    assert (inh["walkcare_res"] == "hex").mean() > 0.95 and (inh["walkcare_raw"] >= inh["care_raw"]).mean() > 0.9
+    assert inh["water_raw"].dropna().between(0, 1).all() and inh["water_raw"].notna().any()
+    assert inh["water_raw"].isna().any() and (inh.loc[inh["water_raw"].isna(), "water_res"] == "none").all()

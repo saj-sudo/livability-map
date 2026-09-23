@@ -21,6 +21,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+import rasterio.windows
 import shapely
 from rasterio import features
 from shapely.geometry import shape
@@ -39,26 +40,36 @@ def _empty(kind: str) -> gpd.GeoDataFrame:
 
 def polygons_from_raster(path: Path, bbox: BBox | None = None, nodata: float | None = None, window_size: int = 2048) -> gpd.GeoDataFrame:
     """Urban centre and cluster polygons from a GHS-SMOD class raster (EPSG:4326)."""
-    pieces: dict[str, list] = {k: [] for k in KINDS}
+    inner: dict[str, list] = {k: [] for k in KINDS}  # pieces wholly inside their window: final
+    edge: dict[str, list] = {k: [] for k in KINDS}  # pieces touching a window edge: may continue next door
     with rasterio.open(path) as src:
         nd = nodata if nodata is not None else src.nodata
+        tol = abs(src.transform.a) / 2
         for window in h3util.iter_windows(src, bbox, window_size):
             arr = src.read(1, window=window)
             valid = h3util._mask_valid(arr.astype("float64"), nd)
             transform = src.window_transform(window)
+            wx0, wy0, wx1, wy1 = rasterio.windows.bounds(window, src.transform)
             for kind, lo in KINDS.items():
                 mask = valid & (arr >= lo)
                 if not mask.any():
                     continue
                 for geom, _ in features.shapes(mask.astype("uint8"), mask=mask, transform=transform):
-                    pieces[kind].append(shape(geom))
+                    poly = shape(geom)
+                    x0, y0, x1, y1 = poly.bounds
+                    touches = x0 - wx0 < tol or wx1 - x1 < tol or y0 - wy0 < tol or wy1 - y1 < tol
+                    (edge if touches else inner)[kind].append(poly)
     frames = []
     for kind in KINDS:
-        if not pieces[kind]:
+        if not inner[kind] and not edge[kind]:
             frames.append(_empty(kind))
             continue
-        merged = shapely.unary_union(pieces[kind])  # joins pieces that met at window edges
-        polys = list(merged.geoms) if merged.geom_type == "MultiPolygon" else [merged]
+        # only pieces that touch a window edge can join across windows; unioning just those keeps
+        # the global run to seconds (a single union of all ~230k pieces ran for over half an hour)
+        polys = list(inner[kind])
+        if edge[kind]:
+            merged = shapely.unary_union(edge[kind])
+            polys += list(merged.geoms) if merged.geom_type == "MultiPolygon" else [merged]
         gdf = gpd.GeoDataFrame({"kind": [kind] * len(polys)}, geometry=polys, crs=4326)
         gdf["area_km2"] = gdf.to_crs(6933).area / 1e6
         gdf = gdf.sort_values("area_km2", ascending=False, kind="stable").reset_index(drop=True)

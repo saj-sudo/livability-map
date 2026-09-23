@@ -453,7 +453,15 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
 - `dims --only <id> [--only <id> ...]` recomputes the named dimensions and merges them into the
   existing `dims_r{res}.parquet`; use it to add a layer, and run without it when a prepared
   layer or the registry changed for a dimension you did not name.
-- Neighbourhood resolution (Session 8, 2026-09-22): SESSION8_MEASUREMENTS
+- Neighbourhood resolution (Session 8, 2026-09-23 run): urban 39 s / 1.2 GB; grid res 6 + 7
+  512 s / 1.8 GB -> 963,098 res-6 cells (670,216 inhabited) and 401,729 res-7 cells (357,504
+  inhabited), over twice the first estimate because GHS-SMOD class 21 (peri-urban) is widespread;
+  pop 122 s, admin 15 s, hazards 1,609 s / 2.9 GB (cell-set aggregation reads only windows the cells
+  touch); dims res 6 14,553 s and res 7 4,931 s, peak 7.9 GB (US tract overlays dominate); the three
+  refreshed dimensions at res 4 + 5 via `dims --only` 795 s; score 13 s, export 28 s. Tiles:
+  hexes.pmtiles 146.5 MB (10,984 tiles), hexes_nbhd.pmtiles 206.2 MB (30,430 tiles, 952 s),
+  hexes_city.pmtiles 254.3 MB (128,730 tiles, 705 s). hex7 at z10-13 made a 531 MB archive (z13
+  alone 276 MB), so hex7 is tiled z10-12 and overzoomed.
 - Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
   when one would pass that (§14.10).
 
@@ -549,7 +557,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
 31. **Urban mask** (Saj, 2026-09-22): GHS-SMOD R2023A epoch 2025 at 30 arc-seconds, the same grid as
     GHS-POP, not the 1.7 GB GHS-UCDB. The `urban` stage polygonises class 30 (urban centre) and
     classes >= 21 (urban cluster) into `data/interim/urban.parquet` with `uc_id`, `kind` and
-    `area_km2`, the saved layer Session 11 reuses for block hexes. SESSION8_URBAN_COUNTS
+    `area_km2`, the saved layer Session 11 reuses for block hexes. Epoch 2025: 12,195 urban centres
+    and 226,941 urban clusters; only pieces touching a raster window edge are unioned, on a
+    sub-pixel precision grid so seams close (a single global union ran for over half an hour).
 32. **Resolution plan and reference scoring** (Saj, 2026-09-22): `pipeline/resolution_plan.yaml`
     replaces the flat resolution list (§9.1). Res 6 covers the US, EU-27, UK and EFTA plus every
     urban cluster, res 7 every urban centre. A derived resolution is ranked against the inhabited
@@ -566,7 +576,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     (employment rate of 15-64s, tag `grid`, domain `eu`) and the English Indices of Deprivation
     2025 on LSOA 2021 (employment, health and housing-barrier domains, tag `area`, domain `uk`)
     ship in this session; German Zensus, Dutch CBS, French IRIS, Canadian DAs and Australian SA2
-    follow the same pattern. A joiner may declare `higher_is` opposite to its dimension (IoD
+    follow the same pattern. Germany, France, Switzerland and Latvia publish no usable
+    employment count on the grid (EMP -9999 in over half their populated cells), so their grid
+    employment is treated as missing and those hexes fall back to OECD / ILOSTAT. A joiner may declare `higher_is` opposite to its dimension (IoD
     deprivation feeding `jobs`); the score stage reflects that joiner's percentile so every
     `{id}_score` obeys the dimension's direction, and the raw value ships as published.
 

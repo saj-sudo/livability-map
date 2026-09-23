@@ -79,6 +79,12 @@ def fetch(ctx: typer.Context, only: list[str] = typer.Option(None, "--only", hel
 
 
 @app.command()
+def urban(ctx: typer.Context) -> None:
+    """GHS-SMOD urban centres and clusters as saved polygons with ids (SPEC §13.31)."""
+    _run_stage("urban", _settings(ctx))
+
+
+@app.command()
 def grid(ctx: typer.Context) -> None:
     """Land polygons -> H3 hexes (SPEC §5 grid)."""
     _run_stage("grid", _settings(ctx))

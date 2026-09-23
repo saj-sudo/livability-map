@@ -133,7 +133,9 @@ class _Acc:
     n_pixels: dict[str, int] = field(default_factory=dict)
 
 
-def _iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> Iterable[Window]:
+def iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> Iterable[Window]:
+    """Read windows covering ``bbox`` (or the whole raster): square tiles for tiled files, full-width
+    strips for striped ones. Shared by the raster aggregations and the urban stage."""
     if bbox is None:
         full = Window(0, 0, src.width, src.height)
     else:
@@ -311,7 +313,7 @@ def aggregate_raster(
         if src.crs is None or not src.crs.is_geographic:
             raise ValueError(f"{path}: raster must be in a geographic CRS (EPSG:4326); reproject first")
         nd = nodata if nodata is not None else src.nodata
-        for window in _iter_windows(src, bbox, window_size):
+        for window in iter_windows(src, bbox, window_size):
             arr = src.read(band, window=window).astype("float64")
             valid = _mask_valid(arr, nd)
             if not valid.any():
@@ -360,7 +362,7 @@ def aggregate_rasters(
             if s.shape != first.shape or not np.allclose(tuple(s.transform)[:6], tuple(first.transform)[:6]):
                 raise ValueError(f"{s.name}: rasters are not aligned with {first.name} (shape or transform differ); resample first")
         nodatas = [nodata if nodata is not None else s.nodata for s in srcs]
-        for window in _iter_windows(first, bbox, window_size):
+        for window in iter_windows(first, bbox, window_size):
             stack = np.stack([s.read(band, window=window).astype("float64") for s in srcs])  # (k, h, w)
             valid_each = np.stack([_mask_valid(stack[k], nodatas[k]) for k in range(len(srcs))])
             valid = valid_each.any(axis=0)

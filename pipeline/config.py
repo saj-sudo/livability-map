@@ -19,7 +19,8 @@ NON_COMMERCIAL: bool = True  # §13.13
 
 # invariant 2 (SPEC §6.1). hex = computed per hex from a raster or point set; basin = a
 # hydrological sub-basin polygon (Aqueduct) sampled at the hex centroid
-RES_TAGS = ("hex", "basin", "admin1", "county", "tract", "national", "none")
+# grid = a statistical grid (Eurostat 1 km census cells) aggregated per hex (Session 8, SPEC §13.34)
+RES_TAGS = ("hex", "grid", "basin", "admin1", "county", "tract", "national", "none")
 
 BBox = tuple[float, float, float, float]  # minlng, minlat, maxlng, maxlat
 

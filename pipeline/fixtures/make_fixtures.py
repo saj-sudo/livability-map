@@ -15,8 +15,8 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - cost-of-living stand-ins: states (BEA-like price parity for two of the three XKB regions, so
   the third falls through to the national fallback), ICP-like (XA only) and WDI-like (both)
   national price levels
-- neighbourhood statistics (Session 8): a Eurostat-like 1 km grid of points over XKA and
-  LSOA-like deprivation polygons over B-Mid (XKB)
+- neighbourhood statistics (Session 8): a Eurostat-like 1 km grid of points over north-east XKA
+  and LSOA-like deprivation polygons over south-east XKA (west XKA keeps the OECD stand-in)
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -480,10 +480,11 @@ def smod_raster(pop: np.ndarray, land: np.ndarray) -> np.ndarray:
 
 
 def eurostat_grid(LNG, LAT, pop: np.ndarray, land: np.ndarray) -> pd.DataFrame:
-    """A 1 km-ish statistical grid over XKA (lng < 12) standing in for the Eurostat census grid:
-    one point per populated pixel with counts and an employment rate that rises eastwards and
-    northwards (so res-6 hexes get a visible gradient)."""
-    sel = land & (LNG < 12.0) & (pop > 0)
+    """A 1 km-ish statistical grid over north-east XKA (lng 11-12, lat >= 42: "EU") standing in for
+    the Eurostat census grid: one point per populated pixel with counts and an employment rate
+    that rises eastwards and northwards (so res-6 hexes get a visible gradient). West of lng 11
+    XKA keeps its OECD stand-in, so both paths stay tested."""
+    sel = land & (LNG >= 11.0) & (LNG < 12.0) & (LAT >= 42.0) & (pop > 0)
     lng, lat, p = LNG[sel], LAT[sel], pop[sel]
     emp_rate = np.clip(0.5 + 0.2 * (lng - 10.0) / 2.0 + 0.1 * (lat - 42.0) / 2.0, 0.3, 0.9)
     pop_1564 = np.round(p * 0.65)
@@ -501,20 +502,21 @@ def eurostat_grid(LNG, LAT, pop: np.ndarray, land: np.ndarray) -> pd.DataFrame:
 
 
 def lsoa_layer(land_geom) -> gpd.GeoDataFrame:
-    """0.05 degree squares over B-Mid (XKB, lng 12-14, lat 41.5-43) standing in for LSOAs with
-    IoD-like scores; deprivation rises northwards so the jobs / health / house joiners get a
-    gradient. Columns match what prep/imd.py produces from the real files."""
+    """0.05 degree squares over south-east XKA (lng 11-12, lat 40-42: "England", around Birch)
+    standing in for LSOAs with IoD-like scores; deprivation rises northwards so the jobs / health /
+    house joiners get a gradient. Kept off XKB, whose US-like layers would win first. Columns
+    match what prep/imd.py produces from the real files."""
     rows = []
-    for i, x0 in enumerate(np.arange(12.0, 14.0, 0.05)):
-        for j, y0 in enumerate(np.arange(41.5, 43.0, 0.05)):
+    for i, x0 in enumerate(np.arange(11.0, 12.0, 0.05)):
+        for j, y0 in enumerate(np.arange(40.0, 42.0, 0.05)):
             geom = box(x0, y0, x0 + 0.05, y0 + 0.05).intersection(land_geom)
             if geom.is_empty:
                 continue
-            t = (y0 - 41.5) / 1.5
+            t = (y0 - 40.0) / 2.0
             rows.append(
                 {
                     "LSOA21CD": f"X0{i:02d}{j:02d}",
-                    "LSOA21NM": f"B-Mid {i:02d}{j:02d}",
+                    "LSOA21NM": f"A-South {i:02d}{j:02d}",
                     "emp_dep_rate": round(0.05 + 0.2 * t, 4),
                     "health_dep": round(-1.0 + 2.0 * t, 4),
                     "housing_barriers": round(10.0 + 30.0 * t, 3),

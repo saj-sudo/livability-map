@@ -67,10 +67,12 @@
   group: life
   kind: score
   higher_is: better
-  coverage: [global, oecd, us]
-  sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence, ilostat_youth_unemp]
+  coverage: [global, oecd, us, eu, uk]
+  sources: [acs_summary, cb_tracts, eurostat_census_grid_2021, eng_imd_2025, ons_lsoa_2021, oecd_regional_wellbeing, oecd_tl2_correspondence, ilostat_youth_unemp]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29, weight_field: pop_16_29, domain: us, label: acs, unit: "% employed (ages 16-29)", multiply: 100, decimals: 0}
+    - {source: eurostat_census_grid_2021, joiner: point_mean, res: grid, field: emp_rate, weight_field: pop_1564, domain: eu, label: eugrid, unit: "% employed (ages 15-64)", multiply: 100, decimals: 0}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: tract, field: emp_dep_rate, weight_field: pop_working, domain: uk, label: imd, higher_is: worse, unit: "% of working-age people employment-deprived (IoD2025, higher = worse)", multiply: 100, decimals: 0}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score, domain: oecd, label: oecd, unit: "/ 10 (OECD jobs score)", decimals: 1}
     - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: youth_employment_rate, domain: global, label: ilostat, unit: "% of 15-24s employed", decimals: 0}
   note: "US: employment rate of civilians aged 16-29 (ACS B23001). OECD: Jobs well-being score 0-10 (TL2). Global: 100 - youth (15-24) unemployment rate (ILOSTAT). Different constructs, labeled; all higher = better"
@@ -149,10 +151,11 @@
   group: life
   kind: score
   higher_is: worse
-  coverage: [oecd, us]
-  sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence]
+  coverage: [oecd, us, uk]
+  sources: [acs_summary, cb_tracts, eng_imd_2025, ons_lsoa_2021, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: rent_share_income, weight_field: renter_households, domain: us, label: acs, unit: "% of income on rent", decimals: 0}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: tract, field: housing_barriers, weight_field: population, domain: uk, label: imd, unit: "barriers to housing and services score (IoD2025, higher = worse)", decimals: 1}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: housing_burden, domain: oecd, label: oecd, unit: "/ 10 (OECD, higher = worse)", decimals: 1}
   note: "US: median gross rent as % of household income (ACS B25071). OECD: 10 - Housing well-being score (rooms per person, affordability satisfaction), so higher = worse housing conditions"
 
@@ -161,10 +164,11 @@
   group: life
   kind: score
   higher_is: better
-  coverage: [oecd, us]
-  sources: [hrsa_ahrf, cb_counties, acs_summary, oecd_regional_wellbeing, oecd_tl2_correspondence]
+  coverage: [oecd, us, uk]
+  sources: [hrsa_ahrf, cb_counties, acs_summary, eng_imd_2025, ons_lsoa_2021, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
     - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us, label: hrsa, unit: "physicians per 10,000", decimals: 1}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: tract, field: health_dep, weight_field: population, domain: uk, label: imd, higher_is: worse, unit: "health deprivation score (IoD2025, higher = worse)", decimals: 2}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_score, domain: oecd, label: oecd, unit: "/ 10 (OECD health score)", decimals: 1}
   note: "US: active non-federal MDs per 10,000 residents (HRSA AHRF, county population from ACS). OECD: Health well-being score 0-10 (life expectancy, mortality), an outcome not access. Different constructs, labeled"
 

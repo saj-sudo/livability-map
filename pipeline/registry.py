@@ -62,7 +62,8 @@ class Source:
 
 
 SCALES = ("percentile", "minmax")
-HEX_JOINERS = ("raster_mean", "point_mean")  # the joiners that produce the `hex` resolution tag
+HEX_JOINERS = ("raster_mean", "point_mean")  # the joiners that compute per hex
+HEX_TAGS = ("hex", "grid")  # hex = raster / point set; grid = statistical grid cells (SPEC §13.34)
 RASTER_FORMATS = ("geotiff", "geotiff-zip", "netcdf", "netcdf-zip")  # what raster_mean can read (netcdf via prep/rasters.py)
 COMPOSITION_KEYS = ("w", "b", "h", "a", "o")  # §6.1: {id}_w/b/h/a/o shares
 
@@ -231,10 +232,10 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     raise ValueError(f"{did}: composition joiners need `fields` with keys {COMPOSITION_KEYS}: {j}")
             elif fields:
                 raise ValueError(f"{did}: `fields` is only valid for composition dimensions: {j}")
-            if j.get("joiner") in HEX_JOINERS and j.get("res") != "hex":
-                raise ValueError(f"{did}: {j.get('joiner')} computes per hex, so res must be `hex`: {j}")
-            if j.get("joiner") not in HEX_JOINERS and j.get("res") == "hex":
-                raise ValueError(f"{did}: only {HEX_JOINERS} may carry the `hex` resolution tag: {j}")
+            if j.get("joiner") in HEX_JOINERS and j.get("res") not in HEX_TAGS:
+                raise ValueError(f"{did}: {j.get('joiner')} computes per hex, so res must be `hex` or `grid`: {j}")
+            if j.get("joiner") not in HEX_JOINERS and j.get("res") in HEX_TAGS:
+                raise ValueError(f"{did}: only {HEX_JOINERS} may carry the `hex` or `grid` resolution tag: {j}")
             if j.get("sample", "mean") not in ("mean", "centroid"):
                 raise ValueError(f"{did}: sample must be mean or centroid: {j}")
             if j.get("higher_is") not in (None, "better", "worse"):

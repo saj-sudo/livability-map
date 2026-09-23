@@ -394,7 +394,7 @@
   vintage: VERIFY
   files: [whr.csv]
 - id: eurostat_census_grid_2021
-  name: fixture 1 km statistical grid points (Eurostat-like, XKA)
+  name: fixture 1 km statistical grid points (Eurostat-like, north-east XKA)
   group: life
   access: fixture
   url: file://pipeline/fixtures/data/eurostat_grid.csv
@@ -405,7 +405,7 @@
   vintage: "fixture"
   files: [eurostat_grid.csv]
 - id: eng_imd_2025
-  name: fixture LSOA-like deprivation polygons (IoD-like, B-Mid) already joined to geometry
+  name: fixture LSOA-like deprivation polygons (IoD-like, south-east XKA) already joined to geometry
   group: life
   access: fixture
   url: file://pipeline/fixtures/data/lsoa.gpkg

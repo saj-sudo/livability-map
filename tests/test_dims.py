@@ -49,7 +49,7 @@ def test_dims_never_writes_zero_for_missing(settings):
 def test_life_dims_global_fallbacks(settings):
     _run_all(settings)
     df = sanity.load_merged(settings, 4)
-    xa = df[(df["iso_a2"] == "XA") & (df["lng"] < 11.5)]  # away from the XKB border where tracts could leak in
+    xa = df[(df["iso_a2"] == "XA") & (df["lng"] < 10.6)]  # west XKA: away from the XKB tracts and the east-XKA grid / LSOA stand-ins
     xb = df[(df["iso_a2"] == "XB") & (df["lng"] > 12.5)]
     # jobs: OECD TL2 stand-in covers XKA (admin1, oecd domain); XKB is tract-covered by the ACS stand-in
     assert (xa["jobs_res"] == "admin1").all() and (xa["jobs_dom"] == "oecd").all()
@@ -123,3 +123,26 @@ def test_overlay_chunking_does_not_change_results(settings, monkeypatch):
     chunked = pd.read_parquet(settings.stage_path("dims", 4))
     for col in ("jobs_raw", "race_w", "transit_raw", "house_raw"):
         pd.testing.assert_series_equal(full[col], chunked[col], check_exact=False, rtol=1e-6)
+
+
+def test_grid_and_imd_joiners_fill_the_fixture_regions(settings):
+    from pipeline.stages import urban
+
+    settings.res = [4, 5, 6]
+    fetch.run(settings)
+    urban.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    dims.run(settings)
+    d6 = sanity.load_merged(settings, 6)
+    inh = d6[d6["inhabited"]]
+    east = inh[inh["iso_a2"] == "XA"]
+    north = east[(east["lng"] > 11.1) & (east["lng"] < 11.9) & (east["lat"] > 42.1)]
+    south = east[(east["lng"] > 11.1) & (east["lng"] < 11.9) & (east["lat"] < 41.9)]
+    assert len(north) and len(south)
+    assert (north["jobs_res"] == "grid").all() and (north["jobs_dom"] == "eu").all()
+    assert d6.loc[d6["jobs_res"] == "grid", "jobs_raw"].between(0.3, 0.9).all()
+    for dim in ("jobs", "health", "house"):  # IoD stand-in over south-east XKA
+        assert (south[f"{dim}_res"] == "tract").all() and (south[f"{dim}_dom"] == "uk").all(), dim
+    assert south["jobs_raw"].between(0.05, 0.25).all()  # the employment deprivation rate, not reflected in _raw

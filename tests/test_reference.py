@@ -39,18 +39,18 @@ def test_missing_reference_is_a_plain_error(settings):
 
 def test_empty_reference_domain_leaves_scores_missing(settings):
     # A derived hex whose domain has no reference value: score stays NA, never 0. Simulated by
-    # blanking the `oecd` domain out of the res-5 dims parquet before scoring res 6.
+    # blanking the `uk` domain out of the res-5 dims parquet before scoring res 6.
     settings.res = [4, 5, 6]
     _run(settings, fetch, urban, grid, pop, admin, hazards, dims)
     settings.res = [4, 5]
     score.run(settings)  # the reference needs its own scores (bivariate cuts) before res 6 is scored
     p5 = settings.stage_path("dims", 5)
     d5 = pd.read_parquet(p5)
-    d5.loc[d5["jobs_dom"] == "oecd", "jobs_raw"] = np.nan
+    d5.loc[d5["jobs_dom"] == "uk", "jobs_raw"] = np.nan
     d5.to_parquet(p5, index=False)
     settings.res = [6]
     score.run(settings)
     r6 = sanity.load_merged(settings, 6)
-    assert (r6["jobs_dom"] == "oecd").any()
-    assert r6.loc[r6["jobs_dom"] == "oecd", "jobs_score"].isna().all()
-    assert r6.loc[(r6["jobs_dom"] != "oecd") & r6["jobs_raw"].notna(), "jobs_score"].notna().any()
+    assert (r6["jobs_dom"] == "uk").any()
+    assert r6.loc[r6["jobs_dom"] == "uk", "jobs_score"].isna().all()
+    assert r6.loc[(r6["jobs_dom"] != "uk") & r6["jobs_raw"].notna(), "jobs_score"].notna().any()

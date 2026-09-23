@@ -90,7 +90,8 @@ def test_fixture_world_has_urban_classes_and_grids(fixture_dir):
         assert arr[row, col] == 11
     grid = pd.read_csv(fixture_dir / "eurostat_grid.csv")
     assert {"lat", "lng", "pop", "pop_1564", "emp", "emp_rate", "share_ge65"} <= set(grid.columns)
-    assert grid["lng"].between(10, 12).all()  # XKA only
+    assert grid["lng"].between(11, 12).all() and (grid["lat"] >= 42).all()  # north-east XKA only
     lsoa = gpd.read_file(fixture_dir / "lsoa.gpkg")
     assert {"LSOA21CD", "emp_dep_rate", "health_dep", "housing_barriers", "population", "pop_working"} <= set(lsoa.columns)
-    assert lsoa.total_bounds[0] >= 12.0  # XKB B-Mid only
+    minx, _, maxx, maxy = lsoa.total_bounds
+    assert minx >= 11.0 - 1e-9 and maxx <= 12.0 + 1e-9 and maxy <= 42.0 + 1e-9  # south-east XKA only

@@ -102,3 +102,18 @@ def test_unit_fields_are_validated(tmp_path):
     d = load_dimensions(p)["x"]
     assert d.joiners[0].unit == "things" and d.joiners[0].decimals == 2
 
+
+def test_grid_tag_allowed_only_for_hex_joiners(tmp_path):
+    import yaml
+
+    root = find_root()
+    sources = load_sources(root / "pipeline" / "sources.yaml")
+    ok = {"id": "g", "name": "g", "group": "life", "kind": "score", "sources": ["eurostat_census_grid_2021"], "joiners": [{"source": "eurostat_census_grid_2021", "joiner": "point_mean", "res": "grid", "field": "emp_rate", "domain": "eu", "label": "x"}]}
+    bad = {**ok, "joiners": [{"source": "acs_summary", "joiner": "area_weighted_overlay", "res": "grid", "field": "f", "domain": "us", "label": "x"}]}
+    p = tmp_path / "dims.yaml"
+    p.write_text(yaml.safe_dump([ok]), encoding="utf-8")
+    assert "g" in load_dimensions(p, sources)
+    p.write_text(yaml.safe_dump([bad]), encoding="utf-8")
+    with pytest.raises(ValueError, match="grid"):
+        load_dimensions(p, sources)
+    assert "grid" in RES_TAGS

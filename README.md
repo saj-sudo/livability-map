@@ -35,37 +35,47 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   - WB CCKP CMIP6 hd35: hot days > 35C     - Global Data Lab Subnational HDI (admin1)         - geoBoundaries CGAZ admin0 + admin1
   - WRI Aqueduct Floods riverine 1-in-100  - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
   - WRI Aqueduct Floods coastal 1-in-100   - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
-  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)
+  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
                                            - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
+                                           - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
+                                           - hex-level: MAP travel time, ACAG PM2.5, tree cover, Ookla
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
-  |                        pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 4] [--bbox ...] <stage>)|
+  |               pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 6] [--bbox ...] <stage>)  |
   |                                                                                                        |
   |  fetch     download + sha256 each source per pipeline/sources.yaml -> data/raw/<id>/                  |
   |            manual sources (GEE export, registration) are checked for presence, recipe printed         |
-  |  grid      Natural Earth land -> H3 cells at H3_RES (drop ocean) -> data/interim/hexes_r{res}.parquet |
+  |  urban     GHS-SMOD classes -> urban centre / cluster polygons with ids -> data/interim/urban.parquet |
+  |  grid      resolution plan (pipeline/resolution_plan.yaml, §9.1): res 4 + 5 from Natural Earth land,  |
+  |            res 6 = children of res-5 cells in US/EU/UK/EFTA or touching urban clusters, res 7 =       |
+  |            children inside urban centres -> data/interim/hexes_r{res}.parquet (one per resolution)   |
   |  pop       GHSL 1 km -> sum per hex -> population, inhabited flag (pop >= POP_MIN)                    |
   |  admin     hex centroid -> geoBoundaries admin0/admin1 -> iso_a2, admin1_id, admin1_name              |
-  |  hazards   for each raster: windowed read -> raster_to_h3 -> aggregate per hex (§8.1)                 |
-  |            -> per-hazard 0-100 percentile score + *_ok flag                                           |
+  |  hazards   for each raster: windowed read of the hexes' cells -> aggregate per hex (§8.1)            |
+  |            -> per-hazard 0-100 percentile score + *_ok flag (res 6/7 ranked against res 5, §13.32)    |
   |  dims      prep/<source>.py turns each raw source into a joinable layer; for each dimension in       |
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
-  |            area_weighted_overlay | point_density -> {id}_raw, {id}_res (admin1|county|tract|national|none)|
+  |            area_weighted_overlay | point_density | raster_mean | point_mean                          |
+  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
-  |            wb_score, bivar class 1-9 (§8.4)                                                            |
-  |  export    data/out/hexes_r{res}.parquet + manifest.json (§6.3); --geojson for tippecanoe             |
-  |  tiles     python tiler (tippecanoe optional) -> hexes.pmtiles: hex4 z2-4, hex5 z5-7 (§9, §13.18)    |
-  |  publish   hexes.pmtiles + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
+  |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
+  |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
+  |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_fine.pmtiles          |
+  |            (hex6 z8-9, hex7 z10-13, where built) (§9.1, §13.18, §13.33)                               |
+  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes.pmtiles   manifest.json           |
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  (basemap: OpenFreeMap)                  |
-  |  views: bivariate | per hazard |       |               +------------------------------------------+
+  |  on Cloudflare Pages                   |               |  hexes.pmtiles  hexes_fine.pmtiles       |
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
+  |  parents (ref) hidden under finer hexes|               +------------------------------------------+
+  |  views: bivariate | per hazard |       |
   |         wellbeing | my priorities      |
   |  presets + sliders (§20.5), legend,    |
   |  click -> inspector (feature props)    |

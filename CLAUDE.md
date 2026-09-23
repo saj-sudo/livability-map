@@ -31,6 +31,9 @@ uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also hap
 uv run python -m pipeline --res 4 all            # real data: fetch -> ... -> tiles -> publish (~35 min, 6 GB RAM)
 uv run python -m pipeline --res 4 --bbox 89.5,23,91.5,25 hazards   # subregion run (own interim/out dirs)
 uv run python -m pipeline --res 5 dims --only care --only net     # add layers without redoing the tract overlays
+uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
+uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
+uv run python -m pipeline tiles --archive hexes_fine             # one archive of the resolution plan
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```
@@ -40,7 +43,8 @@ and every script that writes repo files must use UTF-8 explicitly (`PYTHONUTF8=1
 code does.
 
 CLI options (`--fixtures`, `--res`, `--bbox minlng,minlat,maxlng,maxlat`, `--force`) are typer
-callback options and must precede the stage name. `all` runs stages in order and stops cleanly
+callback options and must precede the stage name. `--res` picks resolutions from the plan
+(default: all of them). `all` runs stages in order and stops cleanly
 at the first stage that is still planned (`pipeline/stages/PLANNED` maps stage to session).
 
 ## Environment constraint
@@ -59,6 +63,15 @@ stage. Paths depend on `fixtures`: real runs use `data/{raw,interim,out}` and
 `pipeline/fixtures/sources.yaml`. Fixture sources reuse the real source ids
 (`natural_earth_land`, `ghsl_pop`, `geoboundaries_adm0/1`, `cckp_hd35`, ...) so stages and
 `dimensions.yaml` work unchanged in both modes.
+
+**Resolution plan** (`pipeline/resolution_plan.yaml`, fixtures: `pipeline/fixtures/resolution_plan.yaml`,
+`resplan.py`, SPEC §9.1, §13.31-34). `land` entries (res 4, 5) cover every land cell; `children`
+entries (res 6: US/EU/UK/EFTA or near urban clusters; res 7: urban centres) are H3 children of
+matching parents from `urban.parquet` (the `urban` stage, GHS-SMOD) and adm0. Each entry names its
+zooms and PMTiles archive (`hexes`, `hexes_fine`); the tiler and web read them via the manifest.
+Derived resolutions are scored against res-5 distributions (`reference.py`); `export` sets `ref`
+on refined parents so the web hides them under the finer layer. Raster aggregation takes a cell
+set (`h3util.CellSet`) so derived resolutions cost what their cells cost.
 
 **Stage contract.** Each `pipeline/stages/<name>.py` exposes `run(settings)`. Stages write one
 parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`,
@@ -103,8 +116,9 @@ rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and 
 (weighted mean of points per hex). All return a Series aligned to the hexes index with NaN for
 missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
-sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `basin`, `admin1`,
-`county`, `tract`, `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
+sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km
+census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside the US, England
+LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
 **Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 6): a 4°x4° synthetic region

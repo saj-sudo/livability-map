@@ -273,3 +273,37 @@
   joiners:
     - {source: aqueduct_water_stress, joiner: polygon_centroid, res: basin, field: drr_cat, domain: global, label: aqueduct, unit: "drought risk category (0-4)", decimals: 0}
   note: "WRI Aqueduct drought risk category 0 (low) to 4 (high) of the sub-basin under the hex centroid; baseline from Aqueduct 3.0 carried into 4.0, no future-scenario drought exists; a quarter of sub-basins have no data"
+
+# ---- NGO hex layers (added 2026-09-23, SPEC §13.36): global or low- and middle-income coverage
+- id: city
+  name: Access to a city (travel time)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_travel_cities]
+  joiners:
+    - {source: map_travel_cities, joiner: raster_mean, res: hex, field: value, domain: global, label: map, unit: "minutes to the nearest city of 50,000+ (2015)", decimals: 0}
+  note: "Motorised travel time to the nearest city of 50,000 or more people in 2015 (Malaria Atlas Project, Weiss et al. 2018): a proxy for access to jobs, services and markets, not a measure of the job market itself"
+
+- id: wealth
+  name: Relative wealth (within the country)
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [lmic]
+  sources: [meta_rwi]
+  joiners:
+    - {source: meta_rwi, joiner: point_radius, res: hex, field: rwi, radius_km: 3, agg: mean, domain: country, domain_by_country: true, label: rwi, unit: "relative wealth index (0 = the country's average)", decimals: 2}
+  note: "Meta Relative Wealth Index (2021) for 93 low- and middle-income countries: satellite- and connectivity-based estimates of household wealth relative to the rest of the same country, averaged within 3 km. Ranked within each country only, so a score says how a place compares with its own country, not with the world. CC BY-NC 4.0"
+
+- id: conflict
+  name: Armed conflict nearby
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [ucdp_ged]
+  joiners:
+    - {source: ucdp_ged, joiner: point_radius, res: hex, field: fatal_per_year, radius_km: 25, agg: sum, domain: global, label: ucdp, unit: "conflict deaths per year within 25 km (2016-2025)", decimals: 1}
+  note: "Organised-violence deaths per year within 25 km, 2016-2025 (UCDP GED 26.1: state-based, non-state and one-sided violence; events located to within 25 km or to a district). 0 means no recorded event nearby, not a guarantee of safety"

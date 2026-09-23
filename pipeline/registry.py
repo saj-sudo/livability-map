@@ -14,7 +14,7 @@ VERIFY = "VERIFY"
 ACCESS_MODES = ("direct", "manual", "dataverse", "fixture")
 GROUPS = ("hazard", "wellbeing", "life", "env", "reference")  # env: present-day environment (air, trees, fire, drought)
 KINDS = ("score", "signed", "composition")
-JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density", "raster_mean", "point_mean")
+JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density", "raster_mean", "point_mean", "point_radius")
 
 
 @dataclass
@@ -62,7 +62,7 @@ class Source:
 
 
 SCALES = ("percentile", "minmax")
-HEX_JOINERS = ("raster_mean", "point_mean")  # the joiners that compute per hex
+HEX_JOINERS = ("raster_mean", "point_mean", "point_radius")  # the joiners that compute per hex
 HEX_TAGS = ("hex", "grid")  # hex = raster / point set; grid = statistical grid cells (SPEC §13.34)
 RASTER_FORMATS = ("geotiff", "geotiff-zip", "netcdf", "netcdf-zip")  # what raster_mean can read (netcdf via prep/rasters.py)
 COMPOSITION_KEYS = ("w", "b", "h", "a", "o")  # §6.1: {id}_w/b/h/a/o shares
@@ -97,11 +97,21 @@ class JoinSpec:
     # (a deprivation rate feeding a "higher = better" dimension); the score stage reflects its
     # percentile so every {id}_score obeys the dimension's direction
     higher_is: str | None = None
+    # point_radius only (SPEC §13.36): search radius (never below the hex edge length) and sum | mean
+    radius_km: float | None = None
+    agg: str = "mean"
+    # score each country as its own domain ("<domain>:<ISO2>"), for values that are relative within
+    # a country (Meta's Relative Wealth Index); never ranked against another country
+    domain_by_country: bool = False
 
     def to_manifest(self) -> dict[str, Any]:
         d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source, "unit": self.unit, "multiply": self.multiply, "decimals": self.decimals}
         if self.higher_is:
             d["higher_is"] = self.higher_is
+        if self.joiner == "point_radius":
+            d.update({"radius_km": self.radius_km, "agg": self.agg})
+        if self.domain_by_country:
+            d["domain_by_country"] = True
         if self.weight_field:
             d["weight_field"] = self.weight_field
         if self.fields:
@@ -240,6 +250,11 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                 raise ValueError(f"{did}: sample must be mean or centroid: {j}")
             if j.get("higher_is") not in (None, "better", "worse"):
                 raise ValueError(f"{did}: a joiner's higher_is must be better or worse: {j}")
+            if j.get("joiner") == "point_radius":
+                if not j.get("radius_km") or float(j["radius_km"]) <= 0:
+                    raise ValueError(f"{did}: point_radius needs a positive radius_km: {j}")
+                if j.get("agg", "mean") not in ("sum", "mean"):
+                    raise ValueError(f"{did}: point_radius agg must be sum or mean: {j}")
             if j.get("higher_is") and raw.get("scale", "percentile") == "minmax":
                 raise ValueError(f"{did}: a joiner's higher_is only applies to percentile scores, not scale: minmax: {j}")
             if sources is not None and j.get("joiner") == "raster_mean" and sources[j["source"]].format not in RASTER_FORMATS:
@@ -260,6 +275,9 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     decimate=int(j.get("decimate", 1)),
                     sample=str(j.get("sample", "mean")),
                     higher_is=j.get("higher_is"),
+                    radius_km=None if j.get("radius_km") is None else float(j["radius_km"]),
+                    agg=str(j.get("agg", "mean")),
+                    domain_by_country=bool(j.get("domain_by_country", False)),
                     **dict(zip(("unit", "multiply", "decimals"), _unit_fields(did, j, unit, multiply, decimals), strict=True)),
                 )
             )

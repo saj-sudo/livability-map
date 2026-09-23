@@ -581,7 +581,7 @@
   nodata: -9999
   native_res_m: ~1000
   license: CC BY 4.0
-  license_note: "licence text is on the Google Earth Engine catalog entry (projects/malariaatlasproject/assets/accessibility/accessibility_to_healthcare_2019): 'This work is licensed under a Creative Commons Attribution 4.0 International License'; malariaatlas.org itself has no licence page"
+  license_note: "malariaatlas.org/open-access-policy: MAP maps are available under the Creative Commons Attribution 3.0 Unported License with citation (the Earth Engine catalog lists MAP accessibility layers as CC BY 4.0)"
   verified: confirmed
   vintage: "Accessibility 202001 release (data year 2019), extent 60S-85N, 43200 x 17400"
   attribution: "D.J. Weiss, A. Nelson, C.A. Vargas-Ruiz et al. (2020) Global maps of travel time to healthcare facilities. Nature Medicine; Malaria Atlas Project"
@@ -872,3 +872,53 @@
   vintage: "ASGS Edition 3 (2021); 50.7 MB zip, 2,473 SA2 (19 without geometry)"
   attribution: "Based on Australian Bureau of Statistics data (ASGS Edition 3)"
   files: [SA2_2021_AUST_SHP_GDA2020.zip]
+
+# ---------------------------------------------------------------- NGO hex layers (SPEC §13.36) ----
+- id: map_travel_cities
+  name: Malaria Atlas Project, travel time to cities 2015 (Weiss et al. 2018), 30 arc-second
+  group: life
+  access: direct
+  url: https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Accessibility__201501_Global_Travel_Time_to_Cities&format=image/geotiff
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -9999
+  license: CC BY 3.0 (MAP open-access policy); the Google Earth Engine catalog lists the same data as CC BY 4.0
+  license_note: "malariaatlas.org/open-access-policy: 'Our maps are available to all users under the Creative Commons Attribution 3.0 Unported License ... We ask that any use of these maps provides the correct citation.'"
+  verified: confirmed
+  vintage: "2015; 3.03 GB int32 GeoTIFF, 43200 x 17400, minutes, land 0-41556 (median 413 over land pixels)"
+  attribution: "Weiss, D.J. et al. (2018) A global map of travel time to cities to assess inequalities in accessibility in 2015. Nature 553, 333-336. Malaria Atlas Project"
+  processing: "mean travel time (minutes) to the nearest city of 50,000+ over the hex's 1 km pixels (raster_mean)"
+  files: [Accessibility__201501_Global_Travel_Time_to_Cities.tif]
+
+- id: meta_rwi
+  name: Meta Data for Good Relative Wealth Index, 93 low- and middle-income countries (with quadkeys)
+  group: life
+  access: direct
+  url: https://data.humdata.org/dataset/76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/bff723a4-6b55-4c51-8790-6176a774e13c/download/relative-wealth-index-93-low-and-middle-income-countries-with-quadkeys-april-2021.csv
+  format: csv
+  crs: EPSG:4326
+  native_res_m: ~2400
+  license: CC BY-NC 4.0
+  license_note: "HDX license_other: 'Creative Commons Attribution-Non Commercial 4.0 International (CC BY-NC 4.0) ... Please cite ... Microestimates of wealth for all low- and middle-income countries, Chi, Fang, Chatterjee, Blumenstock, PNAS 2022'. Non-commercial: acceptable for this project (§13.30); derived wealth_* attributes carry the same licence"
+  verified: confirmed
+  vintage: "April 2021 release; 122 MB CSV, 2,463,901 zoom-14 tiles (~2.4 km), rwi -2.0 to 2.5 relative within each country"
+  attribution: "Chi, G., Fang, H., Chatterjee, S., Blumenstock, J.E. (2022) Microestimates of wealth for all low- and middle-income countries. PNAS 119(3). Relative Wealth Index, Meta Data for Good, via HDX"
+  processing: "tile centres averaged within 3 km of the hex centre (point_radius mean; radius never below the hex edge); ranked within each country (domain_by_country), never across countries (prep/meta_rwi.py)"
+  files: [relative-wealth-index-93-low-and-middle-income-countries-with-quadkeys-april-2021.csv]
+
+- id: ucdp_ged
+  name: UCDP Georeferenced Event Dataset, global version 26.1
+  group: life
+  access: direct
+  url: https://ucdp.uu.se/downloads/ged/ged261-csv.zip
+  format: csv-zip
+  member: GEDEvent_v26_1.csv
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "ucdp.uu.se/downloads: 'All datasets are free of charge and licensed under CC BY 4.0 - you are free to use and redistribute them provided you cite the relevant publications listed with each dataset.'"
+  verified: confirmed
+  vintage: "GED 26.1 (2026-03-30), 1989-2025, 417,968 events; 39 MB zip"
+  attribution: "Davies, Pettersson & Öberg (2026) Organized violence 1989-2025, and violent political protests. Journal of Peace Research; Sundberg & Melander (2013) Introducing the UCDP Georeferenced Event Dataset. JPR 50(4)"
+  processing: "events 2016-2025 with where_prec 1-3; best fatality estimate / 10 years summed within 25 km of the hex centre (point_radius sum); 0 = no recorded event within 25 km (prep/ucdp_ged.py)"
+  files: [ged261-csv.zip]

@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 9  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 10  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -544,6 +544,26 @@ def country_standins(out: Path) -> None:
     gpd.GeoDataFrame({"SA2_CODE_2021": ["X"], "population": [5000.0], "pop_15plus": [4000.0], "emp_rate": [0.6], "median_rent_weekly": [400.0], "rent_share_income": [0.2]}, geometry=[area], crs=4326).to_file(out / "au_sa2.gpkg", driver="GPKG")
 
 
+def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
+    """Stand-ins for the NGO hex layers (SPEC §13.36): a travel-time-to-cities raster (minutes,
+    growing with distance from the nearest town), Relative-Wealth-Index-like points on a 0.03°
+    grid whose value rises eastward within each country (so per-country ranking spans the scale in
+    both), and UCDP-like conflict events (fatalities per year) near Cedar."""
+    dist = _town_distance(LNG, LAT)
+    city = np.where(land, 5.0 + 600.0 * dist, -9999.0)
+    _write_tif(out / "city.tif", city, transform, -9999.0)
+    g = np.arange(10.015, 14.0, 0.03)
+    glng, glat = np.meshgrid(g, np.arange(40.015, 44.0, 0.03))
+    glng, glat = glng.ravel(), glat.ravel()
+    import shapely
+
+    on = shapely.contains(land_geometry().geometry.iloc[0], shapely.points(glng, glat))
+    west = glng < 12.0
+    rwi = np.where(west, (glng - 11.0), (glng - 13.0))  # -1..1 within each country
+    pd.DataFrame({"lat": np.round(glat[on], 4), "lng": np.round(glng[on], 4), "rwi": np.round(rwi[on], 3)}).to_csv(out / "rwi.csv", index=False)
+    pd.DataFrame({"lat": [42.52, 42.45, 42.6], "lng": [13.02, 12.95, 13.1], "fatal_per_year": [3.0, 1.5, 0.5]}).to_csv(out / "ged.csv", index=False)
+
+
 def build(out: Path) -> dict[str, str]:
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
@@ -561,6 +581,7 @@ def build(out: Path) -> dict[str, str]:
     eurostat_grid(LNG, LAT, pop, land).to_csv(out / "eurostat_grid.csv", index=False)
     lsoa_layer(land_gdf.geometry.iloc[0]).to_file(out / "lsoa.gpkg", driver="GPKG")
     country_standins(out)  # after Session 8: country grids and small areas (ocean corner, no effect)
+    ngo_layers(LNG, LAT, land, transform, out)  # after Session 8: travel time to cities, wealth, conflict
     _write_tif(out / "inunriver.tif", river_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     _write_tif(out / "inuncoast.tif", coast_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     heat_dataset().to_netcdf(out / "heat.nc", engine="netcdf4")

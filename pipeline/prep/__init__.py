@@ -23,7 +23,7 @@ from ..config import Settings
 from ..registry import Source, load_sources
 
 # Bump when any loader's output changes so cached layers are rebuilt.
-PREP_VERSION = 9
+PREP_VERSION = 10
 
 # source id -> "module:function" (imported lazily so this package stays import-light)
 LOADERS: dict[str, str] = {
@@ -57,6 +57,9 @@ LOADERS: dict[str, str] = {
     "fr_insee_iris_2021": "pipeline.prep.fr_iris:load",
     "ca_statcan_da_profile": "pipeline.prep.ca_statcan:load",
     "au_abs_sa2_gcp": "pipeline.prep.au_abs:load",
+    # NGO hex layers (SPEC §13.36)
+    "meta_rwi": "pipeline.prep.meta_rwi:load",
+    "ucdp_ged": "pipeline.prep.ucdp_ged:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read

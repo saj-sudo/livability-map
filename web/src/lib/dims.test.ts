@@ -44,7 +44,8 @@ describe("dimension registry from the manifest", () => {
     // the first fourteen slots are frozen: hazards, wellbeing, then the Session 4 life dimensions
     expect(DIM_ORDER.slice(0, 14)).toEqual(["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"]);
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
-    expect(DIM_ORDER.slice(16)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
+    expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
+    expect(DIM_ORDER.slice(22)).toEqual(["city", "wealth", "conflict"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 
@@ -95,5 +96,10 @@ describe("dimension registry from the manifest", () => {
   it("labels the country domains added after Session 8", () => {
     const d = dim("rent", { domains: { "7": { us: 3, de: 4, nl: 2, fr: 1, ca: 1, au: 1 } } });
     expect(chipFor(d)).toBe("US / Germany / Netherlands / France / Canada / Australia");
+  });
+
+  it("reads per-country domains (country:TZ) as one 'within country' chip", () => {
+    const d = dim("wealth", { domains: { "5": { "country:TZ": 40, "country:KE": 30, "country:UG": 20 } } });
+    expect(chipFor(d)).toBe("Within country");
   });
 });

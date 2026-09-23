@@ -146,3 +146,27 @@ def test_grid_and_imd_joiners_fill_the_fixture_regions(settings):
     for dim in ("jobs", "health", "house"):  # IoD stand-in over south-east XKA
         assert (south[f"{dim}_res"] == "area").all() and (south[f"{dim}_dom"] == "uk").all(), dim
     assert south["jobs_raw"].between(0.05, 0.25).all()  # the employment deprivation rate, not reflected in _raw
+
+
+def test_ngo_hex_layers_on_fixtures(settings):
+    # after Session 8: travel time to cities (raster), relative wealth scored within each country
+    # (point_radius mean, per-country domain), conflict deaths within 25 km (point_radius sum)
+    from pipeline.stages import score
+
+    fetch.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    hazards.run(settings)
+    dims.run(settings)
+    score.run(settings)
+    df = sanity.load_merged(settings, 4)
+    inh = df[df["inhabited"]]
+    assert (inh["city_res"] == "hex").mean() > 0.95 and inh["city_raw"].min() >= 0
+    assert set(inh["wealth_dom"].dropna()) == {"country:XA", "country:XB"}
+    for dom in ("country:XA", "country:XB"):  # ranked within each country, so each spans the scale
+        s = inh.loc[inh["wealth_dom"] == dom, "wealth_score"].astype(float)
+        assert s.min() <= 20 and s.max() >= 80, dom
+    assert (inh["conflict_res"] == "hex").all() and (inh["conflict_raw"] == 0).any()  # a real zero: no event nearby
+    cedar = df.set_index("h3").loc[_cell(42.5, 13.0)]
+    assert cedar["conflict_raw"] > 0

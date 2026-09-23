@@ -536,3 +536,37 @@
   verified: confirmed
   vintage: "fixture"
   files: [au_sa2.gpkg]
+- id: map_travel_cities
+  name: fixture travel time to cities (minutes)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/city.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [city.tif]
+- id: meta_rwi
+  name: fixture Relative-Wealth-Index-like points
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/rwi.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [rwi.csv]
+- id: ucdp_ged
+  name: fixture conflict events near Cedar
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ged.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ged.csv]

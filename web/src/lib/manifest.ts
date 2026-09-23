@@ -8,7 +8,7 @@ export type DimKind = "score" | "signed" | "composition";
 // env = present-day environment (air, trees, fire, drought): shown beside the 2050 hazards but
 // never part of exposure / coverage (SPEC §13.28)
 export type DimGroup = "hazard" | "wellbeing" | "life" | "env";
-export type Domain = "global" | "oecd" | "us" | "eu" | "uk" | "de" | "nl" | "fr" | "ca" | "au";
+export type Domain = "global" | "oecd" | "us" | "eu" | "uk" | "de" | "nl" | "fr" | "ca" | "au" | "country";
 
 export interface ManifestSource {
   id: string;

@@ -8,6 +8,7 @@ from .area_weighted_overlay import area_weighted_overlay
 from .iso_lookup import iso_lookup
 from .point_density import point_density
 from .point_mean import point_mean
+from .point_radius import point_radius
 from .polygon_centroid import polygon_centroid
 from .raster_mean import raster_mean
 
@@ -19,6 +20,7 @@ JOINERS = {
     # hex-level layers (resolution tag `hex`): computed straight from a raster or a point set
     "raster_mean": raster_mean,
     "point_mean": point_mean,
+    "point_radius": point_radius,
 }
 
-__all__ = ["JOINERS", "area_weighted_overlay", "iso_lookup", "point_density", "point_mean", "polygon_centroid", "raster_mean"]
+__all__ = ["JOINERS", "area_weighted_overlay", "iso_lookup", "point_density", "point_mean", "point_radius", "polygon_centroid", "raster_mean"]

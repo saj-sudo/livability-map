@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 8  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 9  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -540,8 +540,8 @@ def country_standins(out: Path) -> None:
     pts.assign(low_income_share=40.0, households=30).to_csv(out / "nl_cbs_500m.csv", index=False)
     area = box(13.85, 40.05, 13.95, 40.15)
     gpd.GeoDataFrame({"CODE_IRIS": ["X00000000"], "emp_rate": [0.6], "pop_1564": [1000.0], "poverty_rate": [15.0]}, geometry=[area], crs=4326).to_file(out / "fr_iris.gpkg", driver="GPKG")
-    gpd.GeoDataFrame({"DGUID": ["X"], "emp_rate": [0.6], "low_income_rate": [0.12], "shelter_burden": [0.3], "population": [500.0], "tenant_households": [80.0]}, geometry=[area], crs=4326).to_file(out / "ca_da.gpkg", driver="GPKG")
-    gpd.GeoDataFrame({"SA2_CODE_2021": ["X"], "emp_rate": [0.6], "rent_share_income": [0.25], "population": [5000.0], "households": [2000.0]}, geometry=[area], crs=4326).to_file(out / "au_sa2.gpkg", driver="GPKG")
+    gpd.GeoDataFrame({"DGUID": ["X"], "population": [500.0], "pop_15plus": [400.0], "emp_rate": [60.0], "low_income_rate": [12.0], "households": [200.0], "shelter_burden": [0.3]}, geometry=[area], crs=4326).to_file(out / "ca_da.gpkg", driver="GPKG")
+    gpd.GeoDataFrame({"SA2_CODE_2021": ["X"], "population": [5000.0], "pop_15plus": [4000.0], "emp_rate": [0.6], "median_rent_weekly": [400.0], "rent_share_income": [0.2]}, geometry=[area], crs=4326).to_file(out / "au_sa2.gpkg", driver="GPKG")
 
 
 def build(out: Path) -> dict[str, str]:

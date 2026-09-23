@@ -71,3 +71,50 @@ def test_iris_tables_join_to_contours_with_ns_as_missing(tmp_path):
     assert pd.isna(out.loc["130010102", "poverty_rate"])  # "ns" (not significant)
     assert pd.isna(out.loc["976010000", "pop_1564"])  # Mayotte: contour without census row
     assert out.crs.to_epsg() == 4326
+
+
+# ---- Canada: StatCan 2021 Census Profile, dissemination areas ------------------------------------
+
+CA_HEADER = "CENSUS_YEAR,DGUID,ALT_GEO_CODE,GEO_LEVEL,GEO_NAME,TNR_SF,TNR_LF,DATA_QUALITY_FLAG,CHARACTERISTIC_ID,CHARACTERISTIC_NAME,CHARACTERISTIC_NOTE,C1_COUNT_TOTAL,SYMBOL,C2_COUNT_MEN+,SYMBOL,C3_COUNT_WOMEN+,SYMBOL,C10_RATE_TOTAL,SYMBOL,C11_RATE_MEN+,SYMBOL,C12_RATE_WOMEN+,SYMBOL\r\n"
+
+
+def _ca_row(dguid, level, cid, value, symbol=""):
+    return f'2021,"{dguid}","{dguid[-8:]}","{level}","Qu\xe9bec",1,2,"00000",{cid},"name",,{value},{symbol},,,,,,,,,,\r\n'
+
+
+def test_statcan_profile_pivots_das_and_keeps_suppressed_as_missing(tmp_path):
+    from pipeline.prep.ca_statcan import load_profile
+
+    rows = [_ca_row("2021A000011124", "Country", 1, 36991981)]
+    a, b = "2021S051210010732", "2021S051224690104"
+    for cid, v in ((1, 500), (345, 9.5), (1465, 200), (1467, 30), (2223, 400), (2229, 60.1)):
+        rows.append(_ca_row(a, "Dissemination area", cid, v))
+    rows += [_ca_row(b, "Dissemination area", 1, 20), _ca_row(b, "Dissemination area", 2229, "", "x"), _ca_row(b, "Dissemination area", 345, "", "..")]
+    path = tmp_path / "profile.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("98-401-X2021006_English_CSV_data_Quebec.csv", (CA_HEADER + "".join(rows)).encode("cp1252"))
+    out = load_profile(path, chunksize=3).set_index("DGUID")
+    assert list(out.index) == [a, b]  # only dissemination areas
+    assert out.loc[a, "emp_rate"] == 60.1 and out.loc[a, "low_income_rate"] == 9.5
+    assert out.loc[a, "shelter_burden"] == pytest.approx(30 / 200) and out.loc[a, "households"] == 200
+    assert pd.isna(out.loc[b, "emp_rate"]) and pd.isna(out.loc[b, "low_income_rate"])  # "x" / ".." -> missing, never 0
+    assert pd.isna(out.loc[b, "shelter_burden"])
+
+
+# ---- Australia: ABS 2021 GCP DataPack, SA2 ---------------------------------------------------------
+
+
+def test_abs_datapack_treats_zero_medians_as_missing(tmp_path):
+    from pipeline.prep.au_abs import load_datapack
+
+    base = "2021 Census GCP Statistical Area 2 for AUS/2021Census_{}_AUST_SA2.csv"
+    path = tmp_path / "gcp.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr(base.format("G01"), "SA2_CODE_2021,Tot_P_M,Tot_P_F,Tot_P_P\n101021007,1000,1100,2100\n101021008,0,0,0\n197979799,5,5,10\n")
+        z.writestr(base.format("G02"), "SA2_CODE_2021,Median_rent_weekly,Median_tot_hhd_inc_weekly\n101021007,400,2000\n101021008,0,0\n197979799,0,0\n")
+        z.writestr(base.format("G43"), "SA2_CODE_2021,P_15_yrs_over_P,Percnt_Employment_to_populn_P\n101021007,1700,58.5\n101021008,0,0\n197979799,8,0\n")
+    out = load_datapack(path).set_index("SA2_CODE_2021")
+    assert "197979799" not in out.index  # migratory / offshore pseudo-SA2
+    assert out.loc["101021007", "emp_rate"] == pytest.approx(0.585)
+    assert out.loc["101021007", "rent_share_income"] == pytest.approx(0.2) and out.loc["101021007", "median_rent_weekly"] == 400
+    assert out.loc["101021008", ["emp_rate", "rent_share_income", "median_rent_weekly"]].isna().all()  # 0 = not available

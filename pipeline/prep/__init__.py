@@ -55,6 +55,8 @@ LOADERS: dict[str, str] = {
     "nl_cbs_vierkant_100m": "pipeline.prep.nl_cbs:load_100m",
     "nl_cbs_vierkant_500m": "pipeline.prep.nl_cbs:load_500m",
     "fr_insee_iris_2021": "pipeline.prep.fr_iris:load",
+    "ca_statcan_da_profile": "pipeline.prep.ca_statcan:load",
+    "au_abs_sa2_gcp": "pipeline.prep.au_abs:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read

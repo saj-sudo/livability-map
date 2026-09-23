@@ -492,3 +492,47 @@
   verified: confirmed
   vintage: "fixture"
   files: [fr_iris.gpkg]
+- id: ca_statcan_da_profile
+  name: fixture DA-like polygon with census rates (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ca_da.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ca_da.gpkg]
+- id: ca_statcan_da_boundaries
+  name: fixture DA boundaries (same file)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/ca_da.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ca_da.gpkg]
+- id: au_abs_sa2_gcp
+  name: fixture SA2-like polygon with census values (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/au_sa2.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [au_sa2.gpkg]
+- id: au_abs_sa2_boundaries
+  name: fixture SA2 boundaries (same file)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/au_sa2.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [au_sa2.gpkg]

@@ -812,3 +812,63 @@
   attribution: "IGN – INSEE, Contours…IRIS® 2023, Licence Ouverte Etalab"
   processing: "extracted once with py7zr; each territory reprojected to WGS84 and concatenated (prep/fr_iris.py)"
   files: [CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z]
+
+- id: ca_statcan_da_profile
+  name: Statistics Canada 2021 Census Profile, Canada, provinces, territories, CDs, CSDs and dissemination areas (98-401-X2021006)
+  group: life
+  access: direct
+  url: https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/download-telecharger/comp/GetFile.cfm?Lang=E&FILETYPE=CSV&GEONO=006
+  format: csv-zip
+  geometry: ca_statcan_da_boundaries
+  license: Statistics Canada Open Licence
+  license_note: "statcan.gc.ca/en/terms-conditions/open-licence: worldwide, royalty-free, non-exclusive licence to use, reproduce, publish, freely distribute or sell the Information and Value-added Products; value-added products must say 'Adapted from Statistics Canada, name of product, reference date. This does not constitute an endorsement by Statistics Canada of this product.'"
+  verified: confirmed
+  vintage: "2021 Census (reference day 2021-05-11; income year 2020), released 2022-12-15; 2.25 GB zip of six regional cp1252 CSVs (~26.6 GB), 57,936 DAs, streamed from the zip"
+  attribution: "Adapted from Statistics Canada, Census Profile 2021 (98-401-X2021006), 2021-05-11. This does not constitute an endorsement by Statistics Canada of this product."
+  processing: "characteristics 1, 2223, 2229 (employment rate), 345 (LIM-AT %), 1465 / 1467 (households spending 30%+ on shelter) of dissemination-area rows; blanks with symbols x / .. / ... -> missing; joined to DA boundaries on DGUID (prep/ca_statcan.py)"
+  files: [98-401-X2021006_eng_CSV.zip]
+
+- id: ca_statcan_da_boundaries
+  name: Statistics Canada 2021 Census cartographic boundary file, dissemination areas
+  group: reference
+  access: direct
+  url: https://www12.statcan.gc.ca/census-recensement/2021/geo/sip-pis/boundary-limites/files-fichiers/lda_000b21a_e.zip
+  format: shapefile-zip
+  member: lda_000b21a_e.shp
+  crs: EPSG:3347
+  license: Statistics Canada Open Licence
+  license_note: "as ca_statcan_da_profile"
+  verified: confirmed
+  vintage: "2021 (Last-Modified 2022-01-05); 197 MB zip, 57,932 DAs (67 invalid polygons, repaired with make_valid)"
+  attribution: "Adapted from Statistics Canada, 2021 Census Boundary Files, dissemination areas. This does not constitute an endorsement by Statistics Canada of this product."
+  files: [lda_000b21a_e.zip]
+
+- id: au_abs_sa2_gcp
+  name: ABS 2021 Census General Community Profile DataPack, SA2 for Australia (short headers)
+  group: life
+  access: direct
+  url: https://www.abs.gov.au/census/find-census-data/datapacks/download/2021_GCP_SA2_for_AUS_short-header.zip
+  format: csv-zip
+  geometry: au_abs_sa2_boundaries
+  license: CC BY 4.0
+  license_note: "DataPack readme: licensed under CC BY 4.0; derived material must say 'Based on Australian Bureau of Statistics data'"
+  verified: confirmed
+  vintage: "2021 Census (2021-08-10), Release 2 (members dated 2023-01-16); 42.3 MB zip, 2,472 SA2 rows"
+  attribution: "Based on Australian Bureau of Statistics data (2021 Census GCP DataPack, SA2)"
+  processing: "G01 Tot_P_P, G43 P_15_yrs_over_P / Percnt_Employment_to_populn_P, G02 Median_rent_weekly / Median_tot_hhd_inc_weekly; 0 = not available -> missing; pseudo-SA2s dropped; joined on SA2 code (prep/au_abs.py)"
+  files: [2021_GCP_SA2_for_AUS_short-header.zip]
+
+- id: au_abs_sa2_boundaries
+  name: ABS ASGS Edition 3 SA2 2021 digital boundaries (GDA2020 shapefile)
+  group: reference
+  access: direct
+  url: https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs/edition-3-july-2021-june-2026/access-and-downloads/digital-boundary-files/SA2_2021_AUST_SHP_GDA2020.zip
+  format: shapefile-zip
+  member: SA2_2021_AUST_GDA2020.shp
+  crs: EPSG:7844
+  license: CC BY 4.0
+  license_note: "abs.gov.au: all material on this website is provided under a Creative Commons Attribution 4.0 International licence (logo, arms, microdata and Census branding excepted)"
+  verified: confirmed
+  vintage: "ASGS Edition 3 (2021); 50.7 MB zip, 2,473 SA2 (19 without geometry)"
+  attribution: "Based on Australian Bureau of Statistics data (ASGS Edition 3)"
+  files: [SA2_2021_AUST_SHP_GDA2020.zip]

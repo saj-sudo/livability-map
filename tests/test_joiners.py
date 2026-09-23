@@ -63,3 +63,13 @@ def test_point_density_transit(settings):
     per_cap = point_density(hexes, stops, res=4, per_capita=True)
     assert per_cap.dropna().max() > 0
     assert per_cap[hexes["population"] == 0].isna().all()
+
+
+def test_effective_decimate_keeps_a_few_pixels_across_a_hex():
+    from pipeline.joiners.raster_mean import effective_decimate
+
+    # h3 v4 average edge lengths: res 5 9.85 km, res 6 3.72 km, res 7 1.41 km
+    assert effective_decimate(10, 5, 0.001) == 10
+    assert effective_decimate(10, 6, 0.001) == 8
+    assert effective_decimate(10, 7, 0.001) == 3
+    assert effective_decimate(1, 7, 0.001) == 1

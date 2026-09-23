@@ -43,7 +43,7 @@ def run(settings: Settings) -> dict[int, int]:
             continue
         t0 = time.time()
         hexes = pd.read_parquet(hexes_path, columns=["h3"])
-        agg = h3util.aggregate_raster(raster, res, "sum", bbox=settings.bbox)
+        agg = h3util.aggregate_raster(raster, res, "sum", bbox=settings.bbox, cells=hexes["h3"])
         df = hexes.merge(agg[["h3", "value"]], on="h3", how="left")
         df["population"] = np.nan_to_num(df["value"].to_numpy(), nan=0.0).round().astype("int64")
         df["inhabited"] = df["population"] >= settings.pop_min

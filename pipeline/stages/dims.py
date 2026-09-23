@@ -82,7 +82,7 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
     if spec.joiner == "raster_mean":
         # hex-level: every hex at once; the joiner reads only the windows inside `bbox`
         assert isinstance(layer, RasterLayer), f"{spec.source}: raster_mean needs a raster layer"
-        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox)
+        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox, cells=hexes["h3"])
         return v.to_numpy(dtype="float64")
     if spec.joiner == "point_mean":
         v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)

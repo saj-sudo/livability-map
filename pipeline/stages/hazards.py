@@ -79,13 +79,14 @@ def heat_days(nc_path, lat: np.ndarray, lng: np.ndarray, var: str | None = None)
         ds.close()
 
 
-def flood_fraction(paths: list, res: int, depth_min: float, bbox) -> pd.Series:
+def flood_fraction(paths: list, res: int, depth_min: float, bbox, cells=None) -> pd.Series:
     """Fraction of valid pixels with inundation depth >= depth_min, per hex (index h3).
-    Several paths -> pixel-wise median across them first (riverine climate models)."""
+    Several paths -> pixel-wise median across them first (riverine climate models). ``cells``
+    limits the work to the hexes that exist at this resolution."""
     if len(paths) == 1:
-        agg = h3util.aggregate_raster(paths[0], res, "frac_above", threshold=depth_min, bbox=bbox)
+        agg = h3util.aggregate_raster(paths[0], res, "frac_above", threshold=depth_min, bbox=bbox, cells=cells)
     else:
-        agg = h3util.aggregate_rasters(paths, res, "frac_above", threshold=depth_min, bbox=bbox, reducer="median")
+        agg = h3util.aggregate_rasters(paths, res, "frac_above", threshold=depth_min, bbox=bbox, reducer="median", cells=cells)
     return agg.set_index("h3")["value"]
 
 
@@ -146,7 +147,7 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
         for hz in ("rflood", "cflood"):
             src = sources[HAZARDS[hz][0]]
             rasters = [rawfiles.resolve_raster(settings, src, i) for i in range(len(src.files))]
-            frac = flood_fraction(rasters, res, settings.depth_min, settings.bbox)
+            frac = flood_fraction(rasters, res, settings.depth_min, settings.bbox, cells=hexes["h3"])
             col = HAZARDS[hz][1]
             df[col] = df["h3"].map(frac).astype("float32")
             df[f"{hz}_ok"] = df[col].notna()

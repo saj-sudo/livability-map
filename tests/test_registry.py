@@ -102,3 +102,48 @@ def test_unit_fields_are_validated(tmp_path):
     d = load_dimensions(p)["x"]
     assert d.joiners[0].unit == "things" and d.joiners[0].decimals == 2
 
+
+def test_grid_tag_allowed_only_for_hex_joiners(tmp_path):
+    import yaml
+
+    root = find_root()
+    sources = load_sources(root / "pipeline" / "sources.yaml")
+    ok = {"id": "g", "name": "g", "group": "life", "kind": "score", "sources": ["eurostat_census_grid_2021"], "joiners": [{"source": "eurostat_census_grid_2021", "joiner": "point_mean", "res": "grid", "field": "emp_rate", "domain": "eu", "label": "x"}]}
+    bad = {**ok, "joiners": [{"source": "acs_summary", "joiner": "area_weighted_overlay", "res": "grid", "field": "f", "domain": "us", "label": "x"}]}
+    p = tmp_path / "dims.yaml"
+    p.write_text(yaml.safe_dump([ok]), encoding="utf-8")
+    assert "g" in load_dimensions(p, sources)
+    p.write_text(yaml.safe_dump([bad]), encoding="utf-8")
+    with pytest.raises(ValueError, match="grid"):
+        load_dimensions(p, sources)
+    assert "grid" in RES_TAGS
+
+
+def test_joiner_higher_is_is_refused_on_minmax_dimensions(tmp_path):
+    import yaml
+
+    root = find_root()
+    sources = load_sources(root / "pipeline" / "sources.yaml")
+    d = {"id": "w", "name": "w", "group": "wellbeing", "kind": "score", "scale": "minmax", "sources": ["whr_ladder"], "joiners": [{"source": "whr_ladder", "joiner": "iso_lookup", "res": "national", "field": "ladder", "higher_is": "worse"}]}
+    p = tmp_path / "dims.yaml"
+    p.write_text(yaml.safe_dump([d]), encoding="utf-8")
+    with pytest.raises(ValueError, match="minmax"):
+        load_dimensions(p, sources)
+
+
+def test_point_radius_needs_a_radius_and_the_hex_tag(tmp_path):
+    import yaml
+
+    root = find_root()
+    sources = load_sources(root / "pipeline" / "sources.yaml")
+    base = {"id": "c", "name": "c", "group": "life", "kind": "score", "sources": ["ookla_fixed"]}
+    ok = {**base, "joiners": [{"source": "ookla_fixed", "joiner": "point_radius", "res": "hex", "field": "d_mbps", "radius_km": 5, "agg": "mean", "domain": "country", "domain_by_country": True, "label": "x"}]}
+    p = tmp_path / "dims.yaml"
+    p.write_text(yaml.safe_dump([ok]), encoding="utf-8")
+    spec = load_dimensions(p, sources)["c"].joiners[0]
+    assert spec.radius_km == 5 and spec.agg == "mean" and spec.domain_by_country is True
+    for bad, match in (({"radius_km": None}, "radius_km"), ({"agg": "median"}, "agg"), ({"res": "tract"}, "hex")):
+        j = {**ok["joiners"][0], **bad}
+        p.write_text(yaml.safe_dump([{**base, "joiners": [j]}]), encoding="utf-8")
+        with pytest.raises(ValueError, match=match):
+            load_dimensions(p, sources)

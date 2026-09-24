@@ -67,10 +67,15 @@
   group: life
   kind: score
   higher_is: better
-  coverage: [global, oecd, us]
-  sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence, ilostat_youth_unemp]
+  coverage: [global, oecd, us, eu, uk, fr, ca, au]
+  sources: [ca_statcan_da_profile, ca_statcan_da_boundaries, au_abs_sa2_gcp, au_abs_sa2_boundaries, acs_summary, cb_tracts, eurostat_census_grid_2021, eng_imd_2025, ons_lsoa_2021, fr_insee_iris_2021, fr_ign_iris_contours, oecd_regional_wellbeing, oecd_tl2_correspondence, ilostat_youth_unemp]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29, weight_field: pop_16_29, domain: us, label: acs, unit: "% employed (ages 16-29)", multiply: 100, decimals: 0}
+    - {source: eurostat_census_grid_2021, joiner: point_mean, res: grid, field: emp_rate, weight_field: pop_1564, domain: eu, label: eugrid, unit: "% employed (ages 15-64)", multiply: 100, decimals: 0}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: area, field: emp_dep_rate, weight_field: pop_working, domain: uk, label: imd, higher_is: worse, unit: "% of working-age people employment-deprived (IoD2025, higher = worse)", multiply: 100, decimals: 0}
+    - {source: fr_insee_iris_2021, joiner: area_weighted_overlay, res: area, field: emp_rate, weight_field: pop_1564, domain: fr, label: rp, unit: "% employed (ages 15-64)", multiply: 100, decimals: 0}
+    - {source: ca_statcan_da_profile, joiner: area_weighted_overlay, res: area, field: emp_rate, weight_field: pop_15plus, domain: ca, label: census, unit: "% employed (ages 15+)", decimals: 0}
+    - {source: au_abs_sa2_gcp, joiner: area_weighted_overlay, res: area, field: emp_rate, weight_field: pop_15plus, domain: au, label: census, unit: "% of people 15+ employed", multiply: 100, decimals: 0}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score, domain: oecd, label: oecd, unit: "/ 10 (OECD jobs score)", decimals: 1}
     - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: youth_employment_rate, domain: global, label: ilostat, unit: "% of 15-24s employed", decimals: 0}
   note: "US: employment rate of civilians aged 16-29 (ACS B23001). OECD: Jobs well-being score 0-10 (TL2). Global: 100 - youth (15-24) unemployment rate (ILOSTAT). Different constructs, labeled; all higher = better"
@@ -137,10 +142,13 @@
   group: life
   kind: score
   higher_is: better
-  coverage: [global, us]
-  sources: [acs_summary, cb_tracts, wb_gsap, wb_gsap_regions]
+  coverage: [global, us, fr, nl, ca]
+  sources: [ca_statcan_da_profile, ca_statcan_da_boundaries, acs_summary, cb_tracts, fr_insee_iris_2021, fr_insee_filosofi_iris_2021, fr_ign_iris_contours, nl_cbs_vierkant_500m, wb_gsap, wb_gsap_regions]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: income_entropy, weight_field: households, domain: us, label: acs, unit: "income mix (0-1)", decimals: 2}
+    - {source: fr_insee_iris_2021, joiner: area_weighted_overlay, res: area, field: poverty_rate, weight_field: pop_1564, domain: fr, label: filosofi, higher_is: worse, unit: "% below the poverty line (60% of median)", decimals: 0}
+    - {source: nl_cbs_vierkant_500m, joiner: point_mean, res: grid, field: low_income_share, weight_field: households, domain: nl, label: cbs, higher_is: worse, unit: "% low-income households (bottom 40%)", decimals: 0}
+    - {source: ca_statcan_da_profile, joiner: area_weighted_overlay, res: area, field: low_income_rate, weight_field: population, domain: ca, label: limat, higher_is: worse, unit: "% in low income (LIM-AT)", decimals: 0}
     - {source: wb_gsap, joiner: polygon_centroid, res: admin1, field: nonpoor_share, domain: global, label: gsap, unit: "% above the $4.20/day line", multiply: 100, decimals: 0}
   note: "US: within-area income diversity (entropy of the 16 ACS B19001 brackets, 0-1). Global: share of people above the $4.20/day (2021 PPP) poverty line (GSAP 2023), a level not a mix. Different constructs, labeled"
 
@@ -149,10 +157,13 @@
   group: life
   kind: score
   higher_is: worse
-  coverage: [oecd, us]
-  sources: [acs_summary, cb_tracts, oecd_regional_wellbeing, oecd_tl2_correspondence]
+  coverage: [oecd, us, uk, ca, au]
+  sources: [ca_statcan_da_profile, ca_statcan_da_boundaries, au_abs_sa2_gcp, au_abs_sa2_boundaries, acs_summary, cb_tracts, eng_imd_2025, ons_lsoa_2021, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: rent_share_income, weight_field: renter_households, domain: us, label: acs, unit: "% of income on rent", decimals: 0}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: area, field: housing_barriers, weight_field: population, domain: uk, label: imd, unit: "barriers to housing and services score (IoD2025, higher = worse)", decimals: 1}
+    - {source: ca_statcan_da_profile, joiner: area_weighted_overlay, res: area, field: shelter_burden, weight_field: households, domain: ca, label: census, unit: "% of households spending 30%+ of income on shelter", multiply: 100, decimals: 0}
+    - {source: au_abs_sa2_gcp, joiner: area_weighted_overlay, res: area, field: rent_share_income, weight_field: population, domain: au, label: census, unit: "% median rent / median household income", multiply: 100, decimals: 0}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: housing_burden, domain: oecd, label: oecd, unit: "/ 10 (OECD, higher = worse)", decimals: 1}
   note: "US: median gross rent as % of household income (ACS B25071). OECD: 10 - Housing well-being score (rooms per person, affordability satisfaction), so higher = worse housing conditions"
 
@@ -161,10 +172,11 @@
   group: life
   kind: score
   higher_is: better
-  coverage: [oecd, us]
-  sources: [hrsa_ahrf, cb_counties, acs_summary, oecd_regional_wellbeing, oecd_tl2_correspondence]
+  coverage: [oecd, us, uk]
+  sources: [hrsa_ahrf, cb_counties, acs_summary, eng_imd_2025, ons_lsoa_2021, oecd_regional_wellbeing, oecd_tl2_correspondence]
   joiners:
     - {source: hrsa_ahrf, joiner: polygon_centroid, res: county, field: physicians_per_10k, domain: us, label: hrsa, unit: "physicians per 10,000", decimals: 1}
+    - {source: eng_imd_2025, joiner: area_weighted_overlay, res: area, field: health_dep, weight_field: population, domain: uk, label: imd, higher_is: worse, unit: "health deprivation score (IoD2025, higher = worse)", decimals: 2}
     - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: health_score, domain: oecd, label: oecd, unit: "/ 10 (OECD health score)", decimals: 1}
   note: "US: active non-federal MDs per 10,000 residents (HRSA AHRF, county population from ACS). OECD: Health well-being score 0-10 (life expectancy, mortality), an outcome not access. Different constructs, labeled"
 
@@ -187,11 +199,14 @@
   group: life
   kind: score
   higher_is: worse
-  coverage: [us]
-  sources: [hud_fmr, cb_counties]
+  coverage: [us, de, nl, au]
+  sources: [hud_fmr, cb_counties, de_zensus_2022, nl_cbs_vierkant_100m, au_abs_sa2_gcp, au_abs_sa2_boundaries]
   joiners:
     - {source: hud_fmr, joiner: polygon_centroid, res: county, field: fmr_2br, domain: us, label: hud, unit: "USD/month (2-bedroom FMR)", decimals: 0}
-  note: "HUD Fair Market Rent for a 2-bedroom unit, FY2026, USD per month, by county (the whole-county row or the median of New England town rows); the OECD/EU rent level is v2"
+    - {source: de_zensus_2022, joiner: point_mean, res: grid, field: rent_eur_m2, weight_field: dwellings, domain: de, label: zensus, unit: "EUR/m² net cold rent", decimals: 2}
+    - {source: nl_cbs_vierkant_100m, joiner: point_mean, res: grid, field: woz_keur, weight_field: homes, domain: nl, label: woz, unit: "thousand EUR average home value (WOZ)", decimals: 0}
+    - {source: au_abs_sa2_gcp, joiner: area_weighted_overlay, res: area, field: median_rent_weekly, weight_field: population, domain: au, label: census, unit: "AUD/week median rent", decimals: 0}
+  note: "HUD Fair Market Rent for a 2-bedroom unit, FY2026, USD per month, by county (the whole-county row or the median of New England town rows); Germany: Zensus 2022 average net cold rent per m² on the 100 m grid. Netherlands: CBS average WOZ home value (a price level, not a rent) on 100 m squares. Different constructs, labeled; all higher = more expensive"
 
 # ---- hex-level extras (added 2026-09-22, SPEC §20.6): computed per hex from a global raster or
 # point set, resolution tag `hex` (or `basin` for Aqueduct sub-basins). `env` is present-day
@@ -258,3 +273,59 @@
   joiners:
     - {source: aqueduct_water_stress, joiner: polygon_centroid, res: basin, field: drr_cat, domain: global, label: aqueduct, unit: "drought risk category (0-4)", decimals: 0}
   note: "WRI Aqueduct drought risk category 0 (low) to 4 (high) of the sub-basin under the hex centroid; baseline from Aqueduct 3.0 carried into 4.0, no future-scenario drought exists; a quarter of sub-basins have no data"
+
+# ---- NGO hex layers (added 2026-09-23, SPEC §13.36): global or low- and middle-income coverage
+- id: city
+  name: Access to a city (travel time)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_travel_cities]
+  joiners:
+    - {source: map_travel_cities, joiner: raster_mean, res: hex, field: value, domain: global, label: map, unit: "minutes to the nearest city of 50,000+ (2015)", decimals: 0}
+  note: "Motorised travel time to the nearest city of 50,000 or more people in 2015 (Malaria Atlas Project, Weiss et al. 2018): a proxy for access to jobs, services and markets, not a measure of the job market itself"
+
+- id: wealth
+  name: Relative wealth (within the country)
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [lmic]
+  sources: [meta_rwi]
+  joiners:
+    - {source: meta_rwi, joiner: point_radius, res: hex, field: rwi, radius_km: 3, agg: mean, domain: country, domain_by_country: true, label: rwi, unit: "relative wealth index (0 = the country's average)", decimals: 2}
+  note: "Meta Relative Wealth Index (2021) for 93 low- and middle-income countries: satellite- and connectivity-based estimates of household wealth relative to the rest of the same country, averaged within 3 km. Ranked within each country only, so a score says how a place compares with its own country, not with the world. CC BY-NC 4.0"
+
+- id: conflict
+  name: Armed conflict nearby
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [ucdp_ged]
+  joiners:
+    - {source: ucdp_ged, joiner: point_radius, res: hex, field: fatal_per_year, radius_km: 25, agg: sum, domain: global, label: ucdp, unit: "conflict deaths per year within 25 km (2016-2025)", decimals: 1}
+  note: "Organised-violence deaths per year within 25 km, 2016-2025 (UCDP GED 26.1: state-based, non-state and one-sided violence; events located to within 25 km or to a district). 0 means no recorded event nearby, not a guarantee of safety"
+
+- id: walkcare
+  name: Walking time to healthcare
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [map_walking_healthcare]
+  joiners:
+    - {source: map_walking_healthcare, joiner: raster_mean, res: hex, field: value, domain: global, label: map, unit: "minutes on foot to the nearest hospital or clinic", decimals: 0}
+  note: "Walking-only travel time to the nearest hospital or clinic (Malaria Atlas Project 2020), for people without motorised transport; the motorised time is the `care` dimension"
+
+- id: water
+  name: Working water points nearby
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [wpdx]
+  sources: [wpdx_water_points]
+  joiners:
+    - {source: wpdx_water_points, joiner: point_radius, res: hex, field: has_water, radius_km: 5, agg: mean, domain: global, label: wpdx, unit: "% of recorded water points within 5 km with water at the last visit", multiply: 100, decimals: 0}
+  note: "Share of the community water points recorded within 5 km (WPdx+, 19 countries in Africa and South Asia) that had water when last visited. Missing where no point is recorded, which is common in cities with piped water: no point never means no water. CC BY-SA 4.0"

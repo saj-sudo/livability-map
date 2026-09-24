@@ -8,7 +8,7 @@ import type { Manifest, ManifestDimension } from "../../lib/manifest";
 export const metadata = { title: "Methodology — livability-map" };
 
 const pct = (share: unknown) => (typeof share === "number" ? `${(100 * share).toFixed(1)}%` : "n/a");
-const TAG_ORDER = ["tract", "county", "admin1", "national", "none"];
+const TAG_ORDER = ["hex", "grid", "basin", "tract", "area", "county", "admin1", "national", "none"];
 
 function CoverageTable({ dims, res }: { dims: ManifestDimension[]; res: string }) {
   return (

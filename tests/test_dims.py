@@ -49,7 +49,7 @@ def test_dims_never_writes_zero_for_missing(settings):
 def test_life_dims_global_fallbacks(settings):
     _run_all(settings)
     df = sanity.load_merged(settings, 4)
-    xa = df[(df["iso_a2"] == "XA") & (df["lng"] < 11.5)]  # away from the XKB border where tracts could leak in
+    xa = df[(df["iso_a2"] == "XA") & (df["lng"] < 10.6)]  # west XKA: away from the XKB tracts and the east-XKA grid / LSOA stand-ins
     xb = df[(df["iso_a2"] == "XB") & (df["lng"] > 12.5)]
     # jobs: OECD TL2 stand-in covers XKA (admin1, oecd domain); XKB is tract-covered by the ACS stand-in
     assert (xa["jobs_res"] == "admin1").all() and (xa["jobs_dom"] == "oecd").all()
@@ -123,3 +123,54 @@ def test_overlay_chunking_does_not_change_results(settings, monkeypatch):
     chunked = pd.read_parquet(settings.stage_path("dims", 4))
     for col in ("jobs_raw", "race_w", "transit_raw", "house_raw"):
         pd.testing.assert_series_equal(full[col], chunked[col], check_exact=False, rtol=1e-6)
+
+
+def test_grid_and_imd_joiners_fill_the_fixture_regions(settings):
+    from pipeline.stages import urban
+
+    settings.res = [4, 5, 6]
+    fetch.run(settings)
+    urban.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    dims.run(settings)
+    d6 = sanity.load_merged(settings, 6)
+    inh = d6[d6["inhabited"]]
+    east = inh[inh["iso_a2"] == "XA"]
+    north = east[(east["lng"] > 11.1) & (east["lng"] < 11.9) & (east["lat"] > 42.1)]
+    south = east[(east["lng"] > 11.1) & (east["lng"] < 11.9) & (east["lat"] < 41.9)]
+    assert len(north) and len(south)
+    assert (north["jobs_res"] == "grid").all() and (north["jobs_dom"] == "eu").all()
+    assert d6.loc[d6["jobs_res"] == "grid", "jobs_raw"].between(0.3, 0.9).all()
+    for dim in ("jobs", "health", "house"):  # IoD stand-in over south-east XKA
+        assert (south[f"{dim}_res"] == "area").all() and (south[f"{dim}_dom"] == "uk").all(), dim
+    assert south["jobs_raw"].between(0.05, 0.25).all()  # the employment deprivation rate, not reflected in _raw
+
+
+def test_ngo_hex_layers_on_fixtures(settings):
+    # after Session 8: travel time to cities (raster), relative wealth scored within each country
+    # (point_radius mean, per-country domain), conflict deaths within 25 km (point_radius sum)
+    from pipeline.stages import score
+
+    fetch.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    hazards.run(settings)
+    dims.run(settings)
+    score.run(settings)
+    df = sanity.load_merged(settings, 4)
+    inh = df[df["inhabited"]]
+    assert (inh["city_res"] == "hex").mean() > 0.95 and inh["city_raw"].min() >= 0
+    assert set(inh["wealth_dom"].dropna()) == {"country:XA", "country:XB"}
+    for dom in ("country:XA", "country:XB"):  # ranked within each country, so each spans the scale
+        s = inh.loc[inh["wealth_dom"] == dom, "wealth_score"].astype(float)
+        assert s.min() <= 20 and s.max() >= 80, dom
+    assert (inh["conflict_res"] == "hex").all() and (inh["conflict_raw"] == 0).any()  # a real zero: no event nearby
+    cedar = df.set_index("h3").loc[_cell(42.5, 13.0)]
+    assert cedar["conflict_raw"] > 0
+    # walking time to care (raster) and working water points within 5 km (missing where none recorded)
+    assert (inh["walkcare_res"] == "hex").mean() > 0.95 and (inh["walkcare_raw"] >= inh["care_raw"]).mean() > 0.9
+    assert inh["water_raw"].dropna().between(0, 1).all() and inh["water_raw"].notna().any()
+    assert inh["water_raw"].isna().any() and (inh.loc[inh["water_raw"].isna(), "water_res"] == "none").all()

@@ -34,6 +34,43 @@ def _typed(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def child_paths(settings: Settings, res: int) -> list:
+    """hexes parquets of the plan entries built from ``res`` (children fills whose parent is res).
+    A complete finer layer never overlaps (hex4 stops at z4), so it marks nothing."""
+    kids = [e for e in settings.plan.entries if not e.complete and e.parent == res]
+    return [settings.hexes_path(e.res) for e in kids if settings.hexes_path(e.res).exists()]
+
+
+def refined_flag(h3s: pd.Series, paths) -> pd.Series:
+    """``ref``: True for cells that a finer layer replaced (their children exist in ``paths``),
+    missing otherwise (never False: a missing attribute costs nothing in a tile, invariant 3)."""
+    flags = pd.Series(pd.NA, index=h3s.index, dtype="boolean")
+    parents: set[str] = set()
+    for p in paths or []:
+        parents |= set(pd.read_parquet(p, columns=["parent"])["parent"])
+    if parents:
+        flags[h3s.isin(parents).to_numpy()] = True
+    return flags
+
+
+def refresh_refs(settings: Settings) -> list[int]:
+    """Rewrite ``ref`` in every exported parquet whose children changed since its own export
+    (e.g. `--res 6` added after res 5 was exported). Returns the resolutions rewritten."""
+    done = []
+    for e in settings.plan.entries:
+        out = settings.out_dir / f"hexes_r{e.res}.parquet"
+        if not out.exists():
+            continue
+        df = pd.read_parquet(out)
+        ref = refined_flag(df["h3"], child_paths(settings, e.res))
+        if "ref" in df.columns and df["ref"].astype("boolean").fillna(False).equals(ref.fillna(False)):
+            continue
+        df["ref"] = ref
+        df.to_parquet(out, index=False)
+        done.append(e.res)
+    return done
+
+
 def _feature(row: dict, keep: list[str]) -> dict:
     props = {}
     for k in keep:
@@ -68,14 +105,18 @@ def run(settings: Settings, geojson: bool = False) -> dict[int, int]:
         for p in inputs:
             if not p.exists():
                 raise FileNotFoundError(f"{p} missing: run every stage up to `score` before `export`")
+        # SPEC §9.1: the plan entries built from this resolution mark which cells were refined
+        kids = child_paths(settings, res)
+        inputs += kids
         out = settings.out_dir / f"hexes_r{res}.parquet"
-        params = {"res": res, "bbox": settings.bbox, "stage": "export", "geojson": geojson}
+        params = {"res": res, "bbox": settings.bbox, "stage": "export", "geojson": geojson, "children": [p.name for p in kids]}
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             counts[res] = int(stage_cache.read_meta(out).get("rows", 0))
             print(f"export res {res}: up to date ({counts[res]} hexes), skipping")
             continue
         t0 = time.time()
         df = _typed(sanity.load_merged(settings, res))
+        df["ref"] = refined_flag(df["h3"], kids)
         missing = [c for c in keep if c not in df.columns]
         if missing:
             raise RuntimeError(f"export res {res}: tile attributes missing from the interim stages: {missing}")
@@ -88,6 +129,8 @@ def run(settings: Settings, geojson: bool = False) -> dict[int, int]:
         stage_cache.record(out, inputs, params, extra)
         counts[res] = len(df)
         print(f"export res {res}: {len(df)} hexes, {len(df.columns)} columns ({len(keep)} ship in tiles) in {time.time() - t0:.1f}s -> {out.name}")
+    for r in refresh_refs(settings):
+        print(f"export res {r}: ref refreshed (a finer resolution was built after it)")
     m = manifest.build(settings)
     path = manifest.write(settings, m)
     print(f"export manifest: {len(m['sources'])} sources, {len(m['dimensions'])} dimensions -> {path.name}")

@@ -44,7 +44,8 @@ describe("dimension registry from the manifest", () => {
     // the first fourteen slots are frozen: hazards, wellbeing, then the Session 4 life dimensions
     expect(DIM_ORDER.slice(0, 14)).toEqual(["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health"]);
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
-    expect(DIM_ORDER.slice(16)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
+    expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
+    expect(DIM_ORDER.slice(22)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 
@@ -72,5 +73,33 @@ describe("dimension registry from the manifest", () => {
     expect(resLabel("hex")).toBe("this hex");
     expect(resLabel("basin")).toBe("sub-basin");
     expect(resLabel("weird")).toBe("weird");
+  });
+
+  it("gives the EU grid and the England small-area joiners their own chip and unit (Session 8)", () => {
+    const jobs = dim("jobs", {
+      domains: { "6": { us: 10, eu: 20, uk: 5 } },
+      joiners: [
+        { source: "acs_summary", joiner: "area_weighted_overlay", res: "tract", field: "f", domain: "us", label: "acs", unit: "% employed (ages 16-29)", multiply: 100, decimals: 0 },
+        { source: "eurostat_census_grid_2021", joiner: "point_mean", res: "grid", field: "f", domain: "eu", label: "eugrid", unit: "% employed (ages 15-64)", multiply: 100, decimals: 0 },
+        { source: "eng_imd_2025", joiner: "area_weighted_overlay", res: "area", field: "f", domain: "uk", label: "imd", unit: "% employment-deprived", multiply: 100, decimals: 0 },
+      ] as never,
+    });
+    expect(chipFor(jobs)).toBe("US / EU / England");
+    const u = unitsFrom(jobs);
+    expect(u.tract.unit).toContain("16-29");
+    expect(u.grid.unit).toContain("15-64");
+    expect(u.area.unit).toContain("deprived");
+    expect(resLabel("grid")).toBe("1 km grid");
+    expect(resLabel("area")).toBe("small area");
+  });
+
+  it("labels the country domains added after Session 8", () => {
+    const d = dim("rent", { domains: { "7": { us: 3, de: 4, nl: 2, fr: 1, ca: 1, au: 1 } } });
+    expect(chipFor(d)).toBe("US / Germany / Netherlands / France / Canada / Australia");
+  });
+
+  it("reads per-country domains (country:TZ) as one 'within country' chip", () => {
+    const d = dim("wealth", { domains: { "5": { "country:TZ": 40, "country:KE": 30, "country:UG": 20 } } });
+    expect(chipFor(d)).toBe("Within country");
   });
 });

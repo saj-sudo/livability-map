@@ -4,11 +4,24 @@ import json
 
 import pytest
 
-from pipeline.stages import admin, dims, export, fetch, grid, hazards, pop, publish, score, tiles
+from pipeline.stages import (
+    admin,
+    dims,
+    export,
+    fetch,
+    grid,
+    hazards,
+    pop,
+    publish,
+    score,
+    tiles,
+    urban,
+)
 
 
 def _run_all(settings):
     fetch.run(settings)
+    urban.run(settings)
     grid.run(settings)
     pop.run(settings)
     admin.run(settings)
@@ -16,7 +29,7 @@ def _run_all(settings):
     dims.run(settings)
     score.run(settings)
     export.run(settings)
-    tiles.run(settings, backend="python", maxzoom=4, workers=0)
+    tiles.run(settings, backend="python", workers=0)
 
 
 def test_publish_local_copies_files_and_stamps_manifest(settings, tmp_path):
@@ -63,3 +76,23 @@ def test_diagnose_messages():
     assert publish._diagnose({"status": 200, "magic": True, "acao": "*", "cf_cache": "HIT"}).startswith("expected HTTP 206")
     assert "Hotlink" in publish._diagnose({"status": 206, "magic": True, "acao": None, "cf_cache": None})
     assert publish._diagnose({"status": 206, "magic": True, "acao": "*", "cf_cache": "HIT"}).startswith("ok")
+
+
+def test_local_publish_ships_every_archive(settings, tmp_path):
+    settings.res = [4, 5, 6, 7]
+    _run_all(settings)
+    dest = tmp_path / "data"
+    publish.run(settings, target="local", local_dir=dest)
+    assert {p.name for p in dest.iterdir()} == {"hexes.pmtiles", "hexes_nbhd.pmtiles", "hexes_city.pmtiles", "manifest.json"}
+    assert publish.files_to_ship(json.loads((dest / "manifest.json").read_text(encoding="utf-8"))) == ["manifest.json", "hexes.pmtiles", "hexes_city.pmtiles", "hexes_nbhd.pmtiles"]
+
+
+def test_local_publish_removes_archives_the_plan_no_longer_lists(settings, tmp_path):
+    _run_all(settings)
+    dest = tmp_path / "webdata"
+    dest.mkdir()
+    (dest / "hexes_fine.pmtiles").write_bytes(b"PMTiles old")  # an archive from an older plan
+    (dest / "gazetteer.json").write_text("{}", encoding="utf-8")  # not ours to touch
+    publish.run(settings, target="local", local_dir=dest)
+    assert not (dest / "hexes_fine.pmtiles").exists()
+    assert (dest / "gazetteer.json").exists() and (dest / "hexes.pmtiles").exists()

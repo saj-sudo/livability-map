@@ -21,6 +21,7 @@ import h3
 import numpy as np
 import pandas as pd
 import rasterio
+import rasterio.windows
 from rasterio import features
 from rasterio.windows import Window, from_bounds
 from shapely.geometry import Polygon, box
@@ -133,7 +134,44 @@ class _Acc:
     n_pixels: dict[str, int] = field(default_factory=dict)
 
 
-def _iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> Iterable[Window]:
+@dataclass
+class CellSet:
+    """The cells a raster aggregation is for: polygons and bounds built once, so every window
+    rasterizes only the cells that touch it. A derived resolution (SPEC §9.1) has a few hundred
+    thousand cells scattered over the world, not the tens of millions a full fill of every window
+    would produce; complete resolutions pass their land cells too, so ocean cells are never
+    computed and dropped."""
+
+    cells: list[str]
+    bounds: np.ndarray  # (N, 4) minx, miny, maxx, maxy in degrees
+    polygons: list[Polygon]
+
+    @classmethod
+    def from_cells(cls, cells: Iterable[str]) -> CellSet:
+        ordered = sorted(set(cells))
+        polys = [cell_polygon(c) for c in ordered]
+        bounds = np.array([p.bounds for p in polys], dtype="float64").reshape(len(polys), 4)
+        return cls(ordered, bounds, polys)
+
+    def in_bounds(self, minx: float, miny: float, maxx: float, maxy: float) -> np.ndarray:
+        """Indexes of the cells whose bounding box touches the given box (antimeridian cells,
+        whose bogus polygon spans the globe, are left out as in the full fill)."""
+        if not self.cells:
+            return np.zeros(0, dtype="int64")
+        b = self.bounds
+        m = (b[:, 0] <= maxx) & (b[:, 2] >= minx) & (b[:, 1] <= maxy) & (b[:, 3] >= miny) & ((b[:, 2] - b[:, 0]) <= 180)
+        return np.flatnonzero(m)
+
+
+def as_cellset(cells) -> CellSet | None:
+    if cells is None or isinstance(cells, CellSet):
+        return cells
+    return CellSet.from_cells(cells)
+
+
+def iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> Iterable[Window]:
+    """Read windows covering ``bbox`` (or the whole raster): square tiles for tiled files, full-width
+    strips for striped ones. Shared by the raster aggregations and the urban stage."""
     if bbox is None:
         full = Window(0, 0, src.width, src.height)
     else:
@@ -163,7 +201,7 @@ def _iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> 
             yield Window(col, row, w, h)
 
 
-def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, decimate: int = 1) -> tuple[list[str], np.ndarray]:
+def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, decimate: int = 1, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray]:
     """Rasterize cell polygons into the window; returns (cells, index array) where index 0 = no
     cell. With ``decimate`` > 1 the index image is built on the block-averaged grid that
     :func:`block_mean` produces for the same window (pixel size x decimate, same origin)."""
@@ -173,7 +211,7 @@ def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, d
     if decimate > 1:
         transform = transform @ rasterio.Affine.scale(decimate)
         shape = (-(-shape[0] // decimate), -(-shape[1] // decimate))  # ceil division
-    return _cells_index(bounds, transform, shape, res)
+    return _cells_index(bounds, transform, shape, res, cellset)
 
 
 def block_mean(arr: np.ndarray, valid: np.ndarray, d: int) -> tuple[np.ndarray, np.ndarray]:
@@ -194,17 +232,24 @@ def block_mean(arr: np.ndarray, valid: np.ndarray, d: int) -> tuple[np.ndarray, 
     return mean, counts > 0
 
 
-def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int) -> tuple[list[str], np.ndarray]:
-    cells = cells_overlapping_bbox(bounds, res)
+def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray]:
+    """(cells, id image) for one window: the given cells that touch it, or a full H3 fill of
+    the window when no cell set was given."""
+    if cellset is not None:
+        sel = cellset.in_bounds(*bounds)
+        cells = [cellset.cells[i] for i in sel]
+        shapes = [(cellset.polygons[i], k) for k, i in enumerate(sel, start=1)]
+    else:
+        cells = cells_overlapping_bbox(bounds, res)
+        shapes = []
+        for i, c in enumerate(cells, start=1):
+            poly = cell_polygon(c)
+            # cells straddling the antimeridian produce a bogus polygon spanning the globe; skip
+            if poly.bounds[2] - poly.bounds[0] > 180:
+                continue
+            shapes.append((poly, i))
     if not cells:
         return [], np.zeros(shape, dtype="int32")
-    shapes = []
-    for i, c in enumerate(cells, start=1):
-        poly = cell_polygon(c)
-        # cells straddling the antimeridian produce a bogus polygon spanning the globe; skip
-        if poly.bounds[2] - poly.bounds[0] > 180:
-            continue
-        shapes.append((poly, i))
     idx = features.rasterize(
         shapes,
         out_shape=shape,
@@ -291,8 +336,13 @@ def aggregate_raster(
     band: int = 1,
     nodata: float | None = None,
     decimate: int = 1,
+    cells=None,
 ) -> pd.DataFrame:
     """Aggregate a WGS84 raster to H3 cells.
+
+    ``cells`` (an iterable of H3 ids or a :class:`CellSet`) restricts the work to those cells:
+    only windows they touch are read and only they are rasterized. Without it every window is
+    filled with all cells of ``res`` that overlap it.
 
     Returns a DataFrame with columns ``h3, value, n_pixels, n_valid`` (and ``n_above`` for
     frac_above). ``value`` is the sum, mean, or fraction of valid pixels >= threshold.
@@ -307,21 +357,24 @@ def aggregate_raster(
     if decimate < 1 or (decimate > 1 and agg != "mean"):
         raise ValueError("decimate must be >= 1 and is only meaningful for agg='mean'")
     acc = _Acc()
+    cellset = as_cellset(cells)
     with rasterio.open(path) as src:
         if src.crs is None or not src.crs.is_geographic:
             raise ValueError(f"{path}: raster must be in a geographic CRS (EPSG:4326); reproject first")
         nd = nodata if nodata is not None else src.nodata
-        for window in _iter_windows(src, bbox, window_size):
+        for window in iter_windows(src, bbox, window_size):
+            if cellset is not None and cellset.in_bounds(*rasterio.windows.bounds(window, src.transform)).size == 0:
+                continue  # none of our cells touch this window: skip the read entirely
             arr = src.read(band, window=window).astype("float64")
             valid = _mask_valid(arr, nd)
             if not valid.any():
                 continue
             if decimate > 1:
                 arr, valid = block_mean(arr, valid, decimate)
-            cells, idx = _window_cells_index(src, window, res, decimate)
-            if not cells:
+            window_cells, idx = _window_cells_index(src, window, res, decimate, cellset)
+            if not window_cells:
                 continue
-            _accumulate(acc, arr, valid, cells, idx, agg, threshold)
+            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold)
     return _finish(acc, agg)
 
 
@@ -335,6 +388,7 @@ def aggregate_rasters(
     band: int = 1,
     nodata: float | None = None,
     reducer: str = "median",
+    cells=None,
 ) -> pd.DataFrame:
     """Like :func:`aggregate_raster`, but each pixel's value is the median (or mean) across
     several aligned rasters before aggregation. Used for the five Aqueduct riverine climate
@@ -351,6 +405,7 @@ def aggregate_rasters(
     if not paths:
         raise ValueError("aggregate_rasters needs at least one raster")
     acc = _Acc()
+    cellset = as_cellset(cells)
     srcs = [rasterio.open(p) for p in paths]
     try:
         first = srcs[0]
@@ -360,7 +415,9 @@ def aggregate_rasters(
             if s.shape != first.shape or not np.allclose(tuple(s.transform)[:6], tuple(first.transform)[:6]):
                 raise ValueError(f"{s.name}: rasters are not aligned with {first.name} (shape or transform differ); resample first")
         nodatas = [nodata if nodata is not None else s.nodata for s in srcs]
-        for window in _iter_windows(first, bbox, window_size):
+        for window in iter_windows(first, bbox, window_size):
+            if cellset is not None and cellset.in_bounds(*rasterio.windows.bounds(window, first.transform)).size == 0:
+                continue
             stack = np.stack([s.read(band, window=window).astype("float64") for s in srcs])  # (k, h, w)
             valid_each = np.stack([_mask_valid(stack[k], nodatas[k]) for k in range(len(srcs))])
             valid = valid_each.any(axis=0)
@@ -370,10 +427,10 @@ def aggregate_rasters(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slices are expected
                 arr = np.nanmedian(stack, axis=0) if reducer == "median" else np.nanmean(stack, axis=0)
-            cells, idx = _window_cells_index(first, window, res)
-            if not cells:
+            window_cells, idx = _window_cells_index(first, window, res, 1, cellset)
+            if not window_cells:
                 continue
-            _accumulate(acc, arr, valid, cells, idx, agg, threshold)
+            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold)
     finally:
         for s in srcs:
             s.close()

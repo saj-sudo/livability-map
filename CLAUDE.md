@@ -12,10 +12,16 @@ section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, 
 §5 ASCII diagram (mirrored in `README.md`) in the same change when the pipeline shape changes.
 
 Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScript, Sessions 6-7).
-Status (2026-09-22): every stage and the map app are built and run end to end on real data at
-H3 res 4 and 5 with 18 dimensions (four hazards, wellbeing, nine life, four environment); the
-R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI, MEDSL county
-returns, HUD FMR workbook) are outstanding. SPEC §13.18-27 records the decisions taken.
+Status (2026-09-23): every stage and the map app run end to end on real data at H3 res 4 and 5
+everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
+8, three PMTiles archives), with 18 dimensions incl. the Eurostat 1 km grid and England IoD 2025.
+Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
+Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
+MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
+
+Manual steps only Saj can do (registrations, browser-only downloads, credentials, permission
+requests) live in `docs/manual-steps.md`: add an item there whenever a session hits one, and move
+it to Done when it is handled.
 
 ## Commands
 
@@ -31,6 +37,9 @@ uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also hap
 uv run python -m pipeline --res 4 all            # real data: fetch -> ... -> tiles -> publish (~35 min, 6 GB RAM)
 uv run python -m pipeline --res 4 --bbox 89.5,23,91.5,25 hazards   # subregion run (own interim/out dirs)
 uv run python -m pipeline --res 5 dims --only care --only net     # add layers without redoing the tract overlays
+uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
+uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
+uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```
@@ -40,7 +49,8 @@ and every script that writes repo files must use UTF-8 explicitly (`PYTHONUTF8=1
 code does.
 
 CLI options (`--fixtures`, `--res`, `--bbox minlng,minlat,maxlng,maxlat`, `--force`) are typer
-callback options and must precede the stage name. `all` runs stages in order and stops cleanly
+callback options and must precede the stage name. `--res` picks resolutions from the plan
+(default: all of them). `all` runs stages in order and stops cleanly
 at the first stage that is still planned (`pipeline/stages/PLANNED` maps stage to session).
 
 ## Environment constraint
@@ -59,6 +69,15 @@ stage. Paths depend on `fixtures`: real runs use `data/{raw,interim,out}` and
 `pipeline/fixtures/sources.yaml`. Fixture sources reuse the real source ids
 (`natural_earth_land`, `ghsl_pop`, `geoboundaries_adm0/1`, `cckp_hd35`, ...) so stages and
 `dimensions.yaml` work unchanged in both modes.
+
+**Resolution plan** (`pipeline/resolution_plan.yaml`, fixtures: `pipeline/fixtures/resolution_plan.yaml`,
+`resplan.py`, SPEC §9.1, §13.31-34). `land` entries (res 4, 5) cover every land cell; `children`
+entries (res 6: US/EU/UK/EFTA or near urban clusters; res 7: urban centres) are H3 children of
+matching parents from `urban.parquet` (the `urban` stage, GHS-SMOD) and adm0. Each entry names its
+zooms and PMTiles archive (`hexes`, `hexes_nbhd`, `hexes_city`); the tiler and web read them via the manifest.
+Derived resolutions are scored against res-5 distributions (`reference.py`); `export` sets `ref`
+on refined parents so the web hides them under the finer layer. Raster aggregation takes a cell
+set (`h3util.CellSet`) so derived resolutions cost what their cells cost.
 
 **Stage contract.** Each `pipeline/stages/<name>.py` exposes `run(settings)`. Stages write one
 parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`,
@@ -100,11 +119,13 @@ EPSG:4326.
 (population-weighted via `weight_field`, equal-area CRS 6933, `min_coverage` guard),
 `point_density`, and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
 rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
-(weighted mean of points per hex). All return a Series aligned to the hexes index with NaN for
+(weighted mean of points per hex) and `point_radius` (mean or sum of points within a radius of
+the centre; `domain_by_country` ranks such values within each country). All return a Series aligned to the hexes index with NaN for
 missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
-sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `basin`, `admin1`,
-`county`, `tract`, `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
+sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km
+census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside the US, England
+LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
 **Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 6): a 4°x4° synthetic region

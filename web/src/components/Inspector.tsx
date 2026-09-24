@@ -29,7 +29,7 @@ interface Props {
   embedded?: boolean;
 }
 
-const RES_WORDS: Record<string, string> = { hex: "this hex", basin: "sub-basin", tract: "tract level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
+const RES_WORDS: Record<string, string> = { hex: "this hex", grid: "1 km grid cells", basin: "sub-basin", tract: "tract level", area: "small-area level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
 const SOURCE_WORDS: Record<string, string> = { shdi: "Subnational HDI", whr: "World Happiness Report" };
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {

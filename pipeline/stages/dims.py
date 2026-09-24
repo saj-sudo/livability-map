@@ -82,10 +82,13 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
     if spec.joiner == "raster_mean":
         # hex-level: every hex at once; the joiner reads only the windows inside `bbox`
         assert isinstance(layer, RasterLayer), f"{spec.source}: raster_mean needs a raster layer"
-        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox)
+        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox, cells=hexes["h3"])
         return v.to_numpy(dtype="float64")
     if spec.joiner == "point_mean":
         v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)
+        return v.to_numpy(dtype="float64")
+    if spec.joiner == "point_radius":
+        v = JOINERS["point_radius"](hexes, layer, res, field, radius_km=spec.radius_km, agg=spec.agg, weight_field=spec.weight_field)
         return v.to_numpy(dtype="float64")
     mask = _layer_mask(hexes, layer, res)
     if not mask.any():
@@ -143,7 +146,12 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
             raw[fill] = v[fill]
         res_tag[fill] = spec.res
         src[fill] = spec.source
-        dom[fill] = spec.domain
+        if spec.domain_by_country and "iso_a2" in hexes.columns:
+            # values relative within a country are ranked only against that country (§20.4)
+            iso = hexes["iso_a2"].fillna("").astype(str).to_numpy()
+            dom[fill] = np.where(iso[fill] != "", np.char.add(f"{spec.domain}:", iso[fill].astype(str)), spec.domain)
+        else:
+            dom[fill] = spec.domain
         lbl[fill] = spec.label or spec.source
     cols: dict[str, pd.Series] = {}
     if dim.kind == "score":

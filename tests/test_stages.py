@@ -73,3 +73,25 @@ def test_fixture_generation_is_deterministic(tmp_path):
     a = make_fixtures.build(tmp_path / "a")
     b = make_fixtures.build(tmp_path / "b")
     assert a == b
+
+
+def test_fixture_world_has_urban_classes_and_grids(fixture_dir):
+    import geopandas as gpd
+    import numpy as np
+    import rasterio
+
+    with rasterio.open(fixture_dir / "smod.tif") as src:
+        arr = src.read(1)
+        assert src.nodata == -200
+        assert {10, 11, 21, 30} <= set(np.unique(arr[arr != -200]).astype(int).tolist())
+        row, col = src.index(11.0, 43.0)  # Alder centre
+        assert arr[row, col] == 30
+        row, col = src.index(12.5, 40.7)  # desert
+        assert arr[row, col] == 11
+    grid = pd.read_csv(fixture_dir / "eurostat_grid.csv")
+    assert {"lat", "lng", "pop", "pop_1564", "emp", "emp_rate", "share_ge65"} <= set(grid.columns)
+    assert grid["lng"].between(11, 12).all() and (grid["lat"] >= 42).all()  # north-east XKA only
+    lsoa = gpd.read_file(fixture_dir / "lsoa.gpkg")
+    assert {"LSOA21CD", "emp_dep_rate", "health_dep", "housing_barriers", "population", "pop_working"} <= set(lsoa.columns)
+    minx, _, maxx, maxy = lsoa.total_bounds
+    assert minx >= 11.0 - 1e-9 and maxx <= 12.0 + 1e-9 and maxy <= 42.0 + 1e-9  # south-east XKA only

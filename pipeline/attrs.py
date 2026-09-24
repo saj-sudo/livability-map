@@ -11,7 +11,9 @@ import math
 
 from .registry import COMPOSITION_KEYS, Dimension
 
-BASE_ATTRS = ["h3", "res", "iso_a2", "admin1_id", "admin1_name", "population", "inhabited"]
+# `ref` (SPEC §6.1, §9.1): true when a finer layer covers this cell (absent otherwise), so the
+# web app can hide a refined parent once its children's layer is on screen
+BASE_ATTRS = ["h3", "res", "iso_a2", "admin1_id", "admin1_name", "population", "inhabited", "ref"]
 HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"]
 HAZARD_RAW = {"heat": "heat_days", "rflood": "rflood_frac", "cflood": "cflood_frac", "wstress": "wstress_cat"}
 COMPOSITE_ATTRS = ["coverage", "exposure", "wb_value", "wb_score", "wb_source", "wb_res", "bivar", "scenario", "horizon"]
@@ -50,7 +52,7 @@ def tile_attrs(dims: dict[str, Dimension]) -> list[str]:
 def style_attrs(dims: dict[str, Dimension]) -> list[str]:
     """The slim subset a style expression needs (used for the fattest low-zoom tiles only when
     the size guard in the tiles stage asks for it): no raw values, no strings but the res tags."""
-    out = ["inhabited", "coverage", "exposure", "wb_score", "wb_res", "bivar"]
+    out = ["inhabited", "ref", "coverage", "exposure", "wb_score", "wb_res", "bivar"]
     out += [f"{hz}_score" for hz in HAZARD_IDS] + [f"{hz}_ok" for hz in HAZARD_IDS]
     for dim in dims.values():
         if dim.group == "hazard" or dim.id == "wb":

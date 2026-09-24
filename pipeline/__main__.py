@@ -24,13 +24,16 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help=__doc__)
 def main(
     ctx: typer.Context,
     fixtures: bool = typer.Option(False, "--fixtures", help="Run against the synthetic fixture world (SPEC §11.1)."),
-    res: list[int] = typer.Option(None, "--res", help="H3 resolution(s); default from config (4, 5)."),
+    res: list[int] = typer.Option(None, "--res", help="H3 resolution(s) from pipeline/resolution_plan.yaml; default: all of them."),
     bbox: str = typer.Option(None, "--bbox", help="minlng,minlat,maxlng,maxlat to run a subregion."),
     force: bool = typer.Option(False, "--force", help="Ignore stage caches and recompute."),
     root: Path = typer.Option(None, "--root", help="Repo root (auto-detected)."),
 ) -> None:
     settings = Settings(root=root.resolve() if root else find_root(), fixtures=fixtures, force=force)
     if res:
+        unknown = sorted(set(res) - set(settings.plan.resolutions()))
+        if unknown:
+            raise typer.BadParameter(f"--res {unknown} is not in {settings.plan_path.name} (plan: {settings.plan.resolutions()})")
         settings.res = sorted(set(res))
     settings.bbox = parse_bbox(bbox)
     if fixtures:
@@ -61,8 +64,23 @@ def _run_stage(name: str, settings: Settings, **kwargs) -> bool:
         if name in PLANNED and "planned for Session" in str(exc):
             print(f"{name:6s} {exc}")
             return False
-        raise
+        _fail(name, exc)
+    except (FileNotFoundError, ValueError, KeyError, OSError) as exc:
+        _fail(name, exc)
     return True
+
+
+def _fail(name: str, exc: Exception) -> None:
+    """Workspace rule: a failed stage prints what went wrong in a sentence, never a traceback.
+    Stage errors are written to be read (they name the missing file or the stage to run first);
+    set PIPELINE_TRACEBACK=1 to see the full stack when debugging."""
+    import os
+
+    if os.environ.get("PIPELINE_TRACEBACK"):
+        raise exc
+    message = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
+    print(f"{name:6s} stopped: {message}", file=sys.stderr)
+    raise typer.Exit(code=1)
 
 
 @app.command()
@@ -73,6 +91,12 @@ def fetch(ctx: typer.Context, only: list[str] = typer.Option(None, "--only", hel
     results = stage.run(_settings(ctx), only=only or None)
     if any(r.status in ("refused", "error") for r in results):
         raise typer.Exit(code=1)
+
+
+@app.command()
+def urban(ctx: typer.Context) -> None:
+    """GHS-SMOD urban centres and clusters as saved polygons with ids (SPEC §13.31)."""
+    _run_stage("urban", _settings(ctx))
 
 
 @app.command()
@@ -121,11 +145,11 @@ def export(ctx: typer.Context, geojson: bool = typer.Option(False, "--geojson", 
 def tiles(
     ctx: typer.Context,
     backend: str = typer.Option("auto", "--backend", help="auto | python | tippecanoe (SPEC §13.18)."),
-    maxzoom: int = typer.Option(7, "--maxzoom", help="Highest zoom built; MapLibre overzooms beyond it."),
     workers: int = typer.Option(None, "--workers", help="Encoder processes (default: cores - 1; 0 = in-process)."),
+    archive: str = typer.Option(None, "--archive", help="Build only this plan archive (hexes | hexes_nbhd | hexes_city)."),
 ) -> None:
-    """hexes_r{res}.parquet -> hexes.pmtiles (SPEC §9.2)."""
-    _run_stage("tiles", _settings(ctx), backend=backend, maxzoom=maxzoom, workers=workers)
+    """hexes_r{res}.parquet -> one PMTiles archive per resolution-plan archive; zooms from the manifest (SPEC §9.1)."""
+    _run_stage("tiles", _settings(ctx), backend=backend, workers=workers, archive=archive)
 
 
 @app.command()
@@ -134,7 +158,7 @@ def publish(
     target: str = typer.Option("auto", "--target", help="auto | local (web/public/data) | r2 (Cloudflare, .env credentials)."),
     local_dir: Path = typer.Option(None, "--local-dir", help="Override the local target directory."),
 ) -> None:
-    """Ship hexes.pmtiles + manifest.json (SPEC §6.3, §13.24)."""
+    """Ship every tile archive + manifest.json (SPEC §6.3, §13.24)."""
     _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir)
 
 

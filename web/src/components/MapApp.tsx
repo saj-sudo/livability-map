@@ -5,7 +5,7 @@
 // SSR because MapLibre needs the DOM and WebGL2.
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ComparePanel from "./ComparePanel";
 import Inspector from "./Inspector";
@@ -15,6 +15,7 @@ import Search from "./Search";
 import Sheet from "./Sheet";
 import Tooltip from "./Tooltip";
 import { PHONE_QUERY, useMediaQuery } from "./useMediaQuery";
+import { archivesFrom, tileLayersFrom } from "../lib/layers";
 import type { FlyTo, HoveredHex, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
@@ -110,8 +111,12 @@ export default function MapApp({ manifest, dims }: Props) {
     setHint("Click or search a second place to compare");
   }, []);
 
-  const tilesKey = manifest.tiles?.hexes?.key ?? "hexes.pmtiles";
-  const tileLayers = manifest.tiles?.hexes?.layers?.map((l) => ({ name: l.name, minzoom: l.minzoom, maxzoom: l.maxzoom }));
+  // SPEC §9.1: one source per tile archive, layers in resolution order with their plan flags
+  const tileLayers = useMemo(() => tileLayersFrom(manifest.tiles), [manifest.tiles]);
+  const archives = useMemo(() => {
+    const a = archivesFrom(manifest.tiles);
+    return a.length ? a : [{ id: "hexes", key: "hexes.pmtiles" }];
+  }, [manifest.tiles]);
 
   // the inspector or the comparison for the selected hex; floats on desktop, sits in the sheet on a phone
   const place =
@@ -136,7 +141,7 @@ export default function MapApp({ manifest, dims }: Props) {
 
   return (
     <div className="map-shell">
-      {ready && <MapView tilesKey={tilesKey} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} />}
+      {ready && <MapView archives={archives} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} />}
       {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
       {helpSlot &&
         createPortal(

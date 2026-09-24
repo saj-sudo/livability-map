@@ -128,3 +128,31 @@ def test_cells_for_geometry_survives_a_piece_that_is_a_hair_over_the_span():
     g2 = box(0.0, 0.0, 20.000000000000004, 5.0)
     assert set(h3util.cells_for_geometry(g2, 4)) == set(h3util.cells_for_geometry(box(0.0, 0.0, 19.9, 5.0), 4)) | set(h3util.cells_for_geometry(box(19.9, 0.0, 20.000000000000004, 5.0), 4))
 
+
+
+def test_aggregate_on_a_cell_subset_matches_the_full_fill(fixture_dir):
+    import pandas as pd
+
+    path = fixture_dir / "pop.tif"
+    full = h3util.aggregate_raster(path, 5, "sum").set_index("h3")["value"]
+    some = full.index[:20].tolist()
+    part = h3util.aggregate_raster(path, 5, "sum", cells=some).set_index("h3")["value"]
+    assert set(part.index) == set(some)
+    pd.testing.assert_series_equal(part.sort_index(), full.loc[some].sort_index(), check_names=False)
+
+
+def test_cellset_bounds_pick_only_touching_cells():
+    alder = h3.latlng_to_cell(43.0, 11.0, 7)
+    cs = h3util.CellSet.from_cells([alder, h3.latlng_to_cell(40.7, 12.5, 7)])
+    hit = cs.in_bounds(10.9, 42.9, 11.1, 43.1)
+    assert [cs.cells[i] for i in hit] == [alder]
+    assert cs.in_bounds(0.0, 0.0, 1.0, 1.0).size == 0
+
+
+def test_aggregate_rasters_accepts_a_cell_subset(stacked_rasters):
+    paths = stacked_rasters
+    full = h3util.aggregate_rasters(paths, 5, "frac_above", threshold=0.5).set_index("h3")["value"]
+    some = full.index[:5].tolist()
+    part = h3util.aggregate_rasters(paths, 5, "frac_above", threshold=0.5, cells=some).set_index("h3")["value"]
+    assert set(part.index) == set(some)
+    assert (part.sort_index().to_numpy() == full.loc[some].sort_index().to_numpy()).all()

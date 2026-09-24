@@ -45,6 +45,18 @@
   verified: confirmed
   vintage: "fixture"
   files: [pop.tif]
+- id: ghsl_smod
+  name: fixture GHS-SMOD-like degree of urbanisation classes
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/smod.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -200
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [smod.tif]
 - id: cckp_hd35
   name: fixture heat NetCDF
   group: hazard
@@ -381,3 +393,203 @@
   verified: none
   vintage: VERIFY
   files: [whr.csv]
+- id: eurostat_census_grid_2021
+  name: fixture 1 km statistical grid points (Eurostat-like, north-east XKA)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/eurostat_grid.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [eurostat_grid.csv]
+- id: eng_imd_2025
+  name: fixture LSOA-like deprivation polygons (IoD-like, south-east XKA) already joined to geometry
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/lsoa.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [lsoa.gpkg]
+- id: ons_lsoa_2021
+  name: fixture LSOA-like boundaries (same file as eng_imd_2025)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/lsoa.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [lsoa.gpkg]
+- id: de_zensus_2022
+  name: fixture Zensus-like rent grid point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/de_zensus.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [de_zensus.csv]
+- id: nl_cbs_vierkant_100m
+  name: fixture CBS-like 100 m square point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/nl_cbs_100m.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [nl_cbs_100m.csv]
+- id: nl_cbs_vierkant_500m
+  name: fixture CBS-like 500 m square point (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/nl_cbs_500m.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [nl_cbs_500m.csv]
+- id: fr_insee_iris_2021
+  name: fixture IRIS-like polygon with activity and poverty (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]
+- id: fr_insee_filosofi_iris_2021
+  name: fixture Filosofi stand-in (same file as fr_insee_iris_2021)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]
+- id: fr_ign_iris_contours
+  name: fixture IRIS contours (same file as fr_insee_iris_2021)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/fr_iris.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [fr_iris.gpkg]
+- id: ca_statcan_da_profile
+  name: fixture DA-like polygon with census rates (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ca_da.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ca_da.gpkg]
+- id: ca_statcan_da_boundaries
+  name: fixture DA boundaries (same file)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/ca_da.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ca_da.gpkg]
+- id: au_abs_sa2_gcp
+  name: fixture SA2-like polygon with census values (ocean corner)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/au_sa2.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [au_sa2.gpkg]
+- id: au_abs_sa2_boundaries
+  name: fixture SA2 boundaries (same file)
+  group: reference
+  access: fixture
+  url: file://pipeline/fixtures/data/au_sa2.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [au_sa2.gpkg]
+- id: map_travel_cities
+  name: fixture travel time to cities (minutes)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/city.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [city.tif]
+- id: meta_rwi
+  name: fixture Relative-Wealth-Index-like points
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/rwi.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [rwi.csv]
+- id: ucdp_ged
+  name: fixture conflict events near Cedar
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/ged.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ged.csv]
+- id: map_walking_healthcare
+  name: fixture walking time to care (minutes)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/walkcare.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [walkcare.tif]
+- id: wpdx_water_points
+  name: fixture water points around Birch
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/wpdx.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [wpdx.csv]

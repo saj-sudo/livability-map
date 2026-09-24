@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from .. import h3util, rawfiles, stage_cache
+from .. import h3util, rawfiles, reference, stage_cache
 from ..config import Settings
 from ..joiners.polygon_centroid import polygon_centroid
 from ..registry import Source, load_sources
@@ -79,13 +79,14 @@ def heat_days(nc_path, lat: np.ndarray, lng: np.ndarray, var: str | None = None)
         ds.close()
 
 
-def flood_fraction(paths: list, res: int, depth_min: float, bbox) -> pd.Series:
+def flood_fraction(paths: list, res: int, depth_min: float, bbox, cells=None) -> pd.Series:
     """Fraction of valid pixels with inundation depth >= depth_min, per hex (index h3).
-    Several paths -> pixel-wise median across them first (riverine climate models)."""
+    Several paths -> pixel-wise median across them first (riverine climate models). ``cells``
+    limits the work to the hexes that exist at this resolution."""
     if len(paths) == 1:
-        agg = h3util.aggregate_raster(paths[0], res, "frac_above", threshold=depth_min, bbox=bbox)
+        agg = h3util.aggregate_raster(paths[0], res, "frac_above", threshold=depth_min, bbox=bbox, cells=cells)
     else:
-        agg = h3util.aggregate_rasters(paths, res, "frac_above", threshold=depth_min, bbox=bbox, reducer="median")
+        agg = h3util.aggregate_rasters(paths, res, "frac_above", threshold=depth_min, bbox=bbox, reducer="median", cells=cells)
     return agg.set_index("h3")["value"]
 
 
@@ -121,14 +122,18 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
             if not p.exists():
                 raise FileNotFoundError(f"{p} missing (run `grid` and `pop` first)")
         out = settings.stage_path("hazards", res)
-        inputs = [f for fs in files.values() for f in fs] + [hexes_path, pop_path]
-        params = {"res": res, "bbox": settings.bbox, "depth_min": settings.depth_min, "stage": "hazards"}
+        inputs = [f for fs in files.values() for f in fs] + [hexes_path, pop_path] + reference.reference_inputs(settings, res, ("pop", "hazards"))
+        params = {"res": res, "bbox": settings.bbox, "depth_min": settings.depth_min, "stage": "hazards", "reference_res": settings.plan.reference_res(res)}
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             df = pd.read_parquet(out)
             counts[res] = {hz: int(df[f"{hz}_ok"].sum()) for hz in HAZARDS}
             print(f"hazards res {res}: up to date ({counts[res]}), skipping")
             continue
         t0 = time.time()
+        # SPEC §13.32: a derived resolution is ranked against the finest complete resolution
+        ref = reference.reference_frame(settings, res)
+        for hz in HAZARDS:
+            reference.require(ref, f"{hz}_ok", "hazards", settings, res)
         hexes = pd.read_parquet(hexes_path, columns=["h3", "lat", "lng"]).merge(
             pd.read_parquet(pop_path, columns=["h3", "inhabited"]), on="h3", how="left"
         )
@@ -146,7 +151,7 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
         for hz in ("rflood", "cflood"):
             src = sources[HAZARDS[hz][0]]
             rasters = [rawfiles.resolve_raster(settings, src, i) for i in range(len(src.files))]
-            frac = flood_fraction(rasters, res, settings.depth_min, settings.bbox)
+            frac = flood_fraction(rasters, res, settings.depth_min, settings.bbox, cells=hexes["h3"])
             col = HAZARDS[hz][1]
             df[col] = df["h3"].map(frac).astype("float32")
             df[f"{hz}_ok"] = df[col].notna()
@@ -156,10 +161,11 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
         df["wstress_cat"] = pd.array(np.round(pd.to_numeric(cat, errors="coerce").to_numpy()), dtype="Int16")
         df["wstress_ok"] = df["wstress_cat"].notna() & (df["wstress_cat"].fillna(-1) >= 0)
 
-        # scores (§8.2): percentile among inhabited hexes with data
+        # scores (§8.2): percentile among inhabited hexes with data (of the reference res, §13.32)
         for hz in HAZARDS:
             raw = df[HAZARDS[hz][1]].astype("float64").where(df[f"{hz}_ok"])
-            df[f"{hz}_score"] = percentile_score(raw, hexes["inhabited"] & df[f"{hz}_ok"])
+            ref_values = None if ref is None else ref.loc[ref[f"{hz}_ok"].fillna(False).astype(bool), HAZARDS[hz][1]].to_numpy(dtype="float64")
+            df[f"{hz}_score"] = percentile_score(raw, hexes["inhabited"] & df[f"{hz}_ok"], reference=ref_values)
 
         cols = ["h3"]
         for hz, (_, rawcol) in HAZARDS.items():

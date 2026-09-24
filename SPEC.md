@@ -73,7 +73,9 @@ dimension, and the map renders low-confidence areas visibly differently.
    processing note for each value. `/methodology` is generated from the pipeline manifest.
 2. **Resolution mismatch is labeled, never smoothed over.** Hazard values are per hex. Every
    other dimension carries a resolution tag: `hex` (computed per hex from a raster or point set),
+   `grid` (a statistical grid such as the Eurostat 1 km census grid, aggregated per hex),
    `basin` (a hydrological sub-basin polygon at the centroid), `admin1`, `county`, `tract`,
+   `area` (a small statistical area outside the US: England LSOA; later IRIS, DAs, SA2),
    `national`, or `none`.
 3. **No data is not zero risk.** Hexes with missing layers render as visibly uncertain, and
    composites exclude missing layers rather than treating them as 0.
@@ -104,38 +106,47 @@ CORS). No database in the web app.
   - WB CCKP CMIP6 hd35: hot days > 35C     - Global Data Lab Subnational HDI (admin1)         - geoBoundaries CGAZ admin0 + admin1
   - WRI Aqueduct Floods riverine 1-in-100  - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
   - WRI Aqueduct Floods coastal 1-in-100   - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
-  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)
+  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
                                            - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
+                                           - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
+                                           - hex-level: MAP travel time, ACAG PM2.5, tree cover, Ookla
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
-  |                        pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 4] [--bbox ...] <stage>)|
+  |               pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 6] [--bbox ...] <stage>)  |
   |                                                                                                        |
   |  fetch     download + sha256 each source per pipeline/sources.yaml -> data/raw/<id>/                  |
   |            manual sources (GEE export, registration) are checked for presence, recipe printed         |
-  |  grid      Natural Earth land -> H3 cells at H3_RES (drop ocean) -> data/interim/hexes_r{res}.parquet |
+  |  urban     GHS-SMOD classes -> urban centre / cluster polygons with ids -> data/interim/urban.parquet |
+  |  grid      resolution plan (pipeline/resolution_plan.yaml, §9.1): res 4 + 5 from Natural Earth land,  |
+  |            res 6 = children of res-5 cells in US/EU/UK/EFTA or touching urban clusters, res 7 =       |
+  |            children inside urban centres -> data/interim/hexes_r{res}.parquet (one per resolution)   |
   |  pop       GHSL 1 km -> sum per hex -> population, inhabited flag (pop >= POP_MIN)                    |
   |  admin     hex centroid -> geoBoundaries admin0/admin1 -> iso_a2, admin1_id, admin1_name              |
-  |  hazards   for each raster: windowed read -> raster_to_h3 -> aggregate per hex (§8.1)                 |
-  |            -> per-hazard 0-100 percentile score + *_ok flag                                           |
-  |  dims      for each dimension in pipeline/dimensions.yaml, run its joiners (§20.3):                    |
-  |            polygon_centroid | iso_lookup | area_weighted_overlay | point_density                      |
-  |            -> {id}_raw, {id}_res ('hex' | 'basin' | 'admin1' | 'county' | 'tract' | 'national' | 'none') |
-  |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                            |
+  |  hazards   for each raster: windowed read of the hexes' cells -> aggregate per hex (§8.1)            |
+  |            -> per-hazard 0-100 percentile score + *_ok flag (res 6/7 ranked against res 5, §13.32)    |
+  |  dims      prep/<source>.py turns each raw source into a joinable layer; for each dimension in       |
+  |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
+  |            area_weighted_overlay | point_density | raster_mean | point_mean                          |
+  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
+  |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
-  |            wb_score, bivar class 1-9 (§8.4)                                                            |
-  |  export    data/out/hexes_r{res}.parquet + manifest.json (§6.3); --geojson for tippecanoe             |
-  |  tiles     python tiler (pipeline/tiler.py; tippecanoe optional) -> hexes.pmtiles                     |
-  |            hex4 layer z2-4 (slim attrs at z2), hex5 layer z5-7, overzoomed beyond (§9, §13.18)       |
-  |  publish   hexes.pmtiles + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
+  |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
+  |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
+  |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
+  |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
+  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes.pmtiles   manifest.json           |
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  (basemap: OpenFreeMap, §13.5)           |
-  |  views: bivariate | per hazard |       |               +------------------------------------------+
+  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
+  |  parents (ref) hidden under finer hexes|               +------------------------------------------+
+  |  views: bivariate | per hazard |       |
   |         wellbeing | my priorities      |
   |  presets + sliders (§20.5), legend,    |
   |  click -> inspector (feature props)    |
@@ -149,11 +160,12 @@ is why every displayed value has to be baked into the hex attributes in §6.
 
 ## 6. Data model
 
-### 6.1 Hex record (one row per H3 cell, both resolutions)
+### 6.1 Hex record (one row per H3 cell, every resolution in the plan)
 
 ```
 h3            string   H3 index (hex string)
-res           int      4 or 5
+res           int      4-7 today (any 4-10 the resolution plan lists, §9.1)
+ref           bool     true when a finer layer replaced this cell (absent otherwise; §9.1)
 lat, lng      float    cell centroid
 iso_a2        string   country of centroid (geoBoundaries admin0), null if disputed/none
 admin1_id     string   geoBoundaries admin1 shapeID of centroid (pinned release), null if none
@@ -304,17 +316,35 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 9.1 H3 resolution
 
-Pipeline is resolution-agnostic (`H3_RES` list). Ship res 4 for zoom 2 to 4 and res 5 for zoom
-5 to 7 (overzoomed to 12 in the client); zoom 0-1 is not built because a res-4 hex is under two
-pixels there and the world tile would exceed 5 MB. Res 5 has about 2 million cells globally, roughly 600k on land. Iterate on res 4 alone
-during Sessions 1 to 4 for speed.
+The resolutions, where each is built, its zooms and its archive live in
+`pipeline/resolution_plan.yaml` (Session 8, §13.32); nothing else hard-codes a resolution.
+
+| Layer | H3 res (avg cell) | Built where | Zooms | Archive |
+|---|---|---|---|---|
+| hex4 | 4 (1,770 km²) | all land | z2-4 (slim attributes at z2) | hexes.pmtiles |
+| hex5 | 5 (253 km²) | all land | z5-7, overzoomed beyond | hexes.pmtiles |
+| hex6 | 6 (36 km²) | children of res-5 cells whose centroid is in the US, EU-27, UK or EFTA, or that touch a GHS-SMOD urban cluster | z8-9, overzoomed | hexes_nbhd.pmtiles |
+| hex7 | 7 (5.2 km²) | children of res-6 cells that touch a GHS-SMOD urban centre | z10-11, overzoomed | hexes_city.pmtiles |
+
+`land` entries are complete (every land cell); `children` entries exist only where a rule matched
+and drop children whose centre is in the ocean. A layer keeps drawing past its last zoom unless
+the next finer present layer is complete, so res 5 still covers the world at z8+; each cell a
+finer layer replaced carries `ref = true` and is hidden from that layer's first zoom, so colours
+never double up. Along the edge of a refined region the H3 children do not tile their parents
+exactly (H3 is not perfectly nested), which leaves a hairline of basemap or overlap there.
+Adding a tier is a yaml entry: Session 11 appends res 9/10 inside urban centres at z14-16 with
+its own archive. Zoom 0-1 is not built because a res-4 hex is under two pixels there and the
+world tile would exceed 5 MB.
 
 ### 9.2 Tile build
 
 Built by `pipeline/tiler.py` (pure Python: `mapbox-vector-tile` + the `pmtiles` writer, decision
-§13.18) with two layers: `hex4` for zoom 2-4 (the slim attribute set at zoom 2, where a res-4 hex
-is about two pixels) and `hex5` for zoom 5-7; MapLibre overzooms the zoom-7 tiles beyond that
-without further requests. tippecanoe (felt fork) remains an optional backend when it is on PATH
+§13.18) with one layer per resolution and one archive per plan `archive` (§9.1): `hex4` for zoom
+2-4 (the slim attribute set at zoom 2, where a res-4 hex is about two pixels) and `hex5` for zoom
+5-7 in `hexes.pmtiles`, `hex6` z8-9 in `hexes_nbhd.pmtiles` and `hex7` z10-11 in `hexes_city.pmtiles`
+(a layer drawn past its last zoom must close its archive: MapLibre overzooms per source); MapLibre overzooms
+beyond each layer's last zoom without further requests. Zooms come from the manifest, never a
+table in code. Each archive stays under ~300 MB (§14.10); past that, split by plan `archive`. tippecanoe (felt fork) remains an optional backend when it is on PATH
 (`tiles --backend tippecanoe` after `export --geojson`). Upload to R2; CORS per §15.14; the web
 app reads the PMTiles via HTTP range requests.
 
@@ -423,6 +453,25 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
 - `dims --only <id> [--only <id> ...]` recomputes the named dimensions and merges them into the
   existing `dims_r{res}.parquet`; use it to add a layer, and run without it when a prepared
   layer or the registry changed for a dimension you did not name.
+- Neighbourhood resolution (Session 8, 2026-09-23 run): urban 39 s / 1.2 GB; grid res 6 + 7
+  512 s / 1.8 GB -> 963,098 res-6 cells (670,216 inhabited) and 401,729 res-7 cells (357,504
+  inhabited), over twice the first estimate because GHS-SMOD class 21 (peri-urban) is widespread;
+  pop 122 s, admin 15 s, hazards 1,609 s / 2.9 GB (cell-set aggregation reads only windows the cells
+  touch); dims res 6 14,553 s and res 7 4,931 s, peak 7.9 GB (US tract overlays dominate); the three
+  refreshed dimensions at res 4 + 5 via `dims --only` 795 s; score 13 s, export 28 s. Tiles:
+  hexes.pmtiles 146.5 MB (10,984 tiles), hexes_nbhd.pmtiles 206.2 MB (30,430 tiles, 952 s),
+  hexes_city.pmtiles 254.3 MB (128,730 tiles, 705 s). hex7 at z10-13 made a 531 MB archive (z13
+  alone 276 MB), so hex7 was tiled z10-12; after the five NGO dimensions (15 more attributes,
+  2026-09-23) it reached 306 MB and is now tiled z10-11 (a res-7 hex is ~30 px wide at z11) and
+  overzoomed. hexes.pmtiles grew from 148 to 191 MB and hexes_nbhd from 207 to 264 MB.
+- Country sources (2026-09-23): `dims --only jobs --only incmix --only house --only rent` at res
+  4-7 took 7,862 s / 5.7 GB (the StatCan profile is streamed once from its 2.25 GB zip into
+  `interim/prep/`), then score 14 s, export 30 s, tiles 2,778 s: hexes 148.1 MB, hexes_nbhd
+  207.3 MB, hexes_city 255.8 MB. Share of inhabited res-6 hexes carrying the country value: DE
+  rent 99%; NL rent 93%, incmix 90%; FR jobs 99%, incmix 18% (Filosofi covers communes of 5,000+
+  only); CA jobs / incmix / house 98%; AU jobs / house / rent 100%.
+- Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
+  when one would pass that (§14.10).
 
 ### 11.1 Fixture world
 
@@ -444,7 +493,7 @@ because that would hide exactly the within-region variation the map exists to sh
 ## 13. Decisions (Session 0, 2026-09-20)
 
 1. **Project name:** `livability-map` as working name; product name before deploy.
-2. **H3 resolutions:** 4 + 5.
+2. **H3 resolutions:** 4 + 5 everywhere; 6 and 7 where the resolution plan says (§9.1, §13.32).
 3. **Scenario and horizon:** moderate pathway (RCP4.5 for Aqueduct, SSP2-4.5 for CCKP), 2050.
 4. **Confidence rendering:** hatch pattern.
 5. **Basemap:** OpenFreeMap.
@@ -513,6 +562,76 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     HUD's Fair Market Rents workbook is `access: manual` because huduser.gov answers every
     non-browser client with an empty 202 (an AWS WAF challenge); the pipeline does not
     impersonate a browser.
+31. **Urban mask** (Saj, 2026-09-22): GHS-SMOD R2023A epoch 2025 at 30 arc-seconds, the same grid as
+    GHS-POP, not the 1.7 GB GHS-UCDB. The `urban` stage polygonises class 30 (urban centre) and
+    classes >= 21 (urban cluster) into `data/interim/urban.parquet` with `uc_id`, `kind` and
+    `area_km2`, the saved layer Session 11 reuses for block hexes. Epoch 2025: 12,195 urban centres
+    and 226,941 urban clusters; only pieces touching a raster window edge are unioned, on a
+    sub-pixel precision grid so seams close (a single global union ran for over half an hour).
+32. **Resolution plan and reference scoring** (Saj, 2026-09-22): `pipeline/resolution_plan.yaml`
+    replaces the flat resolution list (§9.1). Res 6 covers the US, EU-27, UK and EFTA plus every
+    urban cluster, res 7 every urban centre. A derived resolution is ranked against the inhabited
+    hexes of the finest complete resolution (res 5) in the same domain, including the wellbeing
+    min-max bounds and the bivariate tercile cuts, so a neighbourhood keeps its colour meaning at
+    every zoom; its score reads "better than X% of inhabited res-5 hexes".
+33. **One archive per derived layer, and refined parents** (2026-09-22): tiles are built per plan archive
+    (`hexes.pmtiles`, `hexes_nbhd.pmtiles`, `hexes_city.pmtiles`): MapLibre overzooms per source, so a
+    derived layer drawn past its zooms must be the last layer of its archive, and smaller archives
+    stay under the §14.10 size guard. The web
+    app adds one source per archive. `export` writes `ref = true` on cells a finer layer
+    replaced; the coarse layer fades those cells out from the finer layer's first zoom.
+34. **Neighbourhood statistics and tags** (Saj, 2026-09-22): the Eurostat 2021 1 km census grid
+    (employment rate of 15-64s, tag `grid`, domain `eu`) and the English Indices of Deprivation
+    2025 on LSOA 2021 (employment, health and housing-barrier domains, tag `area`, domain `uk`)
+    ship in this session; German Zensus, Dutch CBS, French IRIS, Canadian DAs and Australian SA2
+    ship after Session 8 (§13.35). Germany, France, Switzerland and Latvia publish no usable
+    employment count on the grid (EMP -9999 in over half their populated cells), so their grid
+    employment is treated as missing and those hexes fall back to OECD / ILOSTAT. A joiner may declare `higher_is` opposite to its dimension (IoD
+    deprivation feeding `jobs`); the score stage reflects that joiner's percentile so every
+    `{id}_score` obeys the dimension's direction, and the raw value ships as published.
+35. **Country small areas and grids** (2026-09-23, after Session 8): Germany (Zensus 2022 average
+    net cold rent per m², 100 m grid -> `rent`), the Netherlands (CBS 2023 squares: average WOZ home
+    value at 100 m -> `rent`, low-income household share at 500 m -> `incmix`; CBS publishes income
+    only at 500 m), France (INSEE RP 2021 employment and Filosofi 2021 poverty rate per IRIS on IGN
+    Contours...IRIS 2023 -> `jobs`, `incmix`), Canada (StatCan 2021 Census Profile per DA:
+    employment rate, LIM-AT low income, households spending 30%+ on shelter -> `jobs`, `incmix`,
+    `house`) and Australia (ABS 2021 GCP per SA2: employment-to-population, median rent, median rent
+    over median household income -> `jobs`, `rent`, `house`). Grids carry tag `grid`, small areas
+    `area`; each country is its own scoring domain (`de`, `nl`, `fr`, `ca`, `au`). StatCan's
+    tenant-only 30%+ rate is not used: it reads 0 in most small DAs where the owner-plus-tenant rate
+    does not (randomly rounded counts), so the all-households rate is used instead. ABS publishes
+    unavailable values as 0, which the loader treats as missing. Canada and Australia are **not**
+    added to the res-6 country list: 86% of Canadians and 90% of Australians already live under
+    res-6 cells through the urban-cluster rule, and adding both countries whole would add ~470k
+    mostly empty cells; their data applies at every resolution anyway. The cluster rule stays at
+    GHS-SMOD class >= 21: dense-only variants cut res 6 by only 8-18% (900k / 803k cells) while
+    dropping the peri-urban neighbourhoods of 180-530 million people (measured 2026-09-23).
+36. **NGO hex layers** (2026-09-23): three open datasets from research groups fill gaps outside
+    the US, Europe, Canada and Australia, each a new `life` dimension at tag `hex`: travel time to
+    the nearest city of 50,000+ (`city`, Malaria Atlas Project 2015, CC BY 3.0 / 4.0), relative
+    wealth within the country (`wealth`, Meta Relative Wealth Index 2021, 93 low- and
+    middle-income countries, CC BY-NC 4.0) and organised-violence deaths per year within 25 km
+    (`conflict`, UCDP GED 26.1, 2016-2025, CC BY 4.0). A new joiner, `point_radius`, takes the
+    mean or sum of point values within a radius of the hex centre (never smaller than the hex
+    edge), because the wealth tiles (~2.4 km) are sparser than res-7 hexes and conflict needs a
+    neighbourhood, not a cell. `domain_by_country` ranks a joiner's values only against hexes of
+    the same country (`{id}_dom` = `country:<ISO2>`), since the wealth index is relative within
+    each country. For `conflict`, 0 is a real value (no recorded event within 25 km; the event
+    set is global); events placed only at an admin1 or country centroid are excluded so they do
+    not create hotspots. OPHI's subnational MPI was evaluated and not added: its survey regions
+    match the map's admin1 polygons for only 70% of regions (Tanzania, Uganda and Rwanda among
+    the structural mismatches), and World Bank GSAP already covers the same ground. Sources that
+    need a login, a key or permission are listed in `docs/manual-steps.md`.
+37. **Walking time to care, water points, presets** (2026-09-23): `walkcare` is MAP's walking-only
+    travel time to the nearest hospital or clinic (2020, CC BY 3.0), beside the motorised `care`,
+    because many people in Sub-Saharan Africa have no motorised transport. `water` is the share of
+    WPdx+ community water points within 5 km that had water at the last visit (19 countries, incl.
+    all of East Africa); it is missing where no point is recorded, since WPdx covers community
+    points and a city on piped water has few. WPdx's global export states no user licence; the
+    data is recorded as CC BY-SA 4.0, as WPdx publishes it on HDX, with the derived attributes
+    labelled share-alike (confirmation requested in docs/manual-steps.md). The presets use the new
+    layers where they fit: Early career weights `city`, Raising kids `conflict` and `water`,
+    Retiring `walkcare`.
 
 ## 14. VERIFY before code depends on it
 
@@ -573,6 +692,21 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-20 | 14.15 life dimensions | search. See §20.6 table and notes. | see §20.6 |
 | 2026-09-22 | 14.8 Natural Earth populated places | **confirmed** by download through `python -m pipeline fetch --only natural_earth_places`: `ne_10m_populated_places.zip` (2.8 MB, sha256 in `data/raw/CHECKSUMS`), public domain, fields NAME, ISO_A2, POP_MAX, FEATURECLA; used only for the web app's search index (§10), never joined to a hex. | https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip |
 | 2026-09-22 | 14.9 Basemap dark style | **confirmed** in the browser: `https://tiles.openfreemap.org/styles/dark` loads with the same sprite/glyph hosts; `setStyle` with `transformStyle` keeps the hex source and six layers with no PMTiles refetch. | https://tiles.openfreemap.org/styles/dark |
+| 2026-09-22 | Session 8: GHS-SMOD R2023A | **confirmed** by download (`python -m pipeline fetch --only ghsl_smod`): 34.0 MB zip with `GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.tif` (43202 x 21384 int16, 30 arc-second EPSG:4326, nodata -200, classes 10 water, 11-13 rural, 21-23 urban cluster, 30 urban centre; same grid as GHS-POP), `.clr`, `.ovr` and the GHSL Data Package 2023 PDF; CC BY 4.0 (JRC GHSL). | https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_SMOD_GLOBE_R2023A/GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss/V2-0/ |
+| 2026-09-22 | Session 8: Eurostat Census 2021 grid V3 | **confirmed** by download: 566 MB zip (`Eurostat_Census-GRID_2021_V3.zip`, 2026-05-30) with CSV (340 MB), parquet (76 MB, used), GeoPackage (1.3 GB), GeoTIFF, per-country CSVs, SDMX metadata and `read.me`. 4,595,932 1 km cells in ETRS89-LAEA (EPSG:3035), `GRD_ID` = `CRS3035RES1000mN{y}E{x}`, columns T, M, F, Y_LT15, Y_1564, Y_GE65, EMP, NAT, EU_OTH, OTH, SAME, CHG_IN, CHG_OUT, LAND_SURFACE, POPULATED, CNTR_ID; -8888 = confidential, -9999 = not available (EMP is -9999 for whole countries); EU-27 + CH, NO, LI (no IS; FR without overseas regions). Copyright European Union: reuse authorised with source indicated and modifications stated (Decision 2011/833/EU). | https://gisco-services.ec.europa.eu/census/2021/Eurostat_Census-GRID_2021_V3.zip |
+| 2026-09-22 | Session 8: English Indices of Deprivation 2025, File 7 | **confirmed** by download: 9.9 MB CSV, 33,755 LSOA 2021 rows, 56 columns; used: `LSOA code (2021)`, `Index of Multiple Deprivation (IMD) Score`, `Income Score (rate)`, `Employment Score (rate)`, `Health Deprivation and Disability Score`, `Barriers to Housing and Services Score`, `Total population: mid 2022`, `Working age population 18-66 (for use with Employment Deprivation Domain): mid 2022`. Published 2025-10-30 by MHCLG under the Open Government Licence v3.0. England only. | https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025 |
+| 2026-09-22 | Session 8: ONS LSOA (December 2021) Boundaries EW BGC V5 | **confirmed** by download through the Open Geography hub download API (302 to a cached GeoJSON on services1.arcgis.com; feature service `Lower_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V5`, 35,672 features): 66 MB GeoJSON in EPSG:27700 with LSOA21CD, LSOA21NM, LSOA21NMW, BNG_E, BNG_N, LAT, LONG. Licence per https://www.ons.gov.uk/methodology/geography/licences: Open Government Licence v3.0, "Contains OS data © Crown copyright and database right 2021". | https://open-geography-portalx-ons.hub.arcgis.com/api/download/v1/items/68515293204e43ca8ab56fa13ae8a547/geojson?layers=0 |
+| 2026-09-23 | Zensus 2022 rent grid (DE) | **confirmed** by download: `Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip` (11.0 MB, Destatis, version 2 of 2025-07-08); 100 m CSV (73 MB, `;`, decimal comma, UTF-8) with GITTER_ID_100m, x_mp_100m / y_mp_100m (cell centre, EPSG:3035), durchschnMieteQM (EUR/m² net cold rent), AnzahlWohnungen, werterlaeuternde_Zeichen (KLAMMERN = uncertain); 1,287,342 cells, 1.00-49.69, median 6.41; empty or secret cells are absent. Licence dl-de/by-2-0 (Datensatzbeschreibung), © Statistische Ämter des Bundes und der Länder. | https://www.zensus2022.de/DE/Ergebnisse-des-Zensus/gitterzellen.html |
+| 2026-09-23 | CBS vierkantstatistieken 2023 (NL) | **confirmed** by download: `2026-cbs_vk100_2023_vol.zip` (75.5 MB; gpkg layer cbs_vk100_2023, EPSG:28992, 390,396 squares, 131 columns) and `2026-cbs_vk500_2023_vol.zip` (19.4 MB; cbs_vk500_2023, 151,108 squares). Used: gemiddelde_woz_waarde_woning (thousand EUR), aantal_woningen; percentage_laag_inkomen_huishouden (only at 500 m; 16,260 squares), aantal_part_huishoudens. Sentinels -99997 (0-4 / secret / absent) and -99995 (later version). Licence CC BY 4.0 (CBS copyright page; product description asks for '© CBS'). | https://www.cbs.nl/nl-nl/dossier/nederland-regionaal/geografische-data/kaart-van-100-meter-bij-100-meter-met-statistieken |
+| 2026-09-23 | INSEE IRIS 2021 + IGN Contours IRIS 2023 (FR) | **confirmed** by download: `base-ic-activite-residents-2021_csv.zip` (39.5 MB; 49,280 IRIS; `;`, decimal point; P21_POP1564, P21_ACTOCC1564; updated 2025-12-16), `BASE_TD_FILO_IRIS_2021_DISP_CSV.zip` (0.9 MB; 16,026 IRIS of communes with 5,000+ inhabitants; `;`, decimal comma; DISP_TP6021 poverty rate; ns / nd / s / so), and IGN `CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z` (34.2 MB; nine shapefiles in territory CRSs, 49,424 IRIS, CODE_IRIS). Every INSEE code matches the 2023 contours. Filosofi 2022 was not published at IRIS level. Licence Ouverte 2.0 (Etalab), 'Source : Insee'; IGN metadata: licence ouverte Etalab. | https://www.insee.fr/fr/statistiques/8268843 , https://www.insee.fr/fr/statistiques/8229323 , https://data.geopf.fr/telechargement/resource/CONTOURS-IRIS |
+| 2026-09-23 | StatCan 2021 Census Profile DA + boundaries (CA) | **confirmed** by download: 98-401-X2021006 (GetFile.cfm GEONO=006; 2.25 GB zip, six cp1252 CSVs ~26.6 GB, long format, 2,631 characteristics, 57,936 DAs; HEAD answers 302 -> 404, GET works). Used ids 1, 2223, 2229 (employment rate), 345 (LIM-AT %), 1465 / 1467 (all households, 30%+ on shelter). Suppression by blank + symbol (x, .., ..., F). Boundaries `lda_000b21a_e.zip` (197 MB, EPSG:3347, 57,932 DAs, DGUID matches). Statistics Canada Open Licence ('Adapted from Statistics Canada ...'). | https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/download-telecharger.cfm?Lang=E |
+| 2026-09-23 | ABS 2021 GCP DataPack SA2 + ASGS SA2 boundaries (AU) | **confirmed** by download: `2021_GCP_SA2_for_AUS_short-header.zip` (42.3 MB, Release 2; 2,472 rows per table; G01 Tot_P_P, G02 Median_rent_weekly / Median_tot_hhd_inc_weekly, G43 P_15_yrs_over_P / Percnt_Employment_to_populn_P; unavailable published as 0; pseudo-SA2s ending 97979799 / 99999499) and `SA2_2021_AUST_SHP_GDA2020.zip` (50.7 MB, EPSG:7844, 2,473 SA2, 19 without geometry, SA2_CODE21 matches). CC BY 4.0, 'Based on Australian Bureau of Statistics data'. | https://www.abs.gov.au/census/find-census-data/datapacks |
+| 2026-09-23 | MAP travel time to cities 2015 | **confirmed** by download via WCS (coverage `Accessibility__201501_Global_Travel_Time_to_Cities`, AccessConstraints NONE): 3.03 GB int32 GeoTIFF, 43200 x 17400, EPSG:4326, nodata -9999, minutes 0-41556. MAP open-access policy: CC BY 3.0 with citation; the Earth Engine catalog lists CC BY 4.0. The same policy page also answers the licence of `map_healthcare`. | https://malariaatlas.org/open-access-policy/ |
+| 2026-09-23 | Meta Relative Wealth Index (HDX) | **confirmed** by download: combined 93-country CSV with quadkeys (122 MB, 2,463,901 zoom-14 tiles; latitude / longitude = tile centre, rwi, error; no country column). HDX licence field quotes CC BY-NC 4.0 with the PNAS 2022 citation. Per-country files (110) also checked: the Moldova and North Macedonia resources have swapped URLs, and IND+PAK is one file; the combined file is used, ranked per hex country. | https://data.humdata.org/dataset/relative-wealth-index |
+| 2026-09-23 | UCDP GED 26.1 | **confirmed** by download: `ged261-csv.zip` (39 MB, `GEDEvent_v26_1.csv`, 417,968 events 1989-2025, 49 columns incl. latitude, longitude, best, year, where_prec 1-7 per the codebook). Licence on the downloads page: CC BY 4.0, cite Davies, Pettersson & Öberg (2026) and Sundberg & Melander (2013). | https://ucdp.uu.se/downloads/ |
+| 2026-09-23 | OPHI global MPI 2025 subnational (not used) | **confirmed** by download (`subnational-results-mpi.xlsx`, 1,359 regions in 101 countries; OPHI FAQ: CC BY 4.0, HDX: CC0). Name match to geoBoundaries ADM1 only 70% (survey regions differ from admin1); not added, §13.36. | https://data.humdata.org/dataset/global-mpi |
+| 2026-09-23 | MAP walking-only travel time to healthcare 2020 | **confirmed** by download via WCS (`Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare`): 3.03 GB float32 GeoTIFF, nodata -9999, minutes 0-138,745 (median 798 over land pixels). CC BY 3.0 per the MAP open-access policy (no layer exceptions); Earth Engine lists CC BY 4.0. | https://malariaatlas.org/open-access-policy/ |
+| 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 
 ## 16. Phasing and session plan
 
@@ -624,7 +758,7 @@ The Fair Housing Act and its EU equivalents are the reason, not just taste.
 | 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
 | 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
 | 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
-| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Planned; prompt in docs/superpowers/plans/2026-09-22-next-sessions-neighborhood-and-design.md |
+| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Built 2026-09-22 (PR `claude/neighborhood`): urban stage, resolution plan, reference scoring, two archives, Eurostat grid and England IoD 2025; Zensus, CBS, IRIS, DAs and SA2 remain (§13.34); plan in docs/superpowers/plans/2026-09-22-session-8-neighbourhood-resolution.md |
 | 10 | acceptEdits | Python + TypeScript | Point readouts: COGs on R2 for the physical layers, geotiff.js reads under a click, "what is here" panel | Planned after Session 8 (see "Finer resolution" above) |
 | 11 | acceptEdits | Python | Block hexes (res 9/10) inside urban centres, physical layers and OSM/GTFS distances, per-region archives | Planned after Session 10; needs a larger build machine |
 | 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); Session 8 (neighbourhood resolution) is still outlined only, in `docs/superpowers/plans/` on the cost/rent branch |
@@ -747,10 +881,11 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `iso_lookup` | `iso_a2` to a national table | WHR, ILOSTAT, V-Dem |
 | `area_weighted_overlay` | small polygons to hex, weighted by overlap area x polygon population density | ACS tracts, EPA SLD block groups, school districts |
 | `point_density` | points per hex, optionally per 10k residents | transit stops |
-| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
-| `point_mean` | weighted mean of point values inside the hex (tag `hex`) | Ookla speed tiles at their centroids, weighted by tests |
+| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
+| `point_mean` | weighted mean of point values inside the hex (tag `hex`, or `grid` for statistical grid cells) | Ookla speed tiles at their centroids, weighted by tests; Eurostat 1 km census cells at their centres, weighted by 15-64 population |
+| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km) |
 
-All six are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
+All seven are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
 joins agree with `population`.
 
 ### 20.4 Scoring within a coverage domain
@@ -782,18 +917,23 @@ where the hovered or clicked hex has `_res = none`.
 
 | id | Dimension | Global source (res) | US source (res) | License notes |
 |---|---|---|---|---|
-| jobs | Youth / early-career job market | ILOSTAT youth unemployment CC BY 4.0 (national); OECD regional labour (TL2), Eurostat `lfst_r_lfu3rt` (NUTS2) | ACS B23001 age 16-29 unemployment (tract); BLS LAUS (county, all ages) | All open. ACS is public domain; pull the Summary File at build time. |
+| jobs | Youth / early-career job market | ILOSTAT youth unemployment CC BY 4.0 (national); OECD regional labour (TL2); EU: Eurostat 2021 1 km census grid employment rate of 15-64s (`grid`, Session 8); England: IoD 2025 employment deprivation (LSOA, `area`); France: INSEE RP 2021 employment rate 15-64 (IRIS, `area`); Canada: StatCan 2021 employment rate (DA, `area`); Australia: ABS 2021 employment-to-population (SA2, `area`) | ACS B23001 age 16-29 unemployment (tract); BLS LAUS (county, all ages) | All open. ACS is public domain; pull the Summary File at build time. |
 | transit | Public transit access | Mobility Database catalog CC0 + OSM ODbL (points) - v2 | EPA Smart Location Database v3 transit frequency `D4C` and walkability (block group), public domain | OSM per-hex derivatives are a derivative database under ODbL; keep tiles-only or license that layer ODbL. Walk Score and AllTransit excluded. |
 | school | School quality | GDL SHDI education sub-index (admin1; attainment, not quality) | Urban Institute Education Data Portal ODC-BY (district); NCES CCD boundaries public domain | SEDA is best but non-transferable; ask Stanford. PISA is CC BY-NC-SA (national). GreatSchools excluded. |
 | lgbtq | LGBTQ+ protection and presence | Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B11009 same-sex couple households per 1k households (tract, PD, proxy); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
 | pol | Political lean (signed) | none subnational; V-Dem CC BY-SA (national) is a different construct, v2 | MIT Election Lab county presidential returns 2000-2024 (county, CC0 expected) | Cook PVI excluded. Verify MEDSL license block on the DOI. |
 | race | Racial / ethnic composition | none comparable; most countries do not collect it | ACS B03002 (tract) or 2020 DHC P2 (block), public domain | NHGIS and IPUMS excluded (no redistribution). Differential-privacy noise is negligible at hex scale. |
-| incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |
-| house | Housing cost burden | OECD Regional Well-Being housing (TL2) | ACS B25071 rent as share of income (tract); HUD FMR (county) | Zillow usable only with on-page attribution; deferred. |
-| health | Healthcare access | OECD Regional Well-Being health (TL2); Eurostat `hlth_rs_prsrg` (NUTS2) | HRSA Area Health Resources File physicians per 10k (county) | All open. |
+| incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2); France: Filosofi 2021 poverty rate (IRIS); Netherlands: CBS low-income household share (500 m, `grid`); Canada: LIM-AT low income (DA) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |
+| house | Housing cost burden | OECD Regional Well-Being housing (TL2); England: IoD 2025 barriers to housing and services (LSOA, `area`); Canada: households spending 30%+ of income on shelter (DA); Australia: median rent / median household income (SA2) | ACS B25071 rent as share of income (tract); HUD FMR (county) | Zillow usable only with on-page attribution; deferred. |
+| health | Healthcare access | OECD Regional Well-Being health (TL2); Eurostat `hlth_rs_prsrg` (NUTS2); England: IoD 2025 health deprivation and disability (LSOA, `area`) | HRSA Area Health Resources File physicians per 10k (county) | All open. |
 | cost | Cost of living (price level) | World Bank ICP 2021 household price level CC BY 4.0 (national, World = 100); WDI GDP price level rescaled to it where ICP has no row | BEA Regional Price Parities 2024, metro area then state (US = 100), public domain | Numbeo (proprietary) |
-| rent | Housing cost (rent level) | OECD / Eurostat rent levels - v2 | HUD Fair Market Rent, 2-bedroom, FY2026 (county / FMR area), public domain, manual download (§13.30) | Zillow ZORI (terms forbid redistribution) |
+| rent | Housing cost (rent level) | OECD / Eurostat rent levels - v2; Germany: Zensus 2022 net cold rent per m² (100 m, `grid`); Netherlands: CBS average WOZ home value (100 m); Australia: ABS median weekly rent (SA2) | HUD Fair Market Rent, 2-bedroom, FY2026 (county / FMR area), public domain, manual download (§13.30) | Zillow ZORI (terms forbid redistribution) |
 | care | Travel time to healthcare | Malaria Atlas Project motorized travel time 2019, 1 km, CC BY 4.0 (`hex`) | same | - |
+| city | Access to a city | Malaria Atlas Project travel time to the nearest city of 50,000+, 2015, CC BY 3.0 (`hex`) | same | a proxy for access to jobs and services, not the job market |
+| wealth | Relative wealth within the country | Meta Relative Wealth Index 2021, 93 LMICs, CC BY-NC 4.0 (`hex`, ranked within each country) | - | relative, never compared across countries |
+| conflict | Armed conflict nearby | UCDP GED 26.1 deaths per year within 25 km, 2016-2025, CC BY 4.0 (`hex`) | same | ACLED excluded (no redistribution) |
+| walkcare | Walking time to healthcare | MAP walking-only travel time to the nearest facility, 2020, CC BY 3.0 (`hex`) | same | the motorised time is `care` |
+| water | Working water points nearby | WPdx+ share of water points within 5 km with water, 19 countries, CC BY-SA 4.0 (`hex`) | - | missing where no point is recorded |
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |

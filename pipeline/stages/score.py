@@ -14,6 +14,13 @@ Reads ``hexes ⨝ pop ⨝ admin ⨝ hazards ⨝ dims`` and writes ``data/interim
   distribution.
 - ``scenario``, ``horizon`` constants (§6.1)
 
+A derived resolution (res 6, 7; SPEC §13.32) takes its percentile distributions, wellbeing
+min-max bounds and bivariate cuts from the inhabited hexes of its reference resolution (res 5),
+so a neighbourhood keeps its colour meaning at every zoom. A joiner whose raw value runs
+opposite to its dimension (``higher_is`` on the joiner, e.g. IMD deprivation feeding ``jobs``)
+has its percentile reflected (``100 - p``) so every ``{id}_score`` obeys the dimension's stated
+direction (§13.33).
+
 Scores are plain percentiles; direction is the client's job (SPEC §13.25). Missing stays
 missing (invariant 3). Composition shares pass through untouched from ``dims`` (invariant 8).
 """
@@ -25,10 +32,10 @@ import time
 import numpy as np
 import pandas as pd
 
-from .. import stage_cache
+from .. import reference, stage_cache
 from ..config import Settings
 from ..registry import load_dimensions, load_sources
-from ..scoring import bivariate_class, minmax_score, percentile_score
+from ..scoring import bivariate_class, bivariate_cuts, minmax_score, percentile_score
 from .hazards import HAZARDS
 
 WB_ID = "wb"
@@ -59,12 +66,14 @@ def composites(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def score_dimension(dim, df: pd.DataFrame) -> dict[str, pd.Series]:
-    """Per-domain percentile (or per-source min-max) for one dimension."""
+def score_dimension(dim, df: pd.DataFrame, ref: pd.DataFrame | None = None) -> dict[str, pd.Series]:
+    """Per-domain percentile (or per-source min-max) for one dimension; ``ref`` is the
+    reference frame of a derived resolution (SPEC §13.32)."""
     inhabited = df["inhabited"]
     if dim.scale == "minmax":
         raw = df[f"{dim.id}_raw"]
-        return {f"{dim.id}_score": minmax_score(raw, df[f"{dim.id}_lbl"])}
+        bounds = None if ref is None else pd.DataFrame({"v": ref[f"{dim.id}_raw"], "g": ref[f"{dim.id}_lbl"]})
+        return {f"{dim.id}_score": minmax_score(raw, df[f"{dim.id}_lbl"], reference=bounds)}
     if dim.kind in ("signed", "composition"):
         return {}  # {id}_lean and the composition shares are final in the dims output (invariant 8)
     raw = pd.to_numeric(df[f"{dim.id}_raw"], errors="coerce")
@@ -72,8 +81,16 @@ def score_dimension(dim, df: pd.DataFrame) -> dict[str, pd.Series]:
     score = pd.Series(pd.NA, index=df.index, dtype="Int16")
     for d in [x for x in dom.dropna().unique()]:
         in_dom = (dom == d).to_numpy()
-        part = percentile_score(raw.where(in_dom), inhabited & in_dom)
+        ref_values = None
+        if ref is not None:
+            ref_values = pd.to_numeric(ref.loc[ref[f"{dim.id}_dom"] == d, f"{dim.id}_raw"], errors="coerce").dropna().to_numpy(dtype="float64")
+        part = percentile_score(raw.where(in_dom), inhabited & in_dom, reference=ref_values)
         score[in_dom] = part[in_dom]
+    # §13.33: a joiner whose raw runs opposite to the dimension is reflected within its domain
+    flip = {j.label or j.source for j in dim.joiners if j.higher_is and j.higher_is != dim.higher_is}
+    if flip and f"{dim.id}_lbl" in df.columns:
+        m = df[f"{dim.id}_lbl"].isin(flip).to_numpy() & score.notna().to_numpy()
+        score[m] = 100 - score[m]
     return {f"{dim.id}_score": score}
 
 
@@ -84,18 +101,24 @@ def run(settings: Settings) -> dict[int, dict]:
     report: dict[int, dict] = {}
     for res in settings.res:
         out = settings.stage_path("score", res)
-        inputs = [settings.hexes_path(res)] + [settings.stage_path(s, res) for s in ("pop", "admin", "hazards", "dims")]
-        params = {"res": res, "bbox": settings.bbox, "stage": "score", "scenario": settings.scenario, "horizon": settings.horizon}
+        inputs = [settings.hexes_path(res)] + [settings.stage_path(s, res) for s in ("pop", "admin", "hazards", "dims")] + reference.reference_inputs(settings, res, ("pop", "dims", "score"))
+        params = {"res": res, "bbox": settings.bbox, "stage": "score", "scenario": settings.scenario, "horizon": settings.horizon, "reference_res": settings.plan.reference_res(res)}
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             print(f"score  res {res}: up to date, skipping")
             report[res] = stage_cache.read_meta(out).get("report", {})
             continue
         t0 = time.time()
+        ref = reference.reference_frame(settings, res)  # SPEC §13.32
+        reference.require(ref, f"{WB_ID}_raw", "dims", settings, res)
+        reference.require(ref, "bivar", "score", settings, res)
+        for dim in dims:
+            if dim.kind == "score":
+                reference.require(ref, f"{dim.id}_raw", "dims", settings, res)
         df = _load(settings, res)
         result = composites(df)
         domains: dict[str, dict[str, int]] = {}
         for dim in dims:
-            for col, series in score_dimension(dim, df).items():
+            for col, series in score_dimension(dim, df, ref).items():
                 result[col] = series
             if dim.kind == "score" and dim.scale != "minmax":
                 dom = df[f"{dim.id}_dom"]
@@ -104,7 +127,8 @@ def run(settings: Settings) -> dict[int, dict]:
         result["wb_value"] = df[f"{WB_ID}_raw"].astype("float32")
         result["wb_source"] = df[f"{WB_ID}_lbl"].fillna("none").astype(str)
         # wb_res already comes from the dims stage; not repeated here to keep the merge clean
-        result["bivar"] = bivariate_class(result["exposure"].astype("float64"), result["wb_score"].astype("float64"), df["inhabited"])
+        cuts = None if ref is None else bivariate_cuts(ref["exposure"].astype("float64"), ref["wb_score"].astype("float64"), pd.Series(True, index=ref.index))
+        result["bivar"] = bivariate_class(result["exposure"].astype("float64"), result["wb_score"].astype("float64"), df["inhabited"], cuts=cuts)
         result["scenario"] = settings.scenario
         result["horizon"] = settings.horizon
         result.to_parquet(out, index=False)

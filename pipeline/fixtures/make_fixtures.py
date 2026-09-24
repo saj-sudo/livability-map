@@ -3,7 +3,8 @@
 A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - land polygon with a coastal bite in the south-east and one small island
 - two countries (user-assigned ISO3 XKA, XKB) and five admin1 regions
-- a 0.01 degree population raster with four towns and an empty desert
+- a 0.01 degree population raster with four towns and an empty desert, and a GHS-SMOD-like
+  class raster derived from it (urban centres over Alder, Birch, Cedar; clusters incl. Dune)
 - a 0.25 degree heat NetCDF (hd35), 0.01 degree riverine and coastal flood GeoTIFFs,
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
@@ -14,6 +15,8 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - cost-of-living stand-ins: states (BEA-like price parity for two of the three XKB regions, so
   the third falls through to the national fallback), ICP-like (XA only) and WDI-like (both)
   national price levels
+- neighbourhood statistics (Session 8): a Eurostat-like 1 km grid of points over north-east XKA
+  and LSOA-like deprivation polygons over south-east XKA (west XKA keeps the OECD stand-in)
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -39,13 +42,15 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 6  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 11  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
 NODATA_POP = -200.0
 NODATA_FLOOD = -9999.0
 NODATA_CARE = -9999.0  # travel-time raster nodata (as the real MAP file)
+NODATA_SMOD = -200.0  # GHS-SMOD nodata
+SMOD_CENTRE_PX, SMOD_CLUSTER_PX = 1000.0, 200.0  # persons per pixel -> class 30 / class 21
 
 TOWNS = {  # name: (lng, lat, peak persons/pixel, sigma degrees)
     "Alder": (11.0, 43.0, 3000.0, 0.05),
@@ -63,6 +68,7 @@ SPOT_CHECKS = [
     Spot("Desert (XKB)", 40.7, 12.5, "uninhabited, XKB / B-South"),
     Spot("Island", 40.45, 13.5, "land hex if a cell centre falls on it, else absent"),
     Spot("Ocean", 40.3, 13.8, "not a land hex"),
+    Spot("Alder centre", 43.0, 11.0, "inside the Alder urban centre: a res-7 hex exists here (Session 8)"),
 ]
 
 
@@ -460,6 +466,112 @@ def ookla_points():
     return fixed, pd.DataFrame(mob)
 
 
+def smod_raster(pop: np.ndarray, land: np.ndarray) -> np.ndarray:
+    """GHS-SMOD-like degree-of-urbanisation classes derived from the fixture population: 30
+    (urban centre) where dense (the Alder, Birch and Cedar cores), 21 (urban cluster) around
+    them and over Dune, 11 elsewhere on land, 10 water, nodata where the population raster is
+    nodata (SPEC §13.31; the urban stage polygonises these classes)."""
+    smod = np.full(pop.shape, 10.0)
+    smod[land] = 11.0
+    smod[land & (pop >= SMOD_CLUSTER_PX)] = 21.0
+    smod[land & (pop >= SMOD_CENTRE_PX)] = 30.0
+    smod[pop == NODATA_POP] = NODATA_SMOD
+    return smod
+
+
+def eurostat_grid(LNG, LAT, pop: np.ndarray, land: np.ndarray) -> pd.DataFrame:
+    """A 1 km-ish statistical grid over north-east XKA (lng 11-12, lat >= 42: "EU") standing in for
+    the Eurostat census grid: one point per populated pixel with counts and an employment rate
+    that rises eastwards and northwards (so res-6 hexes get a visible gradient). West of lng 11
+    XKA keeps its OECD stand-in, so both paths stay tested."""
+    sel = land & (LNG >= 11.0) & (LNG < 12.0) & (LAT >= 42.0) & (pop > 0)
+    lng, lat, p = LNG[sel], LAT[sel], pop[sel]
+    emp_rate = np.clip(0.5 + 0.2 * (lng - 10.0) / 2.0 + 0.1 * (lat - 42.0) / 2.0, 0.3, 0.9)
+    pop_1564 = np.round(p * 0.65)
+    return pd.DataFrame(
+        {
+            "lat": np.round(lat, 4),
+            "lng": np.round(lng, 4),
+            "pop": np.round(p),
+            "pop_1564": pop_1564,
+            "emp": np.round(pop_1564 * emp_rate),
+            "emp_rate": np.round(emp_rate, 4),
+            "share_ge65": 0.2,
+        }
+    )
+
+
+def lsoa_layer(land_geom) -> gpd.GeoDataFrame:
+    """0.05 degree squares over south-east XKA (lng 11-12, lat 40-42: "England", around Birch)
+    standing in for LSOAs with IoD-like scores; deprivation rises northwards so the jobs / health /
+    house joiners get a gradient. Kept off XKB, whose US-like layers would win first. Columns
+    match what prep/imd.py produces from the real files."""
+    rows = []
+    for i, x0 in enumerate(np.arange(11.0, 12.0, 0.05)):
+        for j, y0 in enumerate(np.arange(40.0, 42.0, 0.05)):
+            geom = box(x0, y0, x0 + 0.05, y0 + 0.05).intersection(land_geom)
+            if geom.is_empty:
+                continue
+            t = (y0 - 40.0) / 2.0
+            rows.append(
+                {
+                    "LSOA21CD": f"X0{i:02d}{j:02d}",
+                    "LSOA21NM": f"A-South {i:02d}{j:02d}",
+                    "emp_dep_rate": round(0.05 + 0.2 * t, 4),
+                    "health_dep": round(-1.0 + 2.0 * t, 4),
+                    "housing_barriers": round(10.0 + 30.0 * t, 3),
+                    "income_dep_rate": round(0.08 + 0.25 * t, 4),
+                    "imd_score": round(10.0 + 40.0 * t, 3),
+                    "population": 1500.0,
+                    "pop_working": 900.0,
+                    "geometry": geom,
+                }
+            )
+    return gpd.GeoDataFrame(rows, geometry="geometry", crs=4326)
+
+
+def country_standins(out: Path) -> None:
+    """Stand-ins for the country sources added after Session 8 (Zensus, CBS, INSEE IRIS, StatCan,
+    ABS), placed in the ocean corner of the fixture world so no land hex ever takes their values:
+    they keep the registry and the fixture pipeline honest, and the loader tests cover parsing."""
+    pts = pd.DataFrame({"lat": [40.1], "lng": [13.9]})
+    pts.assign(rent_eur_m2=7.5, dwellings=10).to_csv(out / "de_zensus.csv", index=False)
+    pts.assign(woz_keur=350.0, homes=20).to_csv(out / "nl_cbs_100m.csv", index=False)
+    pts.assign(low_income_share=40.0, households=30).to_csv(out / "nl_cbs_500m.csv", index=False)
+    area = box(13.85, 40.05, 13.95, 40.15)
+    gpd.GeoDataFrame({"CODE_IRIS": ["X00000000"], "emp_rate": [0.6], "pop_1564": [1000.0], "poverty_rate": [15.0]}, geometry=[area], crs=4326).to_file(out / "fr_iris.gpkg", driver="GPKG")
+    gpd.GeoDataFrame({"DGUID": ["X"], "population": [500.0], "pop_15plus": [400.0], "emp_rate": [60.0], "low_income_rate": [12.0], "households": [200.0], "shelter_burden": [0.3]}, geometry=[area], crs=4326).to_file(out / "ca_da.gpkg", driver="GPKG")
+    gpd.GeoDataFrame({"SA2_CODE_2021": ["X"], "population": [5000.0], "pop_15plus": [4000.0], "emp_rate": [0.6], "median_rent_weekly": [400.0], "rent_share_income": [0.2]}, geometry=[area], crs=4326).to_file(out / "au_sa2.gpkg", driver="GPKG")
+
+
+def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
+    """Stand-ins for the NGO hex layers (SPEC §13.36): a travel-time-to-cities raster (minutes,
+    growing with distance from the nearest town), Relative-Wealth-Index-like points on a 0.03°
+    grid whose value rises eastward within each country (so per-country ranking spans the scale in
+    both), and UCDP-like conflict events (fatalities per year) near Cedar."""
+    dist = _town_distance(LNG, LAT)
+    city = np.where(land, 5.0 + 600.0 * dist, -9999.0)
+    _write_tif(out / "city.tif", city, transform, -9999.0)
+    g = np.arange(10.015, 14.0, 0.03)
+    glng, glat = np.meshgrid(g, np.arange(40.015, 44.0, 0.03))
+    glng, glat = glng.ravel(), glat.ravel()
+    import shapely
+
+    on = shapely.contains(land_geometry().geometry.iloc[0], shapely.points(glng, glat))
+    west = glng < 12.0
+    rwi = np.where(west, (glng - 11.0), (glng - 13.0))  # -1..1 within each country
+    pd.DataFrame({"lat": np.round(glat[on], 4), "lng": np.round(glng[on], 4), "rwi": np.round(rwi[on], 3)}).to_csv(out / "rwi.csv", index=False)
+    pd.DataFrame({"lat": [42.52, 42.45, 42.6], "lng": [13.02, 12.95, 13.1], "fatal_per_year": [3.0, 1.5, 0.5]}).to_csv(out / "ged.csv", index=False)
+    # walking time to care: three times the motorised stand-in; water points around Birch only (so
+    # other places are missing, as outside WPdx coverage), with water at most of them
+    walk = np.where(land, 30.0 + 1800.0 * dist, -9999.0)
+    _write_tif(out / "walkcare.tif", walk, transform, -9999.0)
+    wl = np.linspace(11.3, 11.7, 9)
+    wlng, wlat = np.meshgrid(wl, np.linspace(40.8, 41.2, 9))
+    has = (np.arange(wlng.size) % 4 != 0).astype(float)
+    pd.DataFrame({"lat": wlat.ravel().round(4), "lng": wlng.ravel().round(4), "has_water": has}).to_csv(out / "wpdx.csv", index=False)
+
+
 def build(out: Path) -> dict[str, str]:
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
@@ -471,7 +583,13 @@ def build(out: Path) -> dict[str, str]:
 
     LNG, LAT, transform = _grid()
     land = _land_mask(LNG, LAT)
-    _write_tif(out / "pop.tif", population_raster(LNG, LAT, land), transform, NODATA_POP)
+    pop = population_raster(LNG, LAT, land)
+    _write_tif(out / "pop.tif", pop, transform, NODATA_POP)
+    _write_tif(out / "smod.tif", smod_raster(pop, land), transform, NODATA_SMOD)  # Session 8 urban mask input
+    eurostat_grid(LNG, LAT, pop, land).to_csv(out / "eurostat_grid.csv", index=False)
+    lsoa_layer(land_gdf.geometry.iloc[0]).to_file(out / "lsoa.gpkg", driver="GPKG")
+    country_standins(out)  # after Session 8: country grids and small areas (ocean corner, no effect)
+    ngo_layers(LNG, LAT, land, transform, out)  # after Session 8: travel time to cities, wealth, conflict
     _write_tif(out / "inunriver.tif", river_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     _write_tif(out / "inuncoast.tif", coast_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     heat_dataset().to_netcdf(out / "heat.nc", engine="netcdf4")

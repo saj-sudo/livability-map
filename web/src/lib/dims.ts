@@ -38,7 +38,7 @@ export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multi
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -75,10 +75,16 @@ const FALLBACK: DimInfo[] = [
   F("net", "Internet speed", "life", "score", "better", "Global"),
   F("fire", "Wildfire (burned area)", "env", "score", "worse", "Global"),
   F("drought", "Drought risk", "env", "score", "worse", "Global"),
+  F("city", "Access to a city", "life", "score", "worse", "Global"),
+  F("wealth", "Relative wealth", "life", "score", "better", "Within country"),
+  F("conflict", "Armed conflict nearby", "life", "score", "worse", "Global"),
+  F("walkcare", "Walking time to healthcare", "life", "score", "worse", "Global"),
+  F("water", "Working water points nearby", "life", "score", "better", "Global"),
 ];
 
-const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US" };
-const DOMAIN_ORDER = ["global", "oecd", "us"];
+// scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country
+const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia", country: "Within country" };
+const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk", "de", "nl", "fr", "ca", "au", "country"];
 
 /**
  * Coverage chip. The manifest overwrites a dimension's `coverage` list with per-resolution
@@ -87,7 +93,8 @@ const DOMAIN_ORDER = ["global", "oecd", "us"];
  */
 export function chipFor(d: Pick<ManifestDimension, "coverage" | "domains" | "joiners">): string {
   const found = new Set<string>();
-  for (const perRes of Object.values(d.domains ?? {})) for (const [k, n] of Object.entries(perRes)) if (n > 0) found.add(k);
+  // a per-country domain ("country:TZ", values relative within a country) counts as one chip
+  for (const perRes of Object.values(d.domains ?? {})) for (const [k, n] of Object.entries(perRes)) if (n > 0) found.add(k.split(":")[0]);
   if (!found.size) for (const j of d.joiners ?? []) if (j.domain) found.add(j.domain);
   if (!found.size && Array.isArray(d.coverage)) for (const c of d.coverage) found.add(String(c));
   const parts = DOMAIN_ORDER.filter((k) => found.has(k)).map((k) => CHIP[k]);
@@ -139,5 +146,5 @@ export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env"
 export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");
 
 /** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
-export const RES_LABELS: Record<string, string> = { hex: "this hex", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
+export const RES_LABELS: Record<string, string> = { hex: "this hex", grid: "1 km grid", area: "small area", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
 export const resLabel = (tag: string): string => RES_LABELS[tag] ?? tag;

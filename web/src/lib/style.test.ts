@@ -3,19 +3,19 @@ import type { StyleSpecification } from "maplibre-gl";
 import { describe, expect, it } from "vitest";
 import type { DimInfo } from "./dims";
 import { hatchImage } from "./hatch";
-import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChange, SOURCE_ID } from "./style";
+import { TILES } from "./layers.test";
+import { tileLayersFrom } from "./layers";
+import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChange, pickVisible, SOURCE_ID } from "./style";
 
 const dim = (id: string, group: DimInfo["group"], higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name: id, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "hazard", "worse"), dim("wb", "wellbeing"), dim("jobs", "life")];
-const LAYERS = [
-  { name: "hex4", minzoom: 2, maxzoom: 4 },
-  { name: "hex5", minzoom: 5, maxzoom: 7 },
-];
+const LAYERS = tileLayersFrom({ hexes: { key: "hexes.pmtiles", sha256: "", bytes: 1, minzoom: 2, maxzoom: 7, layers: [{ name: "hex4", minzoom: 2, maxzoom: 4 }, { name: "hex5", minzoom: 5, maxzoom: 7 }] } });
 const PICKS = { pol: "competitive", race: "diverse" } as const;
 const KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"];
 
 function styleWith(layers: ReturnType<typeof buildLayers>): StyleSpecification {
-  return { version: 8 as const, sources: { [SOURCE_ID]: { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] } }, layers };
+  const vector = { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] };
+  return { version: 8 as const, sources: { [SOURCE_ID]: vector, hexes_nbhd: vector, hexes_city: vector }, layers };
 }
 
 describe("layer stack (SPEC §9.3)", () => {
@@ -39,6 +39,33 @@ describe("layer stack (SPEC §9.3)", () => {
     expect(fill5.minzoom).toBe(5);
     expect(fill5.maxzoom).toBeUndefined();
     expect(fillLayerIds(LAYERS)).toEqual(["fill-hex4", "fill-hex5"]);
+  });
+
+  it("overzooms per manifest flag and hides refined parents from the next layer's minzoom", () => {
+    const layers = buildLayers({ view: "bivar", dims: DIMS, weights: {}, picks: PICKS }, false, true, tileLayersFrom(TILES));
+    const get = (id: string) => layers.find((l) => l.id === id)! as { source: string; maxzoom?: number; paint: Record<string, unknown> };
+    expect(get("fill-hex4").maxzoom).toBe(5);
+    expect(get("fill-hex5").maxzoom).toBeUndefined();
+    expect(get("fill-hex6").maxzoom).toBeUndefined();
+    expect(get("fill-hex5").source).toBe("hexes");
+    expect(get("fill-hex6").source).toBe("hexes_nbhd");
+    expect(get("fill-hex5").paint["fill-opacity"]).toEqual(["step", ["zoom"], 0.85, 8, ["case", ["==", ["get", "ref"], true], 0, 0.85]]);
+    expect(get("fill-hex6").paint["fill-opacity"]).toEqual(["step", ["zoom"], 0.85, 10, ["case", ["==", ["get", "ref"], true], 0, 0.85]]);
+    expect(get("fill-hex4").paint["fill-opacity"]).toBe(0.85); // hex4 stops before a finer layer starts drawing over it
+    expect(get("fill-hex7").paint["fill-opacity"]).toBe(0.85);
+    expect(get("selected-hex5").paint["line-opacity"]).toEqual(["step", ["zoom"], 1, 8, ["case", ["==", ["get", "ref"], true], 0, 1]]);
+    expect(validateStyleMin(styleWith(layers) as never).map((e) => e.message)).toEqual([]);
+  });
+
+  it("never picks a hidden refined parent on hover or click (final review I1)", () => {
+    const L = tileLayersFrom(TILES);
+    const parent = { sourceLayer: "hex5", properties: { h3: "p", ref: true } };
+    const child = { sourceLayer: "hex6", properties: { h3: "c" } };
+    const plain5 = { sourceLayer: "hex5", properties: { h3: "q" } };
+    expect(pickVisible([parent, plain5], 9, L)).toBe(plain5); // parent hidden from z8: skip it
+    expect(pickVisible([parent], 9, L)).toBeUndefined(); // nothing visible under the pointer
+    expect(pickVisible([parent, child], 7, L)).toBe(parent); // below z8 the parent is still drawn
+    expect(pickVisible([child], 9, L)).toBe(child);
   });
 
   it("hides the hatch when confidence is off and the national outline outside wellbeing views", () => {
@@ -82,6 +109,15 @@ describe("theme change keeps the hex stack (setStyle transformStyle)", () => {
     expect(validateStyleMin(merged as never).map((e) => e.message)).toEqual([]);
     expect(isHexLayerId("fill-hex4")).toBe(true);
     expect(isHexLayerId("water")).toBe(false);
+  });
+
+  it("carries every hex source when layers come from two archives", () => {
+    const vector = { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] };
+    const layers = buildLayers({ view: "bivar", dims: DIMS, weights: {}, picks: PICKS }, false, true, tileLayersFrom(TILES));
+    const two: StyleSpecification = { version: 8, sources: { [SOURCE_ID]: vector, hexes_nbhd: vector, hexes_city: vector }, layers };
+    const merged = mergeStyleOnThemeChange(two, next);
+    expect(Object.keys(merged.sources).sort()).toEqual(["basemap", "hexes", "hexes_city", "hexes_nbhd"]);
+    expect(validateStyleMin(merged as never).map((e) => e.message)).toEqual([]);
   });
 
   it("returns the next style untouched when there is nothing to carry", () => {

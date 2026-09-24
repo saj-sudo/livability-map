@@ -1,11 +1,15 @@
-// The hex layer stack (SPEC §9.3): one vector source with one layer per tile layer in the
-// manifest (hex4 z2-4, hex5 z5+ when built), each with a fill per view, a hatch overlay for
+// The hex layer stack (SPEC §9.1, §9.3): one vector source per tile archive and one layer group
+// per tile layer in the manifest (hex4 z2-4, hex5 z5-7, hex6 z8-9, hex7 z10-11 where built), in
+// resolution order. A layer that overzooms keeps drawing under the finer layers; its cells that a
+// finer layer replaced (`ref`) fade out from that layer's first zoom so colours never double up.
+// Each group has a fill per view, a hatch overlay for
 // reduced confidence, a dashed outline for national wellbeing fallback, a hover outline and a
 // haloed selection outline driven by feature-state. Colours come from the theme's palette.
 
 import type { FilterSpecification, LayerSpecification, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import type { DimInfo } from "./dims";
 import { bivarColor, hatchFilter, inhabitedFilter, nationalFilter, priorityColor, rampFor, scoreColor, type Expr, type Picks, type Weights } from "./expressions";
+import { DEFAULT_TILE_LAYERS, type TileLayer } from "./layers";
 import { paletteFor, type Palette } from "./palette";
 import type { Theme } from "./theme";
 import type { ViewId } from "./url";
@@ -15,16 +19,7 @@ export const HATCH_IMAGE = "hatch";
 export const LAYER_KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"] as const;
 export type LayerKind = (typeof LAYER_KINDS)[number];
 
-/** A source layer in the archive with the zoom range the tiler built it for (manifest.tiles). */
-export interface TileLayer {
-  name: string;
-  minzoom: number;
-  maxzoom: number;
-}
-export const DEFAULT_TILE_LAYERS: TileLayer[] = [
-  { name: "hex4", minzoom: 2, maxzoom: 4 },
-  { name: "hex5", minzoom: 5, maxzoom: 7 },
-];
+export { DEFAULT_TILE_LAYERS, type TileLayer };
 
 export interface ViewOptions {
   view: ViewId;
@@ -38,10 +33,39 @@ export const layerId = (kind: LayerKind, layer: string) => `${kind}-${layer}`;
 export const fillLayerIds = (layers: TileLayer[]) => layers.map((l) => layerId("fill", l.name));
 export const isHexLayerId = (id: string) => LAYER_KINDS.some((k) => id.startsWith(`${k}-`));
 
-/** MapLibre's layer maxzoom is exclusive; the highest layer gets none so it overzooms. */
-function zoomRange(layer: TileLayer, layers: TileLayer[]): { minzoom: number; maxzoom?: number } {
-  const top = Math.max(...layers.map((l) => l.maxzoom));
-  return layer.maxzoom >= top ? { minzoom: layer.minzoom } : { minzoom: layer.minzoom, maxzoom: layer.maxzoom + 1 };
+/** Every MapLibre source the layers read (one per archive). */
+export const hexSourceIds = (layers: TileLayer[]): string[] => [...new Set(layers.map((l) => l.source))];
+
+/** MapLibre's layer maxzoom is exclusive; a layer that overzooms gets none. */
+function zoomRange(layer: TileLayer): { minzoom: number; maxzoom?: number } {
+  return layer.overzoom ? { minzoom: layer.minzoom } : { minzoom: layer.minzoom, maxzoom: layer.maxzoom + 1 };
+}
+
+/** First zoom of the next finer layer, when this layer is still drawn there (it overzooms). */
+function hideRefinedFrom(layer: TileLayer, layers: TileLayer[]): number | undefined {
+  if (!layer.overzoom) return undefined;
+  const finer = layers.filter((l) => l.res > layer.res).map((l) => l.minzoom);
+  return finer.length ? Math.min(...finer) : undefined;
+}
+
+/**
+ * The first feature under the pointer that is actually drawn. `queryRenderedFeatures` ignores
+ * paint opacity, so a refined parent (`ref`, faded to 0 from the finer layer's first zoom) would
+ * otherwise answer hover and click over an empty spot or the sea.
+ */
+export function pickVisible<F extends { sourceLayer?: string; properties: Record<string, unknown> }>(features: F[], zoom: number, layers: TileLayer[]): F | undefined {
+  return features.find((f) => {
+    if (f.properties.ref !== true) return true;
+    const layer = layers.find((l) => l.name === f.sourceLayer);
+    const from = layer ? hideRefinedFrom(layer, layers) : undefined;
+    return from === undefined || zoom < from;
+  });
+}
+
+/** Opacity that drops to 0 for refined cells (`ref`) from zoom `from` on (SPEC §9.1). */
+function refinedOpacity(base: number, from: number | undefined): number | Expr {
+  if (from === undefined) return base;
+  return ["step", ["zoom"], base, from, ["case", ["==", ["get", "ref"], true], 0, base]] as unknown as Expr;
 }
 
 export function fillColorFor(o: ViewOptions): Expr {
@@ -60,14 +84,16 @@ export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: bool
   const layers: LayerSpecification[] = [];
   for (const tl of tileLayers) {
     const L = tl.name;
-    const zoom = zoomRange(tl, tileLayers);
-    const base = { source: SOURCE_ID, "source-layer": L, ...zoom };
+    const zoom = zoomRange(tl);
+    const from = hideRefinedFrom(tl, tileLayers);
+    const line = refinedOpacity(1, from);
+    const base = { source: tl.source, "source-layer": L, ...zoom };
     layers.push({
       id: layerId("fill", L),
       type: "fill",
       ...base,
       filter: inhabitedFilter(showUninhabited),
-      paint: { "fill-color": fillColorFor(o), "fill-opacity": 0.85, "fill-outline-color": pal.outline },
+      paint: { "fill-color": fillColorFor(o), "fill-opacity": refinedOpacity(0.85, from), "fill-outline-color": pal.outline },
     } as LayerSpecification);
     layers.push({
       id: layerId("hatch", L),
@@ -75,7 +101,7 @@ export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: bool
       ...base,
       filter: ["all", inhabitedFilter(showUninhabited), hatchFilter()] as unknown as FilterSpecification,
       layout: { visibility: conf ? "visible" : "none" },
-      paint: { "fill-pattern": HATCH_IMAGE, "fill-opacity": 0.5 },
+      paint: { "fill-pattern": HATCH_IMAGE, "fill-opacity": refinedOpacity(0.5, from) },
     } as LayerSpecification);
     layers.push({
       id: layerId("national", L),
@@ -83,25 +109,25 @@ export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: bool
       ...base,
       filter: ["all", inhabitedFilter(showUninhabited), nationalFilter()] as unknown as FilterSpecification,
       layout: { visibility: showsNational(o.view) ? "visible" : "none" },
-      paint: { "line-color": pal.national, "line-width": 0.6, "line-dasharray": [1, 3] },
+      paint: { "line-color": pal.national, "line-width": 0.6, "line-dasharray": [1, 3], "line-opacity": line },
     } as LayerSpecification);
     layers.push({
       id: layerId("hover", L),
       type: "line",
       ...base,
-      paint: { "line-color": pal.hover, "line-width": ["case", stateFlag("hover"), 1.5, 0] },
+      paint: { "line-color": pal.hover, "line-width": ["case", stateFlag("hover"), 1.5, 0], "line-opacity": line },
     } as LayerSpecification);
     layers.push({
       id: layerId("halo", L),
       type: "line",
       ...base,
-      paint: { "line-color": pal.halo, "line-width": ["case", stateFlag("selected"), 5, 0] },
+      paint: { "line-color": pal.halo, "line-width": ["case", stateFlag("selected"), 5, 0], "line-opacity": line },
     } as LayerSpecification);
     layers.push({
       id: layerId("selected", L),
       type: "line",
       ...base,
-      paint: { "line-color": pal.selected, "line-width": ["case", stateFlag("selected"), 2.2, 0] },
+      paint: { "line-color": pal.selected, "line-width": ["case", stateFlag("selected"), 2.2, 0], "line-opacity": line },
     } as LayerSpecification);
   }
   return layers;
@@ -140,15 +166,16 @@ export function firstSymbolLayerId(map: MapLibreMap): string | undefined {
  */
 export function mergeStyleOnThemeChange(prev: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
   if (!prev) return next;
-  const hexSource = prev.sources?.[SOURCE_ID];
   const hexLayers = (prev.layers ?? []).filter((l) => isHexLayerId(l.id));
-  if (!hexSource || !hexLayers.length) return next;
+  const ids = [...new Set(hexLayers.map((l) => (l as { source?: string }).source).filter((s): s is string => !!s))];
+  const hexSources = Object.fromEntries(ids.filter((id) => prev.sources?.[id]).map((id) => [id, prev.sources[id]]));
+  if (!Object.keys(hexSources).length || !hexLayers.length) return next;
   const nextLayers = (next.layers ?? []).filter((l) => !isHexLayerId(l.id));
   const at = nextLayers.findIndex((l) => l.type === "symbol");
   const insertAt = at < 0 ? nextLayers.length : at;
   return {
     ...next,
-    sources: { ...next.sources, [SOURCE_ID]: hexSource },
+    sources: { ...next.sources, ...hexSources },
     layers: [...nextLayers.slice(0, insertAt), ...hexLayers, ...nextLayers.slice(insertAt)],
   };
 }

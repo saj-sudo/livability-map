@@ -87,6 +87,23 @@
   processing: "persons per pixel summed per hex; inhabited = population >= POP_MIN (100)"
   files: [GHS_POP_E2025_GLOBE_R2023A_4326_30ss_V1_0.zip]
 
+- id: ghsl_smod
+  name: JRC GHSL GHS-SMOD R2023A degree of urbanisation, epoch 2025, 30 arc-second WGS84
+  group: reference
+  access: direct
+  url: https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_SMOD_GLOBE_R2023A/GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss/V2-0/GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.zip
+  format: geotiff-zip
+  member: GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.tif
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -200
+  license: CC BY 4.0
+  verified: confirmed
+  vintage: "R2023A V2.0 (2025-01-27), epoch 2025 (projection); 34 MB zip, 43202 x 21384 int16 GeoTIFF, nodata -200"
+  attribution: "European Commission, Joint Research Centre (JRC), GHSL GHS-SMOD R2023A (Degree of Urbanisation, level 2)"
+  processing: "class 30 (urban centre) and classes >= 21 (urban cluster) polygonised by the urban stage into data/interim/urban.parquet; the resolution plan refines hexes that touch them (SPEC §9.1, §13.31)"
+  files: [GHS_SMOD_E2025_GLOBE_R2023A_4326_30ss_V2_0.zip]
+
 # ---------------------------------------------------------------- hazards -------------------
 - id: cckp_hd35
   name: World Bank CCKP CMIP6, hot days Tmax > 35C (hd35), SSP2-4.5, 2040-2059 ensemble median
@@ -564,7 +581,7 @@
   nodata: -9999
   native_res_m: ~1000
   license: CC BY 4.0
-  license_note: "licence text is on the Google Earth Engine catalog entry (projects/malariaatlasproject/assets/accessibility/accessibility_to_healthcare_2019): 'This work is licensed under a Creative Commons Attribution 4.0 International License'; malariaatlas.org itself has no licence page"
+  license_note: "malariaatlas.org/open-access-policy: MAP maps are available under the Creative Commons Attribution 3.0 Unported License with citation (the Earth Engine catalog lists MAP accessibility layers as CC BY 4.0)"
   verified: confirmed
   vintage: "Accessibility 202001 release (data year 2019), extent 60S-85N, 43200 x 17400"
   attribution: "D.J. Weiss, A. Nelson, C.A. Vargas-Ruiz et al. (2020) Global maps of travel time to healthcare facilities. Nature Medicine; Malaria Atlas Project"
@@ -647,3 +664,293 @@
   attribution: "Chen, Y. et al. (2023) Multi-decadal trends and variability in burned area from the fifth version of the Global Fire Emissions Database (GFED5). Earth System Science Data 15, 5227-5259"
   processing: "monthly Total burned area per cell summed per year, averaged over 2001-2020, divided by the cell's area -> percent of area burned per year, written once to a 0.25 degree GeoTIFF (prep/rasters.py) and sampled at the hex centroid (coarser than the hex)"
   files: [BA.zip]
+
+# ---------------------------------------------------------------- neighbourhood statistics (§20.6, Session 8) ---
+- id: eurostat_census_grid_2021
+  name: Eurostat Census 2021 population grid, 1 km (GISCO, V3)
+  group: life
+  access: direct
+  url: https://gisco-services.ec.europa.eu/census/2021/Eurostat_Census-GRID_2021_V3.zip
+  format: parquet-zip
+  member: Eurostat_Census-GRID_2021_V3/ESTAT_Census_2021_V3.parquet
+  crs: EPSG:3035
+  native_res_m: 1000
+  license: "Copyright European Union; reuse authorised for commercial or non-commercial purposes provided the source is indicated and modifications are stated (Eurostat copyright notice, Commission Decision 2011/833/EU)"
+  license_note: "https://ec.europa.eu/eurostat/web/main/help/copyright-notice; Iceland not available, French overseas regions excluded"
+  verified: confirmed
+  vintage: "2021 census round, grid V3 (2026-05-30, data received 2025-01-22); 566 MB zip, parquet member 76 MB, 4,595,932 cells"
+  attribution: "© Eurostat / GISCO, Census 2021 1 km population grid (EU-27 and EFTA)"
+  processing: "parquet member: GRD_ID (CRS3035RES1000mN{y}E{x}) -> cell centre in EPSG:3035 -> WGS84 point; -8888 (confidential) and -9999 (not available) -> missing; emp_rate = EMP / Y_1564 where both are known and Y_1564 > 0; weighted into hexes by point_mean (prep/eurostat_grid.py)"
+  files: [Eurostat_Census-GRID_2021_V3.zip]
+
+- id: eng_imd_2025
+  name: English Indices of Deprivation 2025, File 7 (all ranks, scores, deciles and population denominators by LSOA 2021)
+  group: life
+  access: direct
+  url: https://assets.publishing.service.gov.uk/media/691ded56d140bbbaa59a2a7d/File_7_IoD2025_All_Ranks_Scores_Deciles_Population_Denominators.csv
+  format: csv
+  geometry: ons_lsoa_2021
+  license: Open Government Licence v3.0
+  license_note: "gov.uk: all content is available under the Open Government Licence v3.0, except where otherwise stated"
+  verified: confirmed
+  vintage: "IoD2025 (published 2025-10-30), 33,755 LSOA 2021 rows, 9.9 MB CSV; denominators mid 2022"
+  attribution: "Ministry of Housing, Communities and Local Government, English Indices of Deprivation 2025"
+  processing: "Employment / Health / Barriers-to-Housing domain scores joined to ONS LSOA 2021 boundaries on LSOA21CD and population-weighted into hexes (prep/imd.py); England only, Welsh LSOAs stay missing"
+  files: [File_7_IoD2025_All_Ranks_Scores_Deciles_Population_Denominators.csv]
+
+- id: ons_lsoa_2021
+  name: ONS Lower layer Super Output Areas (December 2021) Boundaries EW BGC (V5), generalised 20 m, clipped to the coastline
+  group: reference
+  access: direct
+  url: https://open-geography-portalx-ons.hub.arcgis.com/api/download/v1/items/68515293204e43ca8ab56fa13ae8a547/geojson?layers=0
+  format: geojson
+  crs: EPSG:27700
+  license: Open Government Licence v3.0
+  license_note: "Source: Office for National Statistics licensed under the Open Government Licence v.3.0; Contains OS data © Crown copyright and database right 2021"
+  verified: confirmed
+  vintage: "December 2021 boundaries, BGC V5 (item modified 2025-08-11); 35,672 features (England and Wales), 66 MB GeoJSON in British National Grid"
+  attribution: "Office for National Statistics licensed under the Open Government Licence v.3.0; Contains OS data © Crown copyright and database right 2021"
+  processing: "reprojected to WGS84 and joined to eng_imd_2025 on LSOA21CD (prep/imd.py)"
+  files: [lsoa_2021_ew_bgc.geojson]
+
+- id: de_zensus_2022
+  name: Zensus 2022 Gitterzellen, average net cold rent per m² and dwellings, 100 m grid
+  group: life
+  access: direct
+  url: https://www.destatis.de/static/DE/zensus/gitterdaten/Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip
+  format: csv-zip
+  member: Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen/Zensus2022_Durchschn_Nettokaltmiete_Anzahl_der_Wohnungen_100m-Gitter.csv
+  crs: EPSG:3035
+  native_res_m: 100
+  license: Datenlizenz Deutschland – Namensnennung – Version 2.0 (dl-de/by-2-0)
+  license_note: "Datensatzbeschreibung (Erläuterungen): data licensed under dl-de/by-2-0, http://www.govdata.de/dl-de/by-2-0; Impressum: © Statistische Ämter des Bundes und der Länder, 2024"
+  verified: confirmed
+  vintage: "Zensus 2022 (reference date 2022-05-15), file version 2 (2025-07-08); 11.0 MB zip, 100 m CSV 1,287,342 cells"
+  attribution: "Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0 (www.govdata.de/dl-de/by-2-0); Daten verändert (aggregated to H3)"
+  processing: "cell centres (x_mp_100m, y_mp_100m, EPSG:3035) -> WGS84 points; durchschnMieteQM (EUR/m², decimal comma) averaged per hex weighted by AnzahlWohnungen (prep/de_zensus.py); cells absent from the file stay missing"
+  files: [Durchschnittliche_Nettokaltmiete_und_Anzahl_der_Wohnungen.zip]
+
+- id: nl_cbs_vierkant_100m
+  name: CBS Statistische gegevens per vierkant 2023 (complete), 100 m squares
+  group: life
+  access: direct
+  url: https://download.cbs.nl/vierkant/100/2026-cbs_vk100_2023_vol.zip
+  format: geopackage-zip
+  member: cbs_vk100_2023_vol.gpkg
+  layer: cbs_vk100_2023
+  crs: EPSG:28992
+  native_res_m: 100
+  license: CC BY 4.0
+  license_note: "CBS copyright page: Creative Commons Naamsvermelding (CC BY 4.0) unless stated otherwise; product description: source citation required, visualisations credit '© CBS'"
+  verified: confirmed
+  vintage: "reference date 2023-01-01, complete release (file dated 2026-06-10); 75.5 MB zip, 390,396 squares"
+  attribution: "© CBS, Statistische gegevens per vierkant 2023"
+  processing: "square centres -> WGS84 points; gemiddelde_woz_waarde_woning (thousand EUR) averaged per hex weighted by aantal_woningen; -99997 / -99995 -> missing (prep/nl_cbs.py)"
+  files: [2026-cbs_vk100_2023_vol.zip]
+
+- id: nl_cbs_vierkant_500m
+  name: CBS Statistische gegevens per vierkant 2023 (complete), 500 m squares
+  group: life
+  access: direct
+  url: https://download.cbs.nl/vierkant/500/2026-cbs_vk500_2023_vol.zip
+  format: geopackage-zip
+  member: cbs_vk500_2023_vol.gpkg
+  layer: cbs_vk500_2023
+  crs: EPSG:28992
+  native_res_m: 500
+  license: CC BY 4.0
+  license_note: "as nl_cbs_vierkant_100m"
+  verified: confirmed
+  vintage: "reference date 2023-01-01, complete release; 19.4 MB zip, 151,108 squares (16,260 with income)"
+  attribution: "© CBS, Statistische gegevens per vierkant 2023"
+  processing: "square centres -> WGS84 points; percentage_laag_inkomen_huishouden (households in the national bottom 40% of disposable income) averaged per hex weighted by aantal_part_huishoudens; sentinels -> missing (prep/nl_cbs.py)"
+  files: [2026-cbs_vk500_2023_vol.zip]
+
+- id: fr_insee_iris_2021
+  name: INSEE RP 2021 base infracommunale IRIS, Activité des résidents
+  group: life
+  access: direct
+  url: https://www.insee.fr/fr/statistiques/fichier/8268843/base-ic-activite-residents-2021_csv.zip
+  format: csv-zip
+  member: base-ic-activite-residents-2021.CSV
+  geometry: fr_ign_iris_contours
+  also_needs: [fr_insee_filosofi_iris_2021]
+  license: Licence Ouverte / Open Licence version 2.0 (Etalab)
+  license_note: "insee.fr/fr/information/2008466: public information on the site is made available under the Licence Ouverte / Open Licence 2.0 (Etalab), reuse including commercial with the source 'Source : Insee' and the date of last update"
+  verified: confirmed
+  vintage: "RP 2021 (geography of 2023-01-01), updated 2025-12-16; 39.5 MB zip, 49,280 IRIS"
+  attribution: "Source : Insee, RP 2021 (exploitation principale), mise à jour 16/12/2025"
+  processing: "P21_ACTOCC1564 / P21_POP1564 -> emp_rate per IRIS, joined to IGN IRIS 2023 contours on CODE_IRIS and population-weighted into hexes (prep/fr_iris.py)"
+  files: [base-ic-activite-residents-2021_csv.zip]
+
+- id: fr_insee_filosofi_iris_2021
+  name: INSEE Filosofi 2021 revenus disponibles par IRIS
+  group: life
+  access: direct
+  url: https://www.insee.fr/fr/statistiques/fichier/8229323/BASE_TD_FILO_IRIS_2021_DISP_CSV.zip
+  format: csv-zip
+  member: BASE_TD_FILO_IRIS_2021_DISP.csv
+  license: Licence Ouverte / Open Licence version 2.0 (Etalab)
+  license_note: "as fr_insee_iris_2021"
+  verified: confirmed
+  vintage: "Filosofi 2021 (geography of 2022-01-01; the latest IRIS-level edition: 2022 was not published at IRIS level); 0.9 MB zip, 16,026 IRIS of communes with 5,000+ inhabitants"
+  attribution: "Source : Insee-DGFiP-Cnaf-Cnav-CCMSA, Filosofi 2021"
+  processing: "DISP_TP6021 (poverty rate at 60% of the median, %; decimal comma; ns / nd / s / so -> missing) joined on IRIS code (prep/fr_iris.py)"
+  files: [BASE_TD_FILO_IRIS_2021_DISP_CSV.zip]
+
+- id: fr_ign_iris_contours
+  name: IGN Contours...IRIS® 3.0, edition 2023-01-01, all territories
+  group: reference
+  access: direct
+  url: https://data.geopf.fr/telechargement/download/CONTOURS-IRIS/CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01/CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z
+  format: shapefile-7z
+  crs: "EPSG:2154 (mainland) and one CRS per overseas territory"
+  license: Licence Ouverte (Etalab)
+  license_note: "ISO metadata: 'Base de données soumise aux conditions de la licence ouverte Etalab'"
+  verified: confirmed
+  vintage: "edition 2023-01-01 (metadata 2024-02-28); 34.2 MB .7z, 49,424 IRIS in nine shapefiles; every code of both INSEE files matches CODE_IRIS"
+  attribution: "IGN – INSEE, Contours…IRIS® 2023, Licence Ouverte Etalab"
+  processing: "extracted once with py7zr; each territory reprojected to WGS84 and concatenated (prep/fr_iris.py)"
+  files: [CONTOURS-IRIS_3-0__SHP__FRA_2023-01-01.7z]
+
+- id: ca_statcan_da_profile
+  name: Statistics Canada 2021 Census Profile, Canada, provinces, territories, CDs, CSDs and dissemination areas (98-401-X2021006)
+  group: life
+  access: direct
+  url: https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/download-telecharger/comp/GetFile.cfm?Lang=E&FILETYPE=CSV&GEONO=006
+  format: csv-zip
+  geometry: ca_statcan_da_boundaries
+  license: Statistics Canada Open Licence
+  license_note: "statcan.gc.ca/en/terms-conditions/open-licence: worldwide, royalty-free, non-exclusive licence to use, reproduce, publish, freely distribute or sell the Information and Value-added Products; value-added products must say 'Adapted from Statistics Canada, name of product, reference date. This does not constitute an endorsement by Statistics Canada of this product.'"
+  verified: confirmed
+  vintage: "2021 Census (reference day 2021-05-11; income year 2020), released 2022-12-15; 2.25 GB zip of six regional cp1252 CSVs (~26.6 GB), 57,936 DAs, streamed from the zip"
+  attribution: "Adapted from Statistics Canada, Census Profile 2021 (98-401-X2021006), 2021-05-11. This does not constitute an endorsement by Statistics Canada of this product."
+  processing: "characteristics 1, 2223, 2229 (employment rate), 345 (LIM-AT %), 1465 / 1467 (households spending 30%+ on shelter) of dissemination-area rows; blanks with symbols x / .. / ... -> missing; joined to DA boundaries on DGUID (prep/ca_statcan.py)"
+  files: [98-401-X2021006_eng_CSV.zip]
+
+- id: ca_statcan_da_boundaries
+  name: Statistics Canada 2021 Census cartographic boundary file, dissemination areas
+  group: reference
+  access: direct
+  url: https://www12.statcan.gc.ca/census-recensement/2021/geo/sip-pis/boundary-limites/files-fichiers/lda_000b21a_e.zip
+  format: shapefile-zip
+  member: lda_000b21a_e.shp
+  crs: EPSG:3347
+  license: Statistics Canada Open Licence
+  license_note: "as ca_statcan_da_profile"
+  verified: confirmed
+  vintage: "2021 (Last-Modified 2022-01-05); 197 MB zip, 57,932 DAs (67 invalid polygons, repaired with make_valid)"
+  attribution: "Adapted from Statistics Canada, 2021 Census Boundary Files, dissemination areas. This does not constitute an endorsement by Statistics Canada of this product."
+  files: [lda_000b21a_e.zip]
+
+- id: au_abs_sa2_gcp
+  name: ABS 2021 Census General Community Profile DataPack, SA2 for Australia (short headers)
+  group: life
+  access: direct
+  url: https://www.abs.gov.au/census/find-census-data/datapacks/download/2021_GCP_SA2_for_AUS_short-header.zip
+  format: csv-zip
+  geometry: au_abs_sa2_boundaries
+  license: CC BY 4.0
+  license_note: "DataPack readme: licensed under CC BY 4.0; derived material must say 'Based on Australian Bureau of Statistics data'"
+  verified: confirmed
+  vintage: "2021 Census (2021-08-10), Release 2 (members dated 2023-01-16); 42.3 MB zip, 2,472 SA2 rows"
+  attribution: "Based on Australian Bureau of Statistics data (2021 Census GCP DataPack, SA2)"
+  processing: "G01 Tot_P_P, G43 P_15_yrs_over_P / Percnt_Employment_to_populn_P, G02 Median_rent_weekly / Median_tot_hhd_inc_weekly; 0 = not available -> missing; pseudo-SA2s dropped; joined on SA2 code (prep/au_abs.py)"
+  files: [2021_GCP_SA2_for_AUS_short-header.zip]
+
+- id: au_abs_sa2_boundaries
+  name: ABS ASGS Edition 3 SA2 2021 digital boundaries (GDA2020 shapefile)
+  group: reference
+  access: direct
+  url: https://www.abs.gov.au/statistics/standards/australian-statistical-geography-standard-asgs/edition-3-july-2021-june-2026/access-and-downloads/digital-boundary-files/SA2_2021_AUST_SHP_GDA2020.zip
+  format: shapefile-zip
+  member: SA2_2021_AUST_GDA2020.shp
+  crs: EPSG:7844
+  license: CC BY 4.0
+  license_note: "abs.gov.au: all material on this website is provided under a Creative Commons Attribution 4.0 International licence (logo, arms, microdata and Census branding excepted)"
+  verified: confirmed
+  vintage: "ASGS Edition 3 (2021); 50.7 MB zip, 2,473 SA2 (19 without geometry)"
+  attribution: "Based on Australian Bureau of Statistics data (ASGS Edition 3)"
+  files: [SA2_2021_AUST_SHP_GDA2020.zip]
+
+# ---------------------------------------------------------------- NGO hex layers (SPEC §13.36) ----
+- id: map_travel_cities
+  name: Malaria Atlas Project, travel time to cities 2015 (Weiss et al. 2018), 30 arc-second
+  group: life
+  access: direct
+  url: https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Accessibility__201501_Global_Travel_Time_to_Cities&format=image/geotiff
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -9999
+  license: CC BY 3.0 (MAP open-access policy); the Google Earth Engine catalog lists the same data as CC BY 4.0
+  license_note: "malariaatlas.org/open-access-policy: 'Our maps are available to all users under the Creative Commons Attribution 3.0 Unported License ... We ask that any use of these maps provides the correct citation.'"
+  verified: confirmed
+  vintage: "2015; 3.03 GB int32 GeoTIFF, 43200 x 17400, minutes, land 0-41556 (median 413 over land pixels)"
+  attribution: "Weiss, D.J. et al. (2018) A global map of travel time to cities to assess inequalities in accessibility in 2015. Nature 553, 333-336. Malaria Atlas Project"
+  processing: "mean travel time (minutes) to the nearest city of 50,000+ over the hex's 1 km pixels (raster_mean)"
+  files: [Accessibility__201501_Global_Travel_Time_to_Cities.tif]
+
+- id: meta_rwi
+  name: Meta Data for Good Relative Wealth Index, 93 low- and middle-income countries (with quadkeys)
+  group: life
+  access: direct
+  url: https://data.humdata.org/dataset/76f2a2ea-ba50-40f5-b79c-db95d668b843/resource/bff723a4-6b55-4c51-8790-6176a774e13c/download/relative-wealth-index-93-low-and-middle-income-countries-with-quadkeys-april-2021.csv
+  format: csv
+  crs: EPSG:4326
+  native_res_m: ~2400
+  license: CC BY-NC 4.0
+  license_note: "HDX license_other: 'Creative Commons Attribution-Non Commercial 4.0 International (CC BY-NC 4.0) ... Please cite ... Microestimates of wealth for all low- and middle-income countries, Chi, Fang, Chatterjee, Blumenstock, PNAS 2022'. Non-commercial: acceptable for this project (§13.30); derived wealth_* attributes carry the same licence"
+  verified: confirmed
+  vintage: "April 2021 release; 122 MB CSV, 2,463,901 zoom-14 tiles (~2.4 km), rwi -2.0 to 2.5 relative within each country"
+  attribution: "Chi, G., Fang, H., Chatterjee, S., Blumenstock, J.E. (2022) Microestimates of wealth for all low- and middle-income countries. PNAS 119(3). Relative Wealth Index, Meta Data for Good, via HDX"
+  processing: "tile centres averaged within 3 km of the hex centre (point_radius mean; radius never below the hex edge); ranked within each country (domain_by_country), never across countries (prep/meta_rwi.py)"
+  files: [relative-wealth-index-93-low-and-middle-income-countries-with-quadkeys-april-2021.csv]
+
+- id: ucdp_ged
+  name: UCDP Georeferenced Event Dataset, global version 26.1
+  group: life
+  access: direct
+  url: https://ucdp.uu.se/downloads/ged/ged261-csv.zip
+  format: csv-zip
+  member: GEDEvent_v26_1.csv
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "ucdp.uu.se/downloads: 'All datasets are free of charge and licensed under CC BY 4.0 - you are free to use and redistribute them provided you cite the relevant publications listed with each dataset.'"
+  verified: confirmed
+  vintage: "GED 26.1 (2026-03-30), 1989-2025, 417,968 events; 39 MB zip"
+  attribution: "Davies, Pettersson & Öberg (2026) Organized violence 1989-2025, and violent political protests. Journal of Peace Research; Sundberg & Melander (2013) Introducing the UCDP Georeferenced Event Dataset. JPR 50(4)"
+  processing: "events 2016-2025 with where_prec 1-3; best fatality estimate / 10 years summed within 25 km of the hex centre (point_radius sum); 0 = no recorded event within 25 km (prep/ucdp_ged.py)"
+  files: [ged261-csv.zip]
+
+- id: map_walking_healthcare
+  name: Malaria Atlas Project, walking-only travel time to healthcare 2020 (Weiss et al. 2020), 30 arc-second
+  group: life
+  access: direct
+  url: https://data.malariaatlas.org/geoserver/ows?service=WCS&version=2.0.1&request=GetCoverage&coverageId=Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare&format=image/geotiff
+  format: geotiff
+  crs: EPSG:4326
+  native_res_m: ~1000
+  nodata: -9999
+  license: CC BY 3.0 (MAP open-access policy); the Earth Engine catalog lists the same layer as CC BY 4.0
+  license_note: "malariaatlas.org/open-access-policy: 'Our maps are available to all users under the Creative Commons Attribution 3.0 Unported License ... We ask that any use of these maps provides the correct citation.'"
+  verified: confirmed
+  vintage: "facilities extracted mid-2019, published 2020; 3.03 GB float32 GeoTIFF, 43200 x 17400, minutes (walking 5 km/h on roads, 1 km/h on water)"
+  attribution: "Weiss, D.J. et al. (2020) Global maps of travel time to healthcare facilities. Nature Medicine 26, 1835-1838. Malaria Atlas Project"
+  processing: "mean walking-only travel time (minutes) to the nearest hospital or clinic over the hex's 1 km pixels (raster_mean)"
+  files: [Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare.tif]
+
+- id: wpdx_water_points
+  name: Water Point Data Exchange, WPdx+ (latest record per water point)
+  group: life
+  access: direct
+  url: https://data.waterpointdata.org/api/views/eqje-vguj/rows.csv?accessType=DOWNLOAD
+  format: csv
+  crs: EPSG:4326
+  license: CC BY-SA 4.0
+  license_note: "WPdx publishes its country sets on HDX as 'Creative Commons Attribution Share-Alike'; providers license their data to WPdx under CC BY 4.0 (waterpointdata.org/share-data). The global export itself states no user licence (asked in docs/manual-steps.md); derived water_* attributes are labelled share-alike, as for Ookla (§13.30)"
+  verified: confirmed
+  vintage: "export of 2026-09-23; 544 MB CSV, 440,270 points in 19 countries (incl. TZA, KEN, UGA, RWA, ETH, SSD), reports 2009-2025 (median 2015)"
+  attribution: "Water Point Data Exchange (WPdx), Global Water Challenge; data contributed by national governments and partners"
+  processing: "is_duplicate rows and status Unknown dropped; has_water = status_id Yes (1) / No (0), averaged within 5 km of the hex centre (point_radius mean); missing where no point is recorded (prep/wpdx.py)"
+  files: [wpdx_plus_eqje-vguj.csv]

@@ -24,14 +24,14 @@ PROCESSING_NOTES = [
     "riverine flood: WRI Aqueduct Floods RCP4.5 2050 1-in-100 inundation depth; pixel-wise median across five climate models, then the share of the hex's valid ~1 km pixels with depth >= 0.15 m.",
     "coastal flood: WRI Aqueduct Floods RCP4.5 2050 1-in-100 with subsidence, median sea-level rise; share of pixels with depth >= 0.15 m.",
     "water stress: WRI Aqueduct 4.0 future (2050, business-as-usual) water stress category 0-4 of the basin/province polygon under the hex centroid; -1 (arid and low water use) is shown but not scored.",
-    "scores: every score is the midrank percentile (0-100) of the raw value among inhabited hexes at the same H3 resolution; life dimensions are ranked within their scoring domain (global, OECD or US) so a US-only value is never ranked against the world. Higher score = more of the raw quantity; whether that is good is stated per dimension.",
+    "scores: every score is the midrank percentile (0-100) of the raw value among inhabited hexes at the same H3 resolution; life dimensions are ranked within their scoring domain (global, OECD, US, EU or England) so a US-only value is never ranked against the world. A derived resolution (res 6, 7) is ranked against the inhabited hexes of the finest complete resolution (res 5) in the same domain, so a neighbourhood keeps its colour meaning at every zoom. Higher score = more of the raw quantity; whether that is good is stated per dimension, and a source whose raw value runs the other way (IoD deprivation feeding jobs) has its percentile reflected so the dimension's direction holds.",
     "wellbeing: min-max normalised within its source (Subnational HDI across regions, World Happiness Report life evaluation across countries), never mixed; a source with a single distinct value scores 50.",
     "exposure: mean of the available hazard scores; coverage counts how many of the four hazards had data. Missing layers are excluded, never treated as 0.",
     "bivariate class: terciles of exposure and wellbeing over inhabited hexes; class = 1 + exposure tercile + 3 x wellbeing tercile (1 = low exposure, low wellbeing; 3 = high exposure, low wellbeing; 7 = low exposure, high wellbeing; 9 = high, high); 0 when either side is missing.",
     "uninhabited hexes (population below 100) keep their raw values and are scored against the inhabited distribution; the map hides them by default.",
     "population is the one attribute where no data is recorded as 0 (a count); hexes with no GHSL pixels are uninhabited.",
-    "grid: H3 cells whose centre lies on Natural Earth 1:10m land; small islands and thin coasts without a cell centre on land are absent (a known gap).",
-    "resolution: hazards are computed per hex; wellbeing and life dimensions are attached at the best available coarser resolution and tagged (admin1 | county | tract | national | none), never aggregated to hide within-region variation.",
+    "grid: H3 cells whose centre lies on Natural Earth 1:10m land; small islands and thin coasts without a cell centre on land are absent (a known gap). Res 6 and 7 (the resolution plan) are the H3 children of parent cells inside the listed countries or touching GHS-SMOD urban clusters / centres; a refined parent carries ref = true and is hidden where its children's layer is on screen.",
+    "resolution: hazards are computed per hex; wellbeing and life dimensions are attached at the best available coarser resolution and tagged (hex | grid | basin | admin1 | county | tract | area | national | none), never aggregated to hide within-region variation.",
 ]
 
 
@@ -98,9 +98,14 @@ def build(settings: Settings) -> dict:
     dims = load_dimensions(settings.dimensions_path, sources)
     checksums = read_checksums(settings.raw_dir / "CHECKSUMS")
     life = [d for d in dims.values() if d.group != "hazard"]
+    # every resolution exported so far, not only this run's --res (a `--res 6 --res 7` export
+    # must not drop res 4/5 from /methodology)
+    exported = {e.res for e in settings.plan.entries if (settings.out_dir / f"hexes_r{e.res}.parquet").exists()}
+    resolutions = sorted(exported | set(settings.res))
     manifest: dict = {
         "built_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "h3_res": list(settings.res),
+        "h3_res": resolutions,
+        "resolution_plan": [{**e.to_manifest(), "cells": (int(len(pd.read_parquet(settings.hexes_path(e.res), columns=["h3"]))) if settings.hexes_path(e.res).exists() else None)} for e in settings.plan.entries],
         "scenario": settings.scenario,
         "horizon": settings.horizon,
         "non_commercial": NON_COMMERCIAL,
@@ -123,7 +128,7 @@ def build(settings: Settings) -> dict:
     else:
         spots = sanity.SPOT_CHECKS
     dim_entries = {d.id: {**d.to_manifest(), "coverage": {}, "domains": {}} for d in life}
-    for res in settings.res:
+    for res in resolutions:
         if not settings.hexes_path(res).exists():
             continue
         df = sanity.load_merged(settings, res)
@@ -147,6 +152,15 @@ def build(settings: Settings) -> dict:
         manifest["spot_checks"][str(res)] = _spot_rows(df, res, spots)
         manifest["known_gaps"][str(res)] = _known_gaps(df, inhabited, life)
     manifest["dimensions"] = list(dim_entries.values())
+    # keep the tile archives an earlier `tiles` run recorded (a subset `--res` export must not
+    # forget them); `tiles` refreshes each entry it rebuilds
+    old = settings.out_dir / "manifest.json"
+    if old.exists():
+        try:
+            previous = json.loads(old.read_text(encoding="utf-8")).get("tiles", {})
+        except json.JSONDecodeError:
+            previous = {}
+        manifest["tiles"] = {k: v for k, v in previous.items() if (settings.out_dir / v.get("key", "")).is_file()}
     return manifest
 
 

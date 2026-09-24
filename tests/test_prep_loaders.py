@@ -296,3 +296,69 @@ def test_hud_prepare_pads_integer_fips_and_accepts_the_older_column_names():
     fmr = pd.DataFrame({"fips": [100199999, 401399999], "fmr2": [1000, 1450]})  # leading zero lost by Excel (01001, 04013)
     out = hud.prepare(fmr).set_index("GEOID")
     assert list(out.index) == ["01001", "04013"] and out.loc["04013", "fmr_2br"] == 1450.0
+
+
+# ---- Session 8: Eurostat census grid, English IoD 2025 ----------------------------------------
+
+
+def test_eurostat_grd_id_parses_to_cell_centres():
+    from pipeline.prep.eurostat_grid import parse_grd_id, to_wgs84
+
+    x, y = parse_grd_id(pd.Series(["CRS3035RES1000mN2684000E4334000", "AT_unallocated"]))
+    assert x[0] == 4334500.0 and y[0] == 2684500.0 and pd.isna(x[1])
+    lat, lng = to_wgs84(x[:1], y[:1])
+    assert 40 < lat[0] < 50 and 5 < lng[0] < 20  # the Alps
+
+
+def test_eurostat_loader_turns_sentinels_into_missing():
+    from pipeline.prep.eurostat_grid import load_frame
+
+    df = pd.DataFrame({
+        "GRD_ID": ["CRS3035RES1000mN2684000E4334000", "CRS3035RES1000mN2685000E4334000", "CRS3035RES1000mN2686000E4334000", "FR_unallocated"],
+        "T": [100, 10, 50, 7], "Y_1564": [60, 0, 30, 5], "Y_GE65": [20, 8, -8888, 1], "EMP": [30, 0, -9999, 2],
+    })
+    out = load_frame(df)
+    assert len(out) == 3  # unallocated population has no location
+    assert out["emp_rate"].round(2).tolist()[0] == 0.5
+    assert pd.isna(out["emp_rate"].iloc[1])  # no working-age population -> missing, not 0
+    assert pd.isna(out["emp_rate"].iloc[2]) and pd.isna(out["share_ge65"].iloc[2])  # confidential / not available
+    assert not (out[["pop", "pop_1564", "emp"]] < 0).any().any()
+
+
+def test_imd_loader_joins_scores_to_lsoas(tmp_path):
+    from pipeline.prep import imd
+
+    header = ",".join(f'"{h}"' for h in imd.COLUMNS.values())
+    (tmp_path / "f7.csv").write_text(header + "\nE01000001,25.5,0.2,0.1,0.5,20.0,1600,950\n", encoding="utf-8")
+    gpd.GeoDataFrame(
+        {"LSOA21CD": ["E01000001", "W01000001"], "LSOA21NM": ["City 001A", "Cardiff 001A"]},
+        geometry=[box(0, 51, 0.01, 51.01), box(-3.2, 51.4, -3.19, 51.41)],
+        crs=4326,
+    ).to_file(tmp_path / "lsoa.geojson", driver="GeoJSON")
+    out = imd.load_frames(tmp_path / "f7.csv", tmp_path / "lsoa.geojson").set_index("LSOA21CD")
+    assert len(out) == 2 and out.loc["E01000001", "emp_dep_rate"] == 0.1 and out.loc["E01000001", "pop_working"] == 950
+    assert out.loc["W01000001", ["emp_dep_rate", "health_dep", "housing_barriers"]].isna().all()  # IoD is England only
+
+
+def test_imd_loader_names_a_missing_column(tmp_path):
+    from pipeline.prep import imd
+
+    (tmp_path / "f7.csv").write_text('"LSOA code (2021)"\nE01000001\n', encoding="utf-8")
+    with pytest.raises(KeyError, match="IoD2025 File 7"):
+        imd.load_frames(tmp_path / "f7.csv", tmp_path / "nope.geojson")
+
+
+def test_eurostat_country_without_employment_counts_is_missing_not_zero():
+    # DE / FR / CH publish EMP as -9999 almost everywhere; a stray 0 there must not become "0% employed"
+    from pipeline.prep.eurostat_grid import load_frame
+
+    ids = [f"CRS3035RES1000mN{3000000 + 1000 * i}E4300000" for i in range(12)]
+    df = pd.DataFrame({
+        "GRD_ID": ids,
+        "T": [50] * 12, "Y_1564": [30] * 12, "Y_GE65": [10] * 12,
+        "EMP": [-9999] * 9 + [0] + [15, 15],
+        "CNTR_ID": ["DE"] * 10 + ["NL", "NL"],
+    })
+    out = load_frame(df)
+    assert out["emp_rate"].iloc[:10].isna().all()  # the whole country is missing
+    assert out["emp_rate"].iloc[10:].round(2).tolist() == [0.5, 0.5]

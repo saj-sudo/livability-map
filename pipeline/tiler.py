@@ -48,6 +48,10 @@ class LayerSpec:
     slim_attrs: tuple[str, ...] = ()  # subset for zooms below slim_below_zoom
     slim_below_zoom: int | None = None
     description: str = ""
+    # resolution plan flags (SPEC §9.1): H3 res, every land cell present, keeps drawing past maxzoom
+    res: int = 0
+    complete: bool = True
+    overzoom: bool = False
 
 
 @dataclass
@@ -136,6 +140,16 @@ def ring_bboxes(rings: Rings) -> np.ndarray:
 
 
 # ---- tile assignment ------------------------------------------------------------------------------
+
+
+def check_span(bbox: np.ndarray, z: int, name: str) -> None:
+    """assign_tiles looks at most 3x3 tiles per hex: refuse a zoom where a hex spans more than two
+    tiles across or down (near the poles Mercator stretches hexes in both directions)."""
+    if not len(bbox):
+        return
+    span = max((bbox[:, 2] - bbox[:, 0]).max(), (bbox[:, 3] - bbox[:, 1]).max()) * (1 << z)
+    if span > 2.0:
+        raise ValueError(f"{name} at z{z}: a hex spans {span:.1f} tiles; assign_tiles assumes at most 3x3 (build this resolution at a higher minzoom)")
 
 
 def assign_tiles(bbox: np.ndarray, z: int, buffer_units: int = BUFFER) -> dict[tuple[int, int], np.ndarray]:
@@ -333,6 +347,7 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
         if len(bbox):
             all_bounds.append((bbox[:, 0].min(), bbox[:, 1].min(), bbox[:, 2].max(), bbox[:, 3].max()))
         for z in range(spec.minzoom, spec.maxzoom + 1):
+            check_span(bbox, z, spec.name)
             for (x, y), idx in assign_tiles(bbox, z).items():
                 tasks.append((zxy_to_tileid(z, x, y), spec.name, z, x, y, idx))
         full_df = pd.read_parquet(spec.parquet)

@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-09-23.
+Last updated: 2026-09-24.
 
 ## Open
 
@@ -22,6 +22,8 @@ Last updated: 2026-09-23.
 | 9 | [UNICEF Giga API key](#9-unicef-giga-api-key) | school locations and school connectivity | 10 min |
 | 10 | [DHS modeled surfaces](#10-dhs-modeled-surfaces) | 5 km education, vaccination, wealth surfaces | 10 min + read terms |
 | 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
+| 12 | [Flip the repo public](#12-flip-the-repo-public) | the public GitHub repo | 2 min |
+| 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min, before item 12 |
 
 Items 2-4 and 6 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
@@ -176,6 +178,53 @@ map records CC BY-SA 4.0 and labels the derived values share-alike (SPEC §13.37
 (https://www.waterpointdata.org/ , contact form) to confirm the licence for users of the global
 export. If they say CC BY 4.0, update `license` on `wpdx_water_points` in `pipeline/sources.yaml`
 and drop the share-alike label; nothing needs rebuilding.
+
+### 12. Flip the repo public
+
+First confirm `LICENSE` (MIT) is on `main`: open https://github.com/saj-sudo/livability-map/blob/main/LICENSE .
+If it 404s, merge the branch that adds it (`claude/portfolio-github-updates-ik5ico`) first. If
+you want item 13, do it before this one: once the repo is public, anyone can clone the old
+history.
+
+Then on GitHub: the repo, **Settings**, **General**, scroll to **Danger Zone**, **Change
+visibility**, **Change to public**, and confirm with the repo name.
+
+A check of the tracked files on 2026-09-24 found no personal emails, Windows user paths, tokens or
+keys (`.env.example` holds only empty keys and placeholders). The one personal detail left is in
+git history, item 13.
+
+### 13. Optional: rewrite the author email on two early commits
+
+Two commits from 2026-09-20/21, `c1156a0` (Session 1) and `e25784a` (CI install fix), carry a
+personal Gmail as author and committer. Every other commit uses the GitHub noreply address.
+Replacing it means rewriting history:
+
+- It changes the SHA of those two commits **and every commit after them**, so it needs a
+  force-push to `main`. Any SHA quoted elsewhere (PR descriptions, notes, this item) stops
+  resolving.
+- It is safe only because the history is days old, the repo is private and nobody has forked it.
+  Merge or delete every other branch first, and re-clone (or `git fetch` then
+  `git reset --hard origin/main`) on the laptop afterwards.
+- It does not clean everything: GitHub keeps pull-request refs (`refs/pull/*`) that you cannot
+  delete, so the old commits stay reachable through the merged PRs' pages. Removing those needs a
+  request to GitHub Support (https://support.github.com/, "remove cached views / PR refs").
+
+Commands, in a fresh clone outside the working copy (Git Bash):
+
+```bash
+pip install git-filter-repo
+git clone https://github.com/saj-sudo/livability-map.git livability-map-rewrite
+cd livability-map-rewrite
+OLD=$(git log -1 --format=%ae c1156a0)           # the personal address; kept out of this file on purpose
+printf '%s\n' "Saj Chandoo <263086808+saj-sudo@users.noreply.github.com> <$OLD>" > ../mailmap.txt
+git filter-repo --mailmap ../mailmap.txt
+git log --format='%ae %ce' | sort -u          # expect only noreply addresses
+git remote add origin https://github.com/saj-sudo/livability-map.git   # filter-repo removes it
+git push --force origin main
+```
+
+GitHub's branch protection, if on, has to allow the force-push for that one push. Then delete
+`../mailmap.txt` and the `livability-map-rewrite` folder.
 
 ---
 

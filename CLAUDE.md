@@ -12,9 +12,10 @@ section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, 
 §5 ASCII diagram (mirrored in `README.md`) in the same change when the pipeline shape changes.
 
 Two-language repo: `pipeline/` (Python 3.11+, Sessions 1-5) and `web/` (TypeScript, Sessions 6-7).
-Status (2026-09-23): every stage and the map app run end to end on real data at H3 res 4 and 5
+Status (2026-09-24): every stage and the map app run end to end on real data at H3 res 4 and 5
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
-8, three PMTiles archives), with 18 dimensions incl. the Eurostat 1 km grid and England IoD 2025.
+8, three PMTiles archives: hexes 191 MB, hexes_nbhd 264 MB, hexes_city 152 MB), with 27 dimensions
+(4 hazard, 1 wellbeing, 18 life, 4 env) incl. the Eurostat 1 km grid and England IoD 2025.
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
 Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
 MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.

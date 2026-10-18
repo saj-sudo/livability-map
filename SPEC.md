@@ -136,14 +136,18 @@ CORS). No database in the web app.
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
-  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
+  |            no coverage drop > 5% against the live build (§13.38); publish runs it again               |
+  |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
+  |            whole-world builds only; archives under content-addressed keys (immutable),                |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.38)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  on Cloudflare Pages                   |               |  <archive>.<sha12>.pmtiles (immutable)   |
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
   |  views: bivariate | per hazard |       |
@@ -472,6 +476,11 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   only); CA jobs / incmix / house 98%; AU jobs / house / rent 100%.
 - Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
   when one would pass that (§14.10).
+- Releases (§13.38): `validate` checks a build without uploading; `publish --target r2` validates
+  against the live manifest, uploads content-addressed archives and switches `manifest.json`
+  last; `npm run deploy` builds the site against that live manifest. Old archives stay in the
+  bucket (about 0.7 GB per release), so earlier Pages builds keep working; prune by hand when
+  a release is long retired.
 
 ### 11.1 Fixture world
 
@@ -632,6 +641,34 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     labelled share-alike (confirmation requested in docs/manual-steps.md). The presets use the new
     layers where they fit: Early career weights `city`, Raising kids `conflict` and `water`,
     Retiring `walkcare`.
+38. **Release safety** (2026-10-18, before the first R2 publish): a build reaches the live map
+    only through checks, and a release can be rolled back.
+    - *Code in the cache key.* Every stage fingerprint carries a digest of the stage module and
+      every `pipeline` module it imports (transitively, including the lazily registered prep
+      loaders), taken over the syntax tree without docstrings: a comment never rebuilds, a
+      changed expression always does. `--force` is no longer needed after a code change. The
+      first run after this change rebuilds everything once.
+    - *Per-dimension freshness.* `dims` fingerprints each dimension (its sources' raw files, its
+      registry entry, the resolution's hexes / pop / admin, the code) and a plain run recomputes
+      only the stale ones; `--only` forces the named ones and never marks the others fresh.
+    - *Fetch keeps the verified file.* A re-download whose checksum differs from CHECKSUMS is
+      parked as `<file>.new` and reported; the verified file stays. A hand-placed (manual)
+      file that differs from last time is accepted but announced.
+    - *`validate` stage* between `tiles` and `publish` (and run again inside `publish`):
+      archives match the manifest's bytes and sha256 and are fresh for their parquet and code;
+      every hazard and every life dimension reaches an inhabited hex at the land resolutions
+      (a dimension whose sources are all missing downloads is a warning, since the web app
+      disables it); against the live build, no resolution, hazard or dimension loses more than
+      5% of its inhabited coverage (`--max-drop` for an explained drop) and none disappears.
+    - *R2 release order.* Fixture, `--bbox` and partial builds never go to R2 (`auto` resolves
+      to `local` for them). Archives upload as `<archive>.<sha12>.pmtiles` with
+      `immutable` caching, are never overwritten, and are skipped when already present; the
+      first one is range- and CORS-checked; only then is `manifest.json` (`no-cache`) switched,
+      with a dated copy under `manifests/`. `npm run deploy` builds against that live manifest
+      (never a local one), refuses fixture, bbox, local or plain-keyed manifests and archives the
+      bucket does not serve, and keeps `public/data` out of the Pages upload. Tiles and app
+      change together; rollback is redeploying an earlier Pages build, whose archives are still
+      in the bucket.
 
 ## 14. VERIFY before code depends on it
 

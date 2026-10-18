@@ -16,17 +16,19 @@ A joiner whose real source is not downloaded yet is skipped with the source's re
 so the fallbacks (for example WHR when SHDI is missing) still run and the sanity output shows
 the gap honestly.
 
-``run(settings, only=[...])`` recomputes just the named dimensions and merges their columns
-into the existing parquet (the other dimensions' columns are kept as they are). That is how a
-new layer is added at res 5 without redoing the hour-long US tract overlays. When the registry
-or a prepared layer of an *unnamed* dimension changed, run without ``--only``.
+Each dimension carries its own fingerprint (its sources' raw files, its registry entry, the
+hexes / pop / admin of the resolution and the stage code), so a plain run recomputes only the
+dimensions whose fingerprint moved and merges them into the existing parquet. That is how a new
+layer is added at res 5 without redoing the hour-long US tract overlays. ``run(settings,
+only=[...])`` forces the named dimensions; it never marks the others fresh, so a later plain run
+still catches a dimension that went stale meanwhile.
 """
 
 from __future__ import annotations
 
 import hashlib
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import geopandas as gpd
@@ -232,6 +234,26 @@ def _tag_counts(df: pd.DataFrame, inhabited: pd.Series, dims: list[Dimension]) -
     return out
 
 
+def _dim_inputs(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int) -> list:
+    return _inputs(settings, [dim], sources, res)
+
+
+def _dim_spec(dim: Dimension, sources: dict[str, Source]) -> str:
+    """Digest of what the registry says about one dimension and its sources (name and note are
+    display-only and do not change the parquet)."""
+    used = sorted({spec.source for spec in dim.joiners})
+    blob = repr(replace(dim, name="", note="")) + "".join(repr(sources[s]) for s in used)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def dim_fingerprints(settings: Settings, dims: list[Dimension], sources: dict[str, Source], res: int) -> dict[str, str]:
+    """Per dimension: its inputs (the res's hexes, pop, admin and its own sources' raw files),
+    its registry entry and the stage code. A plain ``dims`` run recomputes exactly the
+    dimensions whose fingerprint moved (SPEC §13.38)."""
+    params = {"res": res, "bbox": settings.bbox, "prep_version": prep.PREP_VERSION, "stage": "dims"}
+    return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources)}) for d in dims}
+
+
 def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str, dict[str, int]]]:
     settings.ensure_dirs()
     sources = load_sources(settings.sources_path)
@@ -240,11 +262,7 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
         unknown = sorted(set(only) - {d.id for d in all_dims})
         if unknown:
             raise ValueError(f"dims --only: unknown dimension id(s) {unknown}; known: {[d.id for d in all_dims]}")
-        dims = [d for d in all_dims if d.id in set(only)]
-    else:
-        dims = all_dims
-    yaml_sha = hashlib.sha256(settings.dimensions_path.read_bytes()).hexdigest()[:16]
-    layers: dict[str, Layer | None] | None = None
+    layers: dict[str, Layer | None] = {}
     skipped: dict[str, str] = {}
     counts: dict[int, dict[str, dict[str, int]]] = {}
     for res in settings.res:
@@ -253,20 +271,30 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
                 raise FileNotFoundError(f"{p} missing (run `grid`, `pop` and `admin` first)")
         out = settings.stage_path("dims", res)
         inputs = _inputs(settings, all_dims, sources, res)
-        params = {"res": res, "bbox": settings.bbox, "dimensions_sha": yaml_sha, "prep_version": prep.PREP_VERSION, "stage": "dims"}
-        existing: pd.DataFrame | None = None
+        params = {"res": res, "bbox": settings.bbox, "prep_version": prep.PREP_VERSION, "stage": "dims"}
+        want = dim_fingerprints(settings, all_dims, sources, res)
+        meta = stage_cache.read_meta(out) if out.exists() else {}
+        intact = bool(meta) and meta.get("output_bytes") in (None, out.stat().st_size)  # not replaced since recorded
+        have: dict[str, str] = meta.get("dims", {}) if intact and not settings.force else {}
         if only:
             if not out.exists():
                 raise FileNotFoundError(f"dims --only needs an existing {out.name}; run `dims` without --only first")
-            existing = pd.read_parquet(out)
-            drop = tuple(f"{d.id}_" for d in dims)
-            existing = existing[[c for c in existing.columns if c == "h3" or not c.startswith(drop)]]
-        elif stage_cache.is_fresh(out, inputs, params, settings.force):
+            todo = [d for d in all_dims if d.id in set(only)]
+        else:
+            todo = [d for d in all_dims if have.get(d.id) != want[d.id]]
+        if not todo:
             df = pd.read_parquet(out)
             inhabited = pd.read_parquet(settings.stage_path("pop", res), columns=["inhabited"])["inhabited"]
-            counts[res] = _tag_counts(df, inhabited, dims)
+            counts[res] = _tag_counts(df, inhabited, all_dims)
             print(f"dims   res {res}: up to date ({len(df)} hexes), skipping")
             continue
+        existing: pd.DataFrame | None = None
+        if len(todo) < len(all_dims):
+            existing = pd.read_parquet(out)
+            drop = tuple(f"{d.id}_" for d in todo)
+            existing = existing[[c for c in existing.columns if c == "h3" or not c.startswith(drop)]]
+            if not only:
+                print(f"dims   res {res}: {len(todo)} of {len(all_dims)} dimensions changed ({', '.join(d.id for d in todo)}); the rest are up to date")
         t0 = time.time()
         hexes = (
             pd.read_parquet(settings.hexes_path(res), columns=["h3", "lat", "lng"])
@@ -274,26 +302,38 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
             .merge(pd.read_parquet(settings.stage_path("admin", res), columns=["h3", "iso_a2"]), on="h3", how="left")
             .reset_index(drop=True)
         )
-        if layers is None:
-            layers, skipped = _load_layers(settings, dims, sources)
-        df = pd.DataFrame({"h3": hexes["h3"]})
-        for dim in dims:
+        missing_layers = [d for d in todo if any(spec.source not in layers for spec in d.joiners)]
+        if missing_layers:
+            more, why = _load_layers(settings, missing_layers, sources)
+            layers.update(more)
+            skipped.update(why)
+        cols: dict[str, pd.Series] = {}
+        for dim in todo:
             t1 = time.time()
-            for col, series in join_dimension(dim, hexes, res, layers, settings.bbox).items():
-                df[col] = series
-            tags = df.loc[hexes["inhabited"].to_numpy(dtype=bool), f"{dim.id}_res"].value_counts(normalize=True)
+            got = join_dimension(dim, hexes, res, layers, settings.bbox)
+            cols.update(got)
+            tags = got[f"{dim.id}_res"][hexes["inhabited"].to_numpy(dtype=bool)].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())
             print(f"dims   res {res}: {dim.id:8s} {shares} ({time.time() - t1:.1f}s)")
+        # one concat instead of a column insert per field (a fragmented frame on millions of rows)
+        df = pd.concat([pd.DataFrame({"h3": hexes["h3"]}), pd.DataFrame(cols, index=hexes.index)], axis=1)
         if existing is not None:
             # merge the recomputed columns into the kept ones, aligned on h3 (same hex set)
             if len(existing) != len(df) or not set(existing["h3"]) == set(df["h3"]):
                 raise ValueError(f"{out.name} covers a different hex set than the current grid; run `dims` without --only")
             df = existing.merge(df, on="h3", how="left")
         df.to_parquet(out, index=False)
-        stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": skipped, "partial": sorted(only) if only else None})
+        recorded = {k: v for k, v in have.items() if k in want} if existing is not None else {}
+        recorded.update({d.id: want[d.id] for d in todo})
+        # sources this run did not try keep their recorded state (validate reads it to tell a
+        # missing download from a layer that loaded and came out empty)
+        carried = {s: why for s, why in meta.get("skipped_sources", {}).items() if s not in layers} if existing is not None else {}
+        used = {spec.source for d in all_dims for spec in d.joiners}
+        used_skips = {s: why for s, why in {**carried, **skipped}.items() if s in used}
+        stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": used_skips, "dims": recorded, "partial": sorted(only) if only else None})
         inhabited_all = pd.read_parquet(settings.stage_path("pop", res), columns=["h3", "inhabited"]).set_index("h3")["inhabited"].reindex(df["h3"]).to_numpy(dtype=bool)
         counts[res] = _tag_counts(df, pd.Series(inhabited_all), all_dims)
-        what = f"{len(dims)} of {len(all_dims)} dimensions (--only)" if only else f"{len(dims)} dimensions"
+        what = f"{len(todo)} of {len(all_dims)} dimensions" + (" (--only)" if only else "")
         print(f"dims   res {res}: {what} on {len(df)} hexes in {time.time() - t0:.1f}s -> {out.name}")
     if skipped:
         print(f"dims   note: {len(skipped)} source(s) unavailable, fallbacks used: {', '.join(skipped)}")

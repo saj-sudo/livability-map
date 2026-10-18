@@ -152,14 +152,30 @@ def tiles(
     _run_stage("tiles", _settings(ctx), backend=backend, workers=workers, archive=archive)
 
 
+MAX_DROP_HELP = "Largest share of any layer's inhabited coverage a build may lose against the live one (default 0.05); raise it only for a drop you have explained."
+
+
+@app.command()
+def validate(
+    ctx: typer.Context,
+    max_drop: float = typer.Option(None, "--max-drop", help=MAX_DROP_HELP),
+    release: bool = typer.Option(False, "--release", help="Also require a whole-world real build, as publish --target r2 does."),
+) -> None:
+    """Check the build before publish: archives match and are fresh, no layer came out empty, no coverage collapse (SPEC §13.38)."""
+    from .stages import validate as stage
+
+    _run_stage("validate", _settings(ctx), max_drop=stage.MAX_DROP if max_drop is None else max_drop, release=release)
+
+
 @app.command()
 def publish(
     ctx: typer.Context,
     target: str = typer.Option("auto", "--target", help="auto | local (web/public/data) | r2 (Cloudflare, .env credentials)."),
     local_dir: Path = typer.Option(None, "--local-dir", help="Override the local target directory."),
+    max_drop: float = typer.Option(None, "--max-drop", help=MAX_DROP_HELP),
 ) -> None:
-    """Ship every tile archive + manifest.json (SPEC §6.3, §13.24)."""
-    _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir)
+    """Validate, then ship every tile archive + manifest.json (SPEC §6.3, §13.24, §13.38)."""
+    _run_stage("publish", _settings(ctx), target=target, local_dir=local_dir, max_drop=max_drop)
 
 
 @app.command()

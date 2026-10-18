@@ -65,14 +65,18 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
-  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
+  |            no coverage drop > 5% against the live build (§13.38); publish runs it again               |
+  |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
+  |            whole-world builds only; archives under content-addressed keys (immutable),                |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.38)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  on Cloudflare Pages                   |               |  <archive>.<sha12>.pmtiles (immutable)   |
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
   |  views: bivariate | per hazard |       |
@@ -130,7 +134,7 @@ SPEC.md                 the spec; build prompts cite its section numbers
 pipeline/               Python pipeline package (python -m pipeline <stage>)
   sources.yaml          every dataset: url, format, license, vintage, attribution (§6.2)
   dimensions.yaml       everything a person can weight, with joiners (§20.2)
-  stages/               fetch grid pop admin hazards dims score export tiles publish
+  stages/               fetch urban grid pop admin hazards dims score export tiles validate publish
   prep/                 one loader per real source -> the columns dimensions.yaml names
   joiners/              polygon_centroid iso_lookup area_weighted_overlay point_density (§20.3)
   crosswalks/           manual OECD TL2 -> geoBoundaries ADM1 overrides (§13.21)

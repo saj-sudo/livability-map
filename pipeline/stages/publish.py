@@ -6,10 +6,20 @@ Targets:
              same origin during development.
 - ``r2``     upload to the Cloudflare R2 bucket with S3-compatible credentials from ``.env``
              (``R2_ACCOUNT_ID``, ``R2_ACCESS_KEY_ID``, ``R2_SECRET_ACCESS_KEY``, ``R2_BUCKET``,
-             ``R2_PUBLIC_BASE_URL``, ``R2_ALLOWED_ORIGINS``), set the CORS rules PMTiles range
-             requests need, then fetch the first 16 KB with a ``Range`` header to prove the bucket
-             serves byte ranges with CORS headers.
-- ``auto``   ``r2`` when ``R2_ACCESS_KEY_ID`` is set, else ``local``.
+             ``R2_PUBLIC_BASE_URL``, ``R2_ALLOWED_ORIGINS``). Release order (SPEC §13.38):
+             1. refuse a fixture, ``--bbox`` or partial build and anything ``validate`` rejects,
+                compared against the manifest that is live now;
+             2. upload each archive under a content-addressed key (``hexes.<sha12>.pmtiles``,
+                ``immutable``), skipping keys already there; old keys are never overwritten, so
+                a deployed site keeps reading the archives its build named;
+             3. set CORS and fetch the first 16 KB of a new archive with a ``Range`` header;
+                stop before the manifest if byte ranges or CORS fail;
+             4. upload ``manifest.json`` (``no-cache``, keys pointing at the new archives) last,
+                plus a dated copy under ``manifests/`` for the record.
+             The web build reads that manifest (``npm run deploy``), so tiles and app change
+             together; rolling back is redeploying an earlier Pages build.
+- ``auto``   ``r2`` when ``R2_ACCESS_KEY_ID`` is set and the build is a whole-world real build,
+             else ``local`` (a fixture or ``--bbox`` run never reaches the bucket by default).
 
 Invariant 4: publishing refuses when any real source is not ``verified: confirmed``.
 Secrets are read from ``.env`` and never printed.
@@ -17,12 +27,14 @@ Secrets are read from ``.env`` and never printed.
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
+import json
 import os
 import shutil
 from pathlib import Path
 
-from .. import manifest
+from .. import manifest, stage_cache
 from ..config import Settings
 from ..registry import load_dimensions, load_sources, used_source_ids
 
@@ -32,6 +44,15 @@ TARGETS = ("auto", "local", "r2")
 def files_to_ship(m: dict) -> list[str]:
     """manifest.json plus every tile archive the manifest lists (SPEC §13.32: one per plan archive)."""
     return ["manifest.json"] + sorted(t["key"] for t in m.get("tiles", {}).values())
+
+
+def r2_key(name: str, sha256: str) -> str:
+    """Content-addressed object key: a new build never overwrites bytes a live site reads."""
+    return f"{name}.{sha256[:12]}.pmtiles"
+
+
+ARCHIVE_CACHE = "public, max-age=31536000, immutable"
+MANIFEST_CACHE = "no-cache"
 PMTILES_MAGIC = b"PMTiles"
 
 
@@ -110,7 +131,37 @@ def stamp(m: dict, target: str, base_url: str | None) -> dict:
     return m
 
 
-def run(settings: Settings, target: str = "auto", local_dir: Path | None = None) -> dict:
+def _live_manifest(base_url: str) -> dict | None:
+    """The manifest the bucket serves now (the regression baseline); None before the first release."""
+    import requests
+
+    try:
+        resp = requests.get(f"{base_url}/manifest.json", timeout=60, headers={"Cache-Control": "no-cache"})
+    except requests.RequestException as exc:
+        raise RuntimeError(f"publish r2: could not read the live manifest at {base_url}/manifest.json ({exc}); check R2_PUBLIC_BASE_URL") from exc
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise RuntimeError(f"publish r2: the live manifest at {base_url}/manifest.json answered HTTP {resp.status_code}; check the bucket's public access")
+    return resp.json()
+
+
+def _partial(settings: Settings) -> bool:
+    """A fixture or ``--bbox`` build: never the live map."""
+    return bool(settings.fixtures or settings.bbox)
+
+
+def _exists(client, bucket: str, key: str, size: int) -> bool:
+    try:
+        head = client.head_object(Bucket=bucket, Key=key)
+    except Exception:  # noqa: BLE001 - botocore raises ClientError (404) for a missing key
+        return False
+    return int(head.get("ContentLength", -1)) == size
+
+
+def run(settings: Settings, target: str = "auto", local_dir: Path | None = None, max_drop: float | None = None) -> dict:
+    from . import validate
+
     if target not in TARGETS:
         raise ValueError(f"target must be one of {TARGETS}")
     out = settings.out_dir
@@ -127,10 +178,15 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None)
         raise RuntimeError(f"publish refused: {', '.join(bad)} are not first-hand verified (set verified: confirmed after checking, SPEC §15, invariant 4)")
     env = _env(settings.root)
     if target == "auto":
-        target = "r2" if env.get("R2_ACCESS_KEY_ID") else "local"
-        print(f"publish target auto -> {target}")
-    m = manifest.load(settings)
+        partial = _partial(settings)
+        target = "r2" if env.get("R2_ACCESS_KEY_ID") and not partial else "local"
+        print(f"publish target auto -> {target}" + (" (fixture / --bbox builds never go to R2 by default)" if partial and env.get("R2_ACCESS_KEY_ID") else ""))
+    if target == "r2" and _partial(settings):
+        raise RuntimeError("publish refused: a fixture or --bbox build never goes to R2 (it would replace the live map); use --target local")
+    drop = validate.MAX_DROP if max_drop is None else max_drop
     if target == "local":
+        validate.report(settings, validate.check(settings, max_drop=drop))
+        m = manifest.load(settings)
         dest = local_dir or (settings.root / "web" / "public" / "data")
         dest.mkdir(parents=True, exist_ok=True)
         for f in archives:
@@ -146,20 +202,40 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None)
         return {"target": "local", "dest": str(dest)}
     bucket = env.get("R2_BUCKET", "")
     base_url = (env.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
+    if not base_url:
+        raise RuntimeError("publish to R2 needs R2_PUBLIC_BASE_URL in .env: the release checks byte ranges and compares with the live manifest there")
     origins = [o.strip() for o in (env.get("R2_ALLOWED_ORIGINS") or "").split(",") if o.strip()]
     client = _client(env)
-    stamp(m, "r2", base_url or None)
-    manifest.write(settings, m)
-    for f in archives:
-        client.upload_file(str(out / f), bucket, f, ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": "public, max-age=3600"})
-    client.upload_file(str(out / "manifest.json"), bucket, "manifest.json", ExtraArgs={"ContentType": "application/json", "CacheControl": "public, max-age=300"})
+    live = _live_manifest(base_url)
+    print("publish r2: comparing with the live build of " + (live.get("built_at") or "?") if live else "publish r2: no live manifest yet (first release)")
+    validate.report(settings, validate.check(settings, baseline=live, max_drop=drop, release=True))
+    m = manifest.load(settings)
+    shipped = copy.deepcopy(m)
+    for name, entry in shipped["tiles"].items():
+        key = r2_key(name, entry["sha256"])
+        path = out / entry["key"]
+        if _exists(client, bucket, key, path.stat().st_size):
+            print(f"publish r2: {key} already in the bucket, not uploaded again")
+        else:
+            client.upload_file(str(path), bucket, key, ExtraArgs={"ContentType": "application/octet-stream", "CacheControl": ARCHIVE_CACHE})
+            print(f"publish r2: uploaded {entry['key']} as {key} ({path.stat().st_size / 1e6:.1f} MB)")
+        entry["key"] = key
     client.put_bucket_cors(Bucket=bucket, CORSConfiguration={"CORSRules": cors_rules(origins)})
-    print(f"publish r2: uploaded {', '.join(archives)} and manifest.json to bucket {bucket}; CORS origins {origins or ['*']}")
-    result = {"target": "r2", "bucket": bucket, "base_url": base_url}
-    if base_url:
-        check = _range_check(f"{base_url}/{archives[0]}")
-        result["range_check"] = check
-        print(f"publish r2 range check at {base_url}/{archives[0]}: {_diagnose(check)}")
-    else:
-        print("publish r2: set R2_PUBLIC_BASE_URL to verify range requests from the public URL")
-    return result
+    first = sorted(shipped["tiles"].values(), key=lambda e: e["key"])[0]["key"]
+    check = _range_check(f"{base_url}/{first}")
+    diagnosis = _diagnose(check)
+    print(f"publish r2 range check at {base_url}/{first}: {diagnosis}")
+    if not diagnosis.startswith("ok"):
+        raise RuntimeError(f"publish r2 stopped before switching manifest.json: {diagnosis}. The new archives are uploaded under new keys; the live map is unchanged.")
+    stamp(shipped, "r2", base_url)
+    body = json.dumps(shipped, indent=2, default=manifest._json_default, ensure_ascii=False)
+    record = out / "published" / "manifest.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    stage_cache.write_atomic(record, body)
+    history = f"manifests/{shipped['built_at'].replace(':', '')}.json"
+    client.upload_file(str(record), bucket, history, ExtraArgs={"ContentType": "application/json", "CacheControl": ARCHIVE_CACHE})
+    client.upload_file(str(record), bucket, "manifest.json", ExtraArgs={"ContentType": "application/json", "CacheControl": MANIFEST_CACHE})
+    stamp(m, "r2", base_url)
+    manifest.write(settings, m)
+    print(f"publish r2: manifest.json now points at {', '.join(e['key'] for e in shipped['tiles'].values())} in bucket {bucket}; CORS origins {origins or ['*']}. Next: cd web && npm run deploy")
+    return {"target": "r2", "bucket": bucket, "base_url": base_url, "range_check": check, "keys": {n: e["key"] for n, e in shipped["tiles"].items()}}

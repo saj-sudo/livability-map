@@ -7,7 +7,7 @@ returns the columns named in the registry (for example ``emp_rate_16_29`` for AC
 for OECD). Fixture sources are read as-is: the synthetic files already carry the final columns.
 
 Results are cached as (Geo)Parquet under ``data/interim/prep/<source_id>.parquet`` and refreshed
-when the raw files or ``PREP_VERSION`` change (SPEC §11 idempotency).
+when the raw files, the loader's code or ``PREP_VERSION`` change (SPEC §11 idempotency).
 """
 
 from __future__ import annotations
@@ -129,10 +129,10 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
     if missing:
         raise FileNotFoundError(_missing_message(source, missing))
     out = settings.cache_dir / "prep" / f"{source_id}.parquet"
-    params = {"source": source_id, "prep_version": PREP_VERSION}
+    module_name, func_name = spec.split(":")
+    params = {"source": source_id, "prep_version": PREP_VERSION, "loader": module_name}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return _read_cached(out)
-    module_name, func_name = spec.split(":")
     loader = getattr(importlib.import_module(module_name), func_name)
     df = loader(settings, source, sources)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -164,10 +164,10 @@ def load_raster(settings: Settings, source_id: str, sources: dict[str, Source] |
     if source.access == "fixture" or spec is None:
         return rawfiles.resolve_raster(settings, source)
     out = settings.cache_dir / "prep" / f"{source_id}.tif"
-    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster"}
+    module_name, func_name = spec.split(":")
+    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster", "loader": module_name}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return out
-    module_name, func_name = spec.split(":")
     build = getattr(importlib.import_module(module_name), func_name)
     build(rawfiles.resolve_raster(settings, source) if source.format != "netcdf-zip" else inputs[0], out)
     stage_cache.record(out, inputs, params, {"kind": "raster"})

@@ -30,7 +30,7 @@ uv venv && uv pip install -e ".[dev]"            # one-time setup (Python 3.11+,
 uv run python -m pipeline --fixtures --res 4 all # full pipeline on the synthetic fixture world
 uv run python -m pipeline --fixtures grid        # one stage; global options go BEFORE the stage name
 uv run python -m pipeline --fixtures sanity      # SPEC §8.5 counts and spot checks
-uv run pytest                                    # all tests (fixtures only, ~3 s)
+uv run pytest                                    # all tests (fixtures only, ~4 min in the cloud container)
 uv run pytest tests/test_joiners.py -k overlay   # one test
 uv run ruff check .                              # lint (line length 100, E501 ignored)
 uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also happens lazily)
@@ -40,6 +40,7 @@ uv run python -m pipeline --res 5 dims --only care --only net     # add layers w
 uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
 uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
+uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
 ```
@@ -83,7 +84,9 @@ set (`h3util.CellSet`) so derived resolutions cost what their cells cost.
 parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`,
 `hazards_r{res}`, `dims_r{res}`, `score_r{res}`) keyed on `h3`, and `sanity.load_merged` joins
 whatever exists. Idempotency is via `stage_cache.is_fresh/record` (a `.meta.json` sidecar
-fingerprinting inputs + params); `--force` bypasses it, and a code change needs `--force` too.
+fingerprinting inputs + params + code: the AST digest of the stage module and every `pipeline`
+module it imports, incl. lazily registered prep loaders, docstrings and comments ignored, §13.38);
+`--force` bypasses it. `dims` keeps one fingerprint per dimension and recomputes only stale ones.
 `--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
 archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
 
@@ -97,8 +100,12 @@ and the next joiner (e.g. WHR for SHDI) takes over.
 source, bivariate class); `hazards` scores itself, `score` does composites and life dims;
 `export` writes `data/out/hexes_r{res}.parquet` + `manifest.json` (`manifest.py`, §6.3);
 `tiles` uses `tiler.py` (pure Python, hex4 z2-4 slim at z2, hex5 z5-7; tippecanoe optional);
+`validate` (between `tiles` and `publish`, and re-run inside `publish`) checks archive sha256 and
+freshness, empty hazards / dimensions and coverage drops against the live build (§13.38);
 `publish` targets `local` (web/public/data) or `r2` (boto3, `.env`) and refuses sources whose
-`verified` is not `confirmed` (only sources actually used count).
+`verified` is not `confirmed` (only sources actually used count). R2 gets real whole-world builds
+only, archives under content-addressed keys, `manifest.json` switched last; `npm run deploy`
+builds the web app against that live manifest (`LIVABILITY_MANIFEST`).
 
 **Registries.** `pipeline/registry.py` loads `sources.yaml` (one entry per dataset; `access` is
 `direct | manual | fixture`; `verified` is `confirmed | search | none`) and `dimensions.yaml`

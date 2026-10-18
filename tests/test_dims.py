@@ -174,3 +174,69 @@ def test_ngo_hex_layers_on_fixtures(settings):
     assert (inh["walkcare_res"] == "hex").mean() > 0.95 and (inh["walkcare_raw"] >= inh["care_raw"]).mean() > 0.9
     assert inh["water_raw"].dropna().between(0, 1).all() and inh["water_raw"].notna().any()
     assert inh["water_raw"].isna().any() and (inh.loc[inh["water_raw"].isna(), "water_res"] == "none").all()
+
+
+def _own_source_input(settings, dim_id):
+    """A raw input file that only `dim_id` reads (so touching it stales that dimension alone)."""
+    from pipeline.registry import load_dimensions, load_sources
+
+    sources = load_sources(settings.sources_path)
+    all_dims = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
+    mine = set(dims._dim_inputs(settings, next(d for d in all_dims if d.id == dim_id), sources, 4))
+    others = set().union(*(dims._dim_inputs(settings, d, sources, 4) for d in all_dims if d.id != dim_id))
+    own = sorted(p for p in mine - others if p.exists())
+    assert own, f"{dim_id} has no input of its own in the fixture world"
+    return own[0]
+
+
+def _touch(path):
+    import os
+
+    st = path.stat()
+    os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+
+
+def test_dims_recomputes_only_the_dimension_whose_source_changed(settings, capsys):
+    _run_all(settings)
+    _touch(_own_source_input(settings, "care"))
+    capsys.readouterr()
+    dims.run(settings)
+    out = capsys.readouterr().out
+    assert "dimensions changed (care)" in out and "res 4: jobs" not in out
+    dims.run(settings)
+    assert "up to date" in capsys.readouterr().out
+
+
+def test_dims_only_never_marks_another_stale_dimension_fresh(settings, capsys):
+    _run_all(settings)
+    _touch(_own_source_input(settings, "care"))
+    dims.run(settings, only=["net"])  # forces net; care is still stale
+    capsys.readouterr()
+    dims.run(settings)
+    assert "dimensions changed (care)" in capsys.readouterr().out
+
+
+def test_dims_code_change_reruns(settings, capsys, monkeypatch):
+    from pipeline import stage_cache
+
+    _run_all(settings)
+    real = stage_cache.code_version
+    monkeypatch.setattr(stage_cache, "code_version", lambda name: "edited" if name == "pipeline.stages.dims" else real(name))
+    capsys.readouterr()
+    dims.run(settings)
+    assert "up to date" not in capsys.readouterr().out
+
+
+def test_partial_recompute_keeps_the_record_of_missing_sources(settings):
+    import json
+
+    from pipeline import stage_cache
+
+    _run_all(settings)
+    out = settings.stage_path("dims", 4)
+    meta = stage_cache.read_meta(out)
+    meta["skipped_sources"] = {"acs_summary": "not downloaded"}  # as if a real download were missing
+    stage_cache.meta_path(out).write_text(json.dumps(meta), encoding="utf-8")
+    _touch(_own_source_input(settings, "care"))
+    dims.run(settings)  # recomputes care only; acs_summary was not tried
+    assert stage_cache.read_meta(out)["skipped_sources"] == {"acs_summary": "not downloaded"}

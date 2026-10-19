@@ -94,6 +94,20 @@ def fetch(ctx: typer.Context, only: list[str] = typer.Option(None, "--only", hel
 
 
 @app.command()
+def mirror(ctx: typer.Context, only: list[str] = typer.Option(None, "--only", help="Source id(s) to copy.")) -> None:
+    """Copy every raw file recorded in CHECKSUMS to the private R2 raw mirror (SPEC §13.41)."""
+    from . import mirror as mod
+
+    settings = _settings(ctx)
+    try:
+        counts = mod.push_all(settings, mod.from_env(settings, required=True), only=only or None)
+    except RuntimeError as exc:
+        _fail("mirror", exc)
+    if counts["changed"]:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def urban(ctx: typer.Context) -> None:
     """GHS-SMOD urban centres and clusters as saved polygons with ids (SPEC §13.31)."""
     _run_stage("urban", _settings(ctx))

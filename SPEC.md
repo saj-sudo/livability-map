@@ -703,6 +703,18 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       Range support (`scripts/serve.mjs`) and runs Playwright (`web/e2e/smoke.spec.ts`): hexes
       draw and a click opens the place panel with the basemap host blocked, the no-WebGL and
       missing-archive states, and every page under its CSP with no violation.
+41. **Raw-input mirror** (2026-10-19): CHECKSUMS pins every input's bytes, but several direct
+    sources serve whatever is current (WPdx, ILOSTAT, OECD, Natural Earth, BEA) and three are
+    manual, so a clean machine could not rebuild a published map. A private R2 bucket
+    (`R2_RAW_BUCKET`, refused if it is the public tiles bucket) holds every recorded raw file
+    under `raw/<sha256>`. `python -m pipeline mirror` uploads what it lacks (only files whose
+    bytes match CHECKSUMS); `fetch` restores a recorded file from it before going upstream and
+    checks the digest, falling back to upstream when the mirror lacks the file or holds bad bytes.
+    Refreshing a vintage stays deliberate: delete its CHECKSUMS line, fetch upstream, `mirror`.
+    `publish --target r2` notes (does not refuse) a release whose inputs are not all mirrored.
+    Keeping private copies for reproducibility is not redistribution, so non-commercial or
+    unlicensed inputs may sit there; they still never reach tiles without a confirmed licence.
+    CI now installs Python dependencies with `uv sync --locked`, so it tests the locked versions.
 
 ## 14. VERIFY before code depends on it
 

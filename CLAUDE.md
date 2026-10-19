@@ -16,8 +16,12 @@ Status (2026-09-23): every stage and the map app run end to end on real data at 
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
 8, three PMTiles archives), with 18 dimensions incl. the Eurostat 1 km grid and England IoD 2025.
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
-Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
-MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
+Release safety (2026-10-19, SPEC §13.38-41): code-aware stage caches, a `validate` gate,
+content-addressed R2 publish, a per-page CSP, a Playwright e2e job, race as context only, and a
+private raw-input mirror. The first run after §13.38 rebuilds every stage once (new fingerprints).
+Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
+manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
+decisions taken. A full res-6/7 rebuild takes ~8 hours.
 
 Manual steps only Saj can do (registrations, browser-only downloads, credentials, permission
 requests) live in `docs/manual-steps.md`: add an item there whenever a session hits one, and move
@@ -26,7 +30,7 @@ it to Done when it is handled.
 ## Commands
 
 ```bash
-uv venv && uv pip install -e ".[dev]"            # one-time setup (Python 3.11+, uv)
+uv sync --locked --extra dev                     # setup with the exact versions in uv.lock (Python 3.11+, uv)
 uv run python -m pipeline --fixtures --res 4 all # full pipeline on the synthetic fixture world
 uv run python -m pipeline --fixtures grid        # one stage; global options go BEFORE the stage name
 uv run python -m pipeline --fixtures sanity      # SPEC §8.5 counts and spot checks
@@ -40,6 +44,7 @@ uv run python -m pipeline --res 5 dims --only care --only net     # add layers w
 uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
 uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
+uv run python -m pipeline mirror                                 # copy recorded raw files to the private R2 raw mirror (§13.41)
 uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
@@ -112,7 +117,11 @@ builds the web app against that live manifest (`LIVABILITY_MANIFEST`).
 `direct | manual | fixture`; `verified` is `confirmed | search | none`) and `dimensions.yaml`
 (everything a person can weight, incl. hazards and wellbeing; `kind` is `score | signed |
 composition`; each has ordered `joiners`). `fetch` refuses any source whose `license` or direct
-`url` is `VERIFY` (invariant 4). `manual` sources (Aqueduct Floods via Earth Engine, see
+`url` is `VERIFY` (invariant 4). With `R2_RAW_BUCKET` set, `fetch` restores any file with a recorded checksum from the private raw
+mirror (`pipeline/mirror.py`, keyed by sha256) before going upstream; `mirror` uploads them.
+Checksum helpers live in `pipeline/checksums.py` and `.env` reading in `pipeline/envfile.py`
+(leaf modules, so stage code fingerprints do not depend on fetch or publish code).
+`manual` sources (Aqueduct Floods via Earth Engine, see
 `docs/gee-export.md`; GDL SHDI via registration; HUD FMR because huduser.gov's WAF answers
 non-browser clients with an empty 202) are checked for presence, not downloaded. A present file
 with no CHECKSUMS entry is recorded, not re-downloaded; an empty body is an error.

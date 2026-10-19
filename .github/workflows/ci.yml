@@ -12,10 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: Install
-        run: |
-          uv venv --python 3.11
-          uv pip install -e ".[dev]"
+      - name: Install (exact versions from uv.lock)
+        run: uv sync --locked --extra dev --python 3.11
       - name: Lint
         run: uv run ruff check .
       - name: Tests (fixtures only, no data pulls per SPEC §11)
@@ -52,8 +50,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Fixture build published to web/public/data
         run: |
-          uv venv --python 3.11
-          uv pip install -e ".[dev]"
+          uv sync --locked --extra dev --python 3.11
           uv run python -m pipeline --fixtures --res 4 all
       - uses: actions/setup-node@v4
         with:

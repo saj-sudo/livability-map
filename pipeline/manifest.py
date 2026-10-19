@@ -15,9 +15,9 @@ import pandas as pd
 
 from . import sanity, timing
 from .attrs import HAZARD_IDS, HAZARD_RAW
+from .checksums import read_checksums
 from .config import NON_COMMERCIAL, Settings
 from .registry import Dimension, Source, load_dimensions, load_sources
-from .stages.fetch import read_checksums
 
 PROCESSING_NOTES = [
     "heat: World Bank CCKP CMIP6 ensemble median, SSP2-4.5, 2040-2059 climatology of days with Tmax > 35C, sampled at the hex centroid (the 0.25 degree pixel is coarser than the hex).",

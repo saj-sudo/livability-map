@@ -54,6 +54,20 @@ the bucket, so the site is whole again at once. The browser never reads the buck
 `manifest.json`; only the next `npm run deploy` does. Before deploying again, point it back by
 copying the matching `manifests/<built_at>.json` over `manifest.json` in the bucket.
 
+## Raw-input mirror (SPEC §13.41)
+
+So a published map can be rebuilt after an upstream file moves or disappears, keep a private copy
+of every raw input:
+
+1. Create a second R2 bucket (for example `livability-raw`) with **no** public access and no
+   custom domain. It must not be the tiles bucket (`publish` and `fetch` refuse that).
+2. Add `R2_RAW_BUCKET=livability-raw` to `.env` (the R2 token needs read and write on it too).
+3. After fetching: `uv run python -m pipeline mirror` (the first run uploads tens of GB; later
+   runs only what is new). `publish --target r2` notes any input the mirror lacks.
+
+On a fresh machine, `fetch` then restores every file recorded in `data/raw/CHECKSUMS` from the
+mirror before trying upstream, including the manual downloads.
+
 **Storage:** every release adds about 0.7 GB of archives. Delete old `*.pmtiles` keys by hand
 once no Pages deployment you might roll back to names them.
 

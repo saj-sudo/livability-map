@@ -30,12 +30,12 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
-import os
 import shutil
 from pathlib import Path
 
 from .. import manifest, stage_cache
 from ..config import Settings
+from ..envfile import read_env
 from ..registry import load_dimensions, load_sources, used_source_ids
 
 TARGETS = ("auto", "local", "r2")
@@ -57,11 +57,7 @@ PMTILES_MAGIC = b"PMTiles"
 
 
 def _env(root: Path) -> dict[str, str]:
-    from dotenv import dotenv_values
-
-    env = {k: v for k, v in dotenv_values(root / ".env").items() if v is not None}
-    env.update({k: v for k, v in os.environ.items() if k.startswith(("R2_", "CLOUDFLARE_"))})
-    return env
+    return read_env(root)
 
 
 def unverified_sources(settings: Settings) -> list[str]:
@@ -146,6 +142,21 @@ def _live_manifest(base_url: str) -> dict | None:
     return resp.json()
 
 
+def _mirror_note(settings: Settings) -> None:
+    """A release whose raw inputs are not all in the raw mirror cannot be rebuilt byte for byte
+    once an upstream file moves (SPEC §13.41). Said, not enforced."""
+    from .. import mirror
+
+    raw = mirror.from_env(settings)
+    if raw is None:
+        print("publish r2: note: no raw mirror (R2_RAW_BUCKET), so this release cannot be rebuilt byte for byte if an upstream file moves (SPEC §13.41)")
+        return
+    lacking = mirror.missing_from(settings, raw)
+    if lacking:
+        more = f" and {len(lacking) - 5} more" if len(lacking) > 5 else ""
+        print(f"publish r2: note: the raw mirror lacks {', '.join(lacking[:5])}{more}; run `python -m pipeline mirror`")
+
+
 def _partial(settings: Settings) -> bool:
     """A fixture or ``--bbox`` build: never the live map."""
     return bool(settings.fixtures or settings.bbox)
@@ -209,6 +220,7 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None,
     live = _live_manifest(base_url)
     print("publish r2: comparing with the live build of " + (live.get("built_at") or "?") if live else "publish r2: no live manifest yet (first release)")
     validate.report(settings, validate.check(settings, baseline=live, max_drop=drop, release=True))
+    _mirror_note(settings)
     m = manifest.load(settings)
     shipped = copy.deepcopy(m)
     for name, entry in shipped["tiles"].items():

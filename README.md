@@ -94,7 +94,7 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv venv && uv pip install -e ".[dev]"      # or: uv sync
+uv sync --locked --extra dev               # exact versions from uv.lock
 uv run python -m pipeline --help
 uv run python -m pipeline --fixtures all   # synthetic 4x4 degree world, runs in seconds
 uv run pytest

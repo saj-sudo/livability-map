@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-09-23.
+Last updated: 2026-10-19.
 
 ## Open
 
@@ -37,14 +37,18 @@ Needed for `publish --target r2` and `npm run deploy` (SPEC §13.24).
    token with object read and write on that bucket.
 2. Connect a custom domain to the bucket (public access), or note the r2.dev URL.
 3. Create a Pages project for the web app.
-4. Create `.env` in the repo root (it is gitignored) with:
-   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
+4. Create a second, private R2 bucket for the raw-input mirror (no public access, no custom
+   domain) and give the API token read and write on it too (SPEC §13.41).
+5. Create `.env` in the repo root (it is gitignored) with:
+   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_RAW_BUCKET`,
    `R2_PUBLIC_BASE_URL` (the public bucket URL), `R2_ALLOWED_ORIGINS` (the Pages URL and
    `http://localhost:3000`), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CF_PAGES_PROJECT`,
    and `NEXT_PUBLIC_DATA_BASE` (same as `R2_PUBLIC_BASE_URL`). `.env.example` lists the rest.
 
-Then: `uv run python -m pipeline publish --target r2` (uploads the three archives and the
-manifest, sets CORS, checks range requests), then `cd web && npm run deploy`.
+Then: `uv run python -m pipeline mirror` (private copy of every raw input), `uv run python -m
+pipeline publish --target r2` (validates against the live build, uploads the archives under
+content-addressed keys, checks range requests, switches the manifest last), then
+`cd web && npm run deploy`. Details and rollback: docs/deploy.md.
 
 ### 2. Global Data Lab downloads (one registration)
 

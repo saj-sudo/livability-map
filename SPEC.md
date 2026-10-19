@@ -715,6 +715,15 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     Keeping private copies for reproducibility is not redistribution, so non-commercial or
     unlicensed inputs may sit there; they still never reach tiles without a confirmed licence.
     CI now installs Python dependencies with `uv sync --locked`, so it tests the locked versions.
+42. **Public repository, MIT code** (Saj, 2026-10-19): `saj-sudo/livability-map` is public on
+    GitHub. The code is MIT (`LICENSE`, `pyproject.toml`); the data is not: every source keeps
+    its own licence, the map is non-commercial because of SHDI, Meta RWI and Ookla, and WPdx
+    values are share-alike (README "Licensing"). Consequences of being public: nothing secret
+    or non-redistributable is ever committed (`.env`, `data/raw/` and the outputs stay
+    gitignored; only `data/raw/CHECKSUMS` is tracked), commits use the GitHub noreply address,
+    and documents written for third parties (the permission requests in docs/manual-steps.md)
+    are public too. The site itself is not hosted yet: Cloudflare Pages (app) and R2 (tiles)
+    wait on the credentials in docs/manual-steps.md item 1.
 
 ## 14. VERIFY before code depends on it
 

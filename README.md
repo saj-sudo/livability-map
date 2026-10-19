@@ -150,11 +150,21 @@ web/                    Next.js 16 static export: MapLibre map, inspector, prior
 data/                   gitignored raw / interim / out; data/raw/CHECKSUMS is committed
 ```
 
-## Licensing posture
+## Licensing
 
-Non-commercial for the foreseeable future (SPEC §13.13). All sources are CC BY 4.0, public
-domain, ODC-BY or CC0, except Global Data Lab SHDI (free with citation, non-commercial only),
-which the manifest and `/methodology` state plainly. Sources with non-redistributable terms
-(Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo, SEDA without permission) are excluded.
+**Code:** MIT, see [LICENSE](LICENSE). The repository is public (SPEC §13.42).
 
-Code: MIT.
+**Data:** not covered by the code licence. Each source keeps its own terms, listed in
+`pipeline/sources.yaml` and on `/methodology`. Most are open with attribution (CC BY 3.0 / 4.0,
+ODC-BY, OGL v3, Etalab, dl-de/by-2-0, Statistics Canada Open Licence, OECD terms, the EU
+reuse notice) or public domain / CC0. The exceptions, which the manifest and `/methodology`
+label on every value they feed:
+
+- non-commercial: Global Data Lab SHDI (free with citation), Meta Relative Wealth Index
+  (CC BY-NC 4.0), Ookla open data (CC BY-NC-SA 4.0, also share-alike);
+- share-alike: WPdx+ water points (CC BY-SA 4.0, SPEC §13.37).
+
+So the map and its tiles are non-commercial for the foreseeable future (SPEC §13.13, §13.30).
+Sources with non-redistributable terms (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools,
+Numbeo, SEDA without permission) are excluded. Raw downloads are never committed; the private
+raw mirror (SPEC §13.41) is for rebuilding, not redistribution.

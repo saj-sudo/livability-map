@@ -14,13 +14,12 @@ function evalExpr(expr: unknown, properties: Record<string, unknown>): unknown {
 }
 
 const CASES: { name: string; weights: Record<string, number>; picks: Picks; props: Record<string, unknown> }[] = [
-  { name: "scores with a worse-is-better flip", weights: { heat: 1, jobs: 3 }, picks: { pol: "competitive", race: "diverse" }, props: { heat_score: 80, jobs_score: 60 } },
-  { name: "a missing dimension leaves the denominator", weights: { heat: 1, jobs: 3, house: 2 }, picks: { pol: "competitive", race: "diverse" }, props: { heat_score: 80 } },
-  { name: "signed left", weights: { pol: 2, jobs: 1 }, picks: { pol: "left", race: "diverse" }, props: { pol_lean: 60, jobs_score: 10 } },
-  { name: "signed right", weights: { pol: 1 }, picks: { pol: "right", race: "diverse" }, props: { pol_lean: 60 } },
-  { name: "signed competitive", weights: { pol: 1 }, picks: { pol: "competitive", race: "diverse" }, props: { pol_lean: -60 } },
-  { name: "composition diverse", weights: { race: 1 }, picks: { pol: "competitive", race: "diverse" }, props: { race_w: 20, race_b: 20, race_h: 20, race_a: 20, race_o: 20 } },
-  { name: "composition specific group", weights: { race: 1, heat: 1 }, picks: { pol: "competitive", race: "b" }, props: { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, heat_score: 10 } },
+  { name: "scores with a worse-is-better flip", weights: { heat: 1, jobs: 3 }, picks: { pol: "competitive" }, props: { heat_score: 80, jobs_score: 60 } },
+  { name: "a missing dimension leaves the denominator", weights: { heat: 1, jobs: 3, house: 2 }, picks: { pol: "competitive" }, props: { heat_score: 80 } },
+  { name: "signed left", weights: { pol: 2, jobs: 1 }, picks: { pol: "left" }, props: { pol_lean: 60, jobs_score: 10 } },
+  { name: "signed right", weights: { pol: 1 }, picks: { pol: "right" }, props: { pol_lean: 60 } },
+  { name: "signed competitive", weights: { pol: 1 }, picks: { pol: "competitive" }, props: { pol_lean: -60 } },
+  { name: "a composition weight is ignored (§13.39)", weights: { race: 3, heat: 1 }, picks: { pol: "competitive" }, props: { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, heat_score: 10 } },
 ];
 
 describe("chart model agrees with the map expression (SPEC §20.5)", () => {
@@ -34,19 +33,26 @@ describe("chart model agrees with the map expression (SPEC §20.5)", () => {
   }
 
   it("is null (never 0) when no weighted dimension has data, matching the -1 sentinel", () => {
-    expect(evalExpr(compositeExpression(DIMS, { jobs: 2 }, { pol: "competitive", race: "diverse" }), {})).toBe(-1);
-    expect(compositeValue(DIMS, { jobs: 2 }, { pol: "competitive", race: "diverse" }, {})).toBeNull();
-    expect(compositeValue(DIMS, {}, { pol: "competitive", race: "diverse" }, { jobs_score: 50 })).toBeNull();
-    expect(matchValue(dim("jobs"), { jobs_score: null }, { pol: "competitive", race: "diverse" })).toBeNull();
+    expect(evalExpr(compositeExpression(DIMS, { jobs: 2 }, { pol: "competitive" }), {})).toBe(-1);
+    expect(compositeValue(DIMS, { jobs: 2 }, { pol: "competitive" }, {})).toBeNull();
+    expect(compositeValue(DIMS, {}, { pol: "competitive" }, { jobs_score: 50 })).toBeNull();
+    expect(matchValue(dim("jobs"), { jobs_score: null }, { pol: "competitive" })).toBeNull();
   });
 
   it("lists weighted dimensions heaviest first with null for missing", () => {
-    const bars = priorityBars({ heat_score: 80, jobs_score: 60 }, DIMS, { heat: 1, jobs: 3, house: 2 }, { pol: "competitive", race: "diverse" });
+    const bars = priorityBars({ heat_score: 80, jobs_score: 60 }, DIMS, { heat: 1, jobs: 3, house: 2 }, { pol: "competitive" });
     expect(bars.map((b) => [b.id, b.weight, b.match])).toEqual([
       ["jobs", 3, 60],
       ["house", 2, null],
       ["heat", 1, 20],
     ]);
     expect(missingCount(bars)).toEqual({ missing: 1, total: 3 });
+  });
+
+  it("gives a composition dimension no bar and no match (§13.39)", () => {
+    const props = { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, jobs_score: 50 };
+    expect(matchValue(dim("race", "composition"), props, { pol: "competitive" })).toBeNull();
+    expect(priorityBars(props, DIMS, { race: 5, jobs: 1 }, { pol: "competitive" }).map((b) => b.id)).toEqual(["jobs"]);
+    expect(compositeValue(DIMS, { race: 5 }, { pol: "competitive" }, props)).toBeNull();
   });
 });

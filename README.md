@@ -3,8 +3,9 @@
 A free, global, explorable map that puts **projected climate hazard exposure** (heat, riverine
 flood, coastal flood, water stress; one moderate scenario, 2050) beside **present-day wellbeing**
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
-protection and presence, political lean, racial composition, income mix, housing cost burden,
-healthcare, cost of living, rent, travel time to healthcare, internet speed) plus the
+protection and presence, political lean, income mix, housing cost burden, healthcare, cost of
+living, rent, travel time to healthcare, internet speed; racial composition is shown per place
+as context, never weighted) plus the
 **present-day environment** (air quality, tree cover, wildfire, drought risk), on H3 hexagons at
 tens-of-km resolution, built only from open-licensed data.
 

@@ -76,7 +76,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     cbRef.current = { onMove, onSelect, onHover, onHint };
   });
 
-  const options = (s: AppState): ViewOptions => ({ view: s.view, dims, weights: s.weights, picks: { pol: s.pol, race: s.race }, theme: themeRef.current });
+  const options = (s: AppState): ViewOptions => ({ view: s.view, dims, weights: s.weights, picks: { pol: s.pol }, theme: themeRef.current });
 
   // create the map once; the initial view comes from the URL state parsed by MapApp
   useEffect(() => {
@@ -242,7 +242,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     if (!map || !loadedRef.current) return;
     applyView(map, options(state), state.inh, state.conf, tileLayers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.view, state.weights, state.pol, state.race, state.inh, state.conf, dims]);
+  }, [state.view, state.weights, state.pol, state.inh, state.conf, dims]);
 
   return <div ref={container} className="h-full w-full" role="application" aria-label="Map of climate exposure and wellbeing" />;
 }

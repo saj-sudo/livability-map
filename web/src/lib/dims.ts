@@ -82,6 +82,12 @@ const FALLBACK: DimInfo[] = [
   F("water", "Working water points nearby", "life", "score", "better", "Global"),
 ];
 
+/** Composition dimensions (racial and ethnic composition) are context in the place panel, never
+ *  a priority: weighting one sorts neighbourhoods by who lives there, which is steering
+ *  (SPEC §3, decision §13.39). No slider, no part in the composite, ignored in old links. */
+export const weightable = (d: Pick<DimInfo, "kind">): boolean => d.kind !== "composition";
+export const CONTEXT_ONLY_IDS: ReadonlySet<string> = new Set(FALLBACK.filter((d) => !weightable(d)).map((d) => d.id));
+
 // scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country
 const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia", country: "Within country" };
 const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk", "de", "nl", "fr", "ca", "au", "country"];

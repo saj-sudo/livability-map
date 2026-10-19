@@ -5,9 +5,9 @@
 // theme (PALETTES.light when none is given).
 
 import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
-import type { DimInfo } from "./dims";
+import { weightable, type DimInfo } from "./dims";
 import { PALETTES, type Palette } from "./palette";
-import type { PolPick, RacePick } from "../presets";
+import type { PolPick } from "../presets";
 
 export type Expr = ExpressionSpecification;
 
@@ -53,7 +53,6 @@ export const nationalFilter = (): FilterSpecification => ["==", ["coalesce", ["g
 
 export interface Picks {
   pol: PolPick;
-  race: RacePick;
 }
 
 export type Weights = Record<string, number>;
@@ -79,14 +78,12 @@ export function matchExpr(d: DimInfo, p: Picks): Expr {
     if (p.pol === "right") return ["/", ["-", 100, lean], 2] as unknown as Expr;
     return ["-", 100, ["abs", lean]] as unknown as Expr; // competitive: closer to even is better
   }
-  if (p.race !== "diverse") return ["get", `${d.id}_${p.race}`] as unknown as Expr; // percent share
-  // diverse: 100 minus the largest share (100 when no group dominates, 0 when one group is everyone)
-  return ["-", 100, ["max", ["get", `${d.id}_w`], ["get", `${d.id}_b`], ["get", `${d.id}_h`], ["get", `${d.id}_a`], ["get", `${d.id}_o`]]] as unknown as Expr;
+  throw new Error(`${d.id} is a composition dimension: context only, never weighted (SPEC §13.39)`);
 }
 
 /** sum(w_i * match_i * has_i) / sum(w_i * has_i); -1 when no weighted dimension has data. */
 export function compositeExpression(dims: DimInfo[], weights: Weights, p: Picks): Expr {
-  const active = dims.filter((d) => (weights[d.id] ?? 0) > 0);
+  const active = dims.filter((d) => weightable(d) && (weights[d.id] ?? 0) > 0);
   if (!active.length) return -1 as unknown as Expr;
   const num: unknown[] = ["+", 0];
   const den: unknown[] = ["+", 0];

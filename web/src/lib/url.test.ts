@@ -3,12 +3,11 @@ import { DEFAULT_STATE, parseState, serializeState, type AppState } from "./url"
 
 describe("url state", () => {
   it("round-trips a full priorities state", () => {
-    const s: AppState = { lat: 33.45, lng: -112.07, z: 6.25, view: "priorities", preset: null, weights: { jobs: 3, heat: 1, race: 2 }, pol: "left", race: "b", conf: false, inh: true };
+    const s: AppState = { lat: 33.45, lng: -112.07, z: 6.25, view: "priorities", preset: null, weights: { jobs: 3, heat: 1 }, pol: "left", conf: false, inh: true };
     const back = parseState(serializeState(s));
     expect(back.view).toBe("priorities");
-    expect(back.weights).toEqual({ jobs: 3, heat: 1, race: 2 });
+    expect(back.weights).toEqual({ jobs: 3, heat: 1 });
     expect(back.pol).toBe("left");
-    expect(back.race).toBe("b");
     expect(back.conf).toBe(false);
     expect(back.inh).toBe(true);
     expect(back.lat).toBeCloseTo(33.45, 3);
@@ -44,5 +43,13 @@ describe("url state", () => {
     const back = parseState("view=priorities&preset=climate&w=0,0,0,0,2");
     expect(back.preset).toBeNull();
     expect(back.weights).toEqual({ wb: 2 });
+  });
+
+  it("ignores a race weight and pick from links made before §13.39", () => {
+    // w= slots: heat, rflood, cflood, wstress, wb, jobs, transit, school, lgbtq, pol, race
+    const old = parseState("?view=priorities&w=0,0,0,0,0,2,0,0,0,0,4&race=b");
+    expect(old.weights).toEqual({ jobs: 2 });
+    expect("race" in old).toBe(false);
+    expect(serializeState({ ...DEFAULT_STATE, view: "priorities", weights: { jobs: 2, race: 4 } })).not.toMatch(/race|,4/);
   });
 });

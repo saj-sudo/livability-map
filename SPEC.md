@@ -87,8 +87,8 @@ dimension, and the map renders low-confidence areas visibly differently.
 6. **Composite scores are transparent and adjustable.** The default view is a bivariate
    choropleth that needs no weighting. Any single-number composite exposes its weights as sliders.
 7. **No trackers, no analytics scripts, no accounts.**
-8. **Not every dimension has a "better".** Composition dimensions (§20.2) are matched to what the
-   person picks, never ranked by the pipeline.
+8. **Not every dimension has a "better".** Composition dimensions (§20.2) are never ranked by the
+   pipeline and never weighted by the person: they are shown per place as context (§13.39).
 
 ## 5. Architecture and data flow
 
@@ -669,6 +669,15 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       bucket does not serve, and keeps `public/data` out of the Pages upload. Tiles and app
       change together; rollback is redeploying an earlier Pages build, whose archives are still
       in the bucket.
+39. **Racial composition is context, never a priority** (Saj, 2026-10-19): the priorities view
+    used to let a person pick a group ("majority Black", "diverse", ...) and colour tracts by how
+    well their composition matched. That is sorting neighbourhoods by who lives there, the
+    steering §3 and §16 rule out at every scale, not only per property. Composition dimensions
+    now have no slider and no part in the composite (`weightable()` in `web/src/lib/dims.ts`);
+    old links that weight `race` or carry `race=` are read without it. The place panel still
+    shows the tract's shares with their source, because knowing a place's demographics is
+    legitimate context; ranking or filtering by them is not. Political lean stays weightable
+    (not a protected class), labelled US-only as before.
 
 ## 14. VERIFY before code depends on it
 
@@ -904,7 +913,8 @@ Three kinds:
 - `signed`: a lean stored as `{id}_lean` in -100..100 (political two-party margin). The client
   turns it into a match against what the person picks (left, right, competitive).
 - `composition`: integer percent shares (`race_w`, `race_b`, `race_h`, `race_a`, `race_o`) plus
-  `race_maj`. The client lets the person pick a target group or "diverse" and computes a match.
+  `race_maj`. Shown in the place panel as shares; never scored, never weighted, never matched
+  against a group the person picks (§13.39).
   Never scored server-side (invariant 8).
 
 Joiners run in priority order; the first that yields a value sets `{id}_raw` and `{id}_res`.
@@ -935,8 +945,8 @@ percentile a US-only value against the world.
 ### 20.5 The My-priorities view
 
 Client-side composite: `sum(w_i * match_i * has_i) / sum(w_i * has_i)` as a MapLibre
-expression, where `match_i` is the score (or the derived match for signed and composition
-dims) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
+expression, where `match_i` is the score (or the derived match for the signed dimension;
+composition dimensions are never weighted, §13.39) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
 denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`:
 
 | Preset | Emphasis |

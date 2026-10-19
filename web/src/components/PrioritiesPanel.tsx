@@ -1,15 +1,16 @@
 "use client";
 
 // My-priorities controls (SPEC §20.5, decision §13.15): presets as chips, a 0-5 slider per
-// dimension with its coverage chip and a numeric readout, and the picks for the signed
-// (political lean) and composition (racial composition) dimensions. Moving a slider clears the
-// preset; picking a preset replaces the weights. Dimensions are grouped by the manifest's
-// `group`, so a new dimension lands in the right place with no code change.
+// dimension with its coverage chip and a numeric readout, and the pick for the signed (political
+// lean) dimension. Composition dimensions get no slider: they are context in the place panel,
+// never a priority (§13.39). Moving a slider clears the preset; picking a preset replaces the
+// weights. Dimensions are grouped by the manifest's `group`, so a new dimension lands in the
+// right place with no code change.
 
 import type { DimGroup } from "../lib/manifest";
-import { shortName, type DimInfo } from "../lib/dims";
+import { shortName, weightable, type DimInfo } from "../lib/dims";
 import { MAX_WEIGHT, type AppState } from "../lib/url";
-import { PRESETS, presetById, type PolPick, type RacePick } from "../presets";
+import { PRESETS, presetById, type PolPick } from "../presets";
 
 interface Props {
   dims: DimInfo[];
@@ -21,14 +22,6 @@ const POL_OPTIONS: { id: PolPick; label: string }[] = [
   { id: "left", label: "leans Democratic" },
   { id: "competitive", label: "competitive" },
   { id: "right", label: "leans Republican" },
-];
-const RACE_OPTIONS: { id: RacePick; label: string }[] = [
-  { id: "diverse", label: "diverse (no single majority)" },
-  { id: "w", label: "majority white" },
-  { id: "b", label: "majority Black" },
-  { id: "h", label: "majority Hispanic or Latino" },
-  { id: "a", label: "majority Asian / Pacific Islander" },
-  { id: "o", label: "majority other" },
 ];
 
 const GROUP_ORDER: DimGroup[] = ["hazard", "wellbeing", "env", "life"];
@@ -53,9 +46,10 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
   const applyPreset = (id: string) => {
     const p = presetById(id);
     if (!p) return;
-    onChange({ preset: p.id, weights: { ...p.weights }, pol: p.pol ?? state.pol, race: p.race ?? state.race });
+    onChange({ preset: p.id, weights: { ...p.weights }, pol: p.pol ?? state.pol });
   };
   const active = presetById(state.preset);
+  const contextOnly = dims.filter((d) => !weightable(d));
   return (
     <div className="space-y-3 border-t border-rule pt-2">
       <div>
@@ -79,7 +73,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
         <p className="mt-1 min-h-[1.2em] text-[12px] text-muted">{active ? active.blurb : Object.keys(state.weights).length ? "custom weights" : "no weights yet: move a slider or pick a preset"}</p>
       </div>
 
-      {groupsOf(dims).map((g) => (
+      {groupsOf(dims.filter(weightable)).map((g) => (
         <div key={g.group}>
           <div className="mb-1 flex items-baseline justify-between text-[12px] text-muted">
             <span>{g.label}</span>
@@ -140,17 +134,10 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
           </select>
         </label>
       )}
-      {(state.weights.race ?? 0) > 0 && (
-        <label className="block text-[12px] text-muted">
-          Composition I want
-          <select className={selectCls} value={state.race} onChange={(e) => onChange({ race: e.target.value as RacePick })}>
-            {RACE_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      {contextOnly.length > 0 && (
+        <p className="text-[11px] text-muted">
+          {contextOnly.map((d) => shortName(d.name)).join(", ")} {contextOnly.length > 1 ? "are" : "is"} shown for each place as context, not offered as a priority: ranking places by who lives there is steering, and this map does not do it.
+        </p>
       )}
       <p className="text-[11px] text-muted">A dimension missing on a hex drops out of that hex&rsquo;s average; hexes with none of your weighted dimensions stay grey.</p>
     </div>

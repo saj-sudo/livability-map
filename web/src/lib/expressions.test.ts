@@ -1,7 +1,7 @@
 import { createExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 import type { DimInfo } from "./dims";
-import { bivarColor, compositeExpression, hatchFilter, inhabitedFilter, priorityColor, scoreColor } from "./expressions";
+import { bivarColor, compositeExpression, hatchFilter, inhabitedFilter, matchExpr, priorityColor, scoreColor } from "./expressions";
 import { GREY, PALETTES, RAMP_HAZARD } from "./palette";
 
 const dim = (id: string, kind: DimInfo["kind"] = "score", higher_is: DimInfo["higher_is"] = "better", group: DimInfo["group"] = "life"): DimInfo => ({ id, name: id, group, kind, higher_is, chip: "", note: "", scale: "percentile", available: true });
@@ -19,31 +19,35 @@ function evaluate(expr: unknown, properties: Record<string, unknown>, spec?: unk
 
 describe("composite (SPEC §20.5)", () => {
   it("weights present dimensions and flips higher_is worse", () => {
-    const e = compositeExpression(DIMS, { heat: 1, jobs: 3 }, { pol: "competitive", race: "diverse" });
+    const e = compositeExpression(DIMS, { heat: 1, jobs: 3 }, { pol: "competitive" });
     // heat score 80 -> match 20; jobs score 60 -> 60; (1*20 + 3*60) / 4 = 50
     expect(evaluate(e, { heat_score: 80, jobs_score: 60 })).toBe(50);
   });
 
   it("drops missing dimensions from the denominator (invariant 3)", () => {
-    const e = compositeExpression(DIMS, { heat: 1, jobs: 3 }, { pol: "competitive", race: "diverse" });
+    const e = compositeExpression(DIMS, { heat: 1, jobs: 3 }, { pol: "competitive" });
     expect(evaluate(e, { heat_score: 80 })).toBe(20);
     expect(evaluate(e, {})).toBe(-1);
   });
 
-  it("handles signed and composition picks", () => {
-    const left = compositeExpression(DIMS, { pol: 1 }, { pol: "left", race: "diverse" });
+  it("handles the signed pick", () => {
+    const left = compositeExpression(DIMS, { pol: 1 }, { pol: "left" });
     expect(evaluate(left, { pol_lean: 60 })).toBe(80);
-    const right = compositeExpression(DIMS, { pol: 1 }, { pol: "right", race: "diverse" });
+    const right = compositeExpression(DIMS, { pol: 1 }, { pol: "right" });
     expect(evaluate(right, { pol_lean: 60 })).toBe(20);
-    const comp = compositeExpression(DIMS, { pol: 1 }, { pol: "competitive", race: "diverse" });
+    const comp = compositeExpression(DIMS, { pol: 1 }, { pol: "competitive" });
     expect(evaluate(comp, { pol_lean: -60 })).toBe(40);
-    const shares = { race_w: 20, race_b: 20, race_h: 20, race_a: 20, race_o: 20 };
-    expect(evaluate(compositeExpression(DIMS, { race: 1 }, { pol: "competitive", race: "diverse" }), shares)).toBe(80);
-    expect(evaluate(compositeExpression(DIMS, { race: 1 }, { pol: "competitive", race: "b" }), { ...shares, race_b: 70 })).toBe(70);
+  });
+
+  it("never weights a composition dimension, even when a weight arrives (SPEC §13.39)", () => {
+    const shares = { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2 };
+    expect(compositeExpression(DIMS, { race: 3 }, { pol: "competitive" })).toBe(-1);
+    expect(evaluate(compositeExpression(DIMS, { race: 3, jobs: 1 }, { pol: "competitive" }), { ...shares, jobs_score: 40 })).toBe(40);
+    expect(() => matchExpr(DIMS.find((d) => d.id === "race")!, { pol: "competitive" })).toThrow(/context only/);
   });
 
   it("colours grey when nothing weighted is present", () => {
-    const c = priorityColor(DIMS, { jobs: 2 }, { pol: "competitive", race: "diverse" });
+    const c = priorityColor(DIMS, { jobs: 2 }, { pol: "competitive" });
     expect(evaluate(c, {}, FILL_COLOR)).toEqual(evaluate(["to-color", GREY], {}, FILL_COLOR));
     expect(evaluate(c, { jobs_score: 100 }, FILL_COLOR)).not.toEqual(evaluate(["to-color", GREY], {}, FILL_COLOR));
   });

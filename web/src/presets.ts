@@ -1,8 +1,7 @@
 // Named weight sets for the My-priorities view (SPEC §20.5). Weights are 0-5 per dimension id;
-// `pol` and `race` carry the person's pick for the signed and composition dimensions.
+// `pol` carries the person's pick for the signed dimension. Composition is never weighted (§13.39).
 
 export type PolPick = "left" | "right" | "competitive";
-export type RacePick = "w" | "b" | "h" | "a" | "o" | "diverse";
 
 export interface Preset {
   id: string;
@@ -10,7 +9,6 @@ export interface Preset {
   blurb: string;
   weights: Record<string, number>;
   pol?: PolPick;
-  race?: RacePick;
 }
 
 export const PRESETS: Preset[] = [

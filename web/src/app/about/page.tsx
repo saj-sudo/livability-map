@@ -6,11 +6,14 @@ export default function About() {
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-sm leading-relaxed">
       <h1 className="text-2xl font-semibold">About</h1>
       <p>
-        This is a free, global map that puts projected climate hazard exposure (extreme heat, riverine flood, coastal flood and water stress under one moderate scenario for 2050) beside present-day wellbeing and a set of life dimensions you can weight yourself: jobs, transit, schools, LGBTQ+ presence, political lean, racial composition, income mix, housing cost and healthcare. It is built only from open-licensed data, on hexagons a few tens of kilometres across.
+        This is a free, global map that puts projected climate hazard exposure (extreme heat, riverine flood, coastal flood and water stress under one moderate scenario for 2050) beside present-day wellbeing and a set of life dimensions you can weight yourself: jobs, transit, schools, LGBTQ+ presence, political lean, income mix, housing cost and healthcare. It is built only from open-licensed data, on hexagons a few tens of kilometres across.
       </p>
       <h2 className="text-lg font-semibold">It does not recommend where to live</h2>
       <p>
         The map shows evidence, shows its sources and shows its gaps. There is no ranking, no &ldquo;top ten places&rdquo; feed and no single livability number decided for you. The default view needs no weighting; the priorities view exposes every weight as a slider and computes the result in your browser. Where a layer is missing, the hex says so and is drawn differently; missing data is never treated as zero risk.
+      </p>
+      <p>
+        Racial and ethnic composition (US census tracts) appears in the place panel as context, with its source. It is deliberately not something you can weight or filter by: ranking neighbourhoods by who lives there is steering, and this map does not do it.
       </p>
       <h2 className="text-lg font-semibold">What it is not</h2>
       <ul className="list-disc space-y-1 pl-5">

@@ -10,7 +10,7 @@ import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChan
 const dim = (id: string, group: DimInfo["group"], higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name: id, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "hazard", "worse"), dim("wb", "wellbeing"), dim("jobs", "life")];
 const LAYERS = tileLayersFrom({ hexes: { key: "hexes.pmtiles", sha256: "", bytes: 1, minzoom: 2, maxzoom: 7, layers: [{ name: "hex4", minzoom: 2, maxzoom: 4 }, { name: "hex5", minzoom: 5, maxzoom: 7 }] } });
-const PICKS = { pol: "competitive", race: "diverse" } as const;
+const PICKS = { pol: "competitive" } as const;
 const KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"];
 
 function styleWith(layers: ReturnType<typeof buildLayers>): StyleSpecification {

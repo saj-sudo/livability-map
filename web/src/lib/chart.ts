@@ -3,15 +3,17 @@
 // chart.test.ts proves the two agree, so the number a person reads is the number the hex
 // is coloured by. Missing stays null (invariant 3), never 0.
 
-import type { DimInfo } from "./dims";
+import { weightable, type DimInfo } from "./dims";
 import { hasAttr, type Picks, type Weights } from "./expressions";
 
 export type Props = Record<string, unknown>;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-/** 0..100 match of one dimension on a hex, or null when the hex has no value for it. */
+/** 0..100 match of one dimension on a hex, or null when the hex has no value for it (or the
+ *  dimension is context only, §13.39). */
 export function matchValue(d: DimInfo, props: Props, picks: Picks): number | null {
+  if (!weightable(d)) return null;
   if (!(hasAttr(d) in props) || props[hasAttr(d)] === null || props[hasAttr(d)] === undefined) return null;
   if (d.kind === "score") {
     const s = num(props[`${d.id}_score`]);
@@ -25,9 +27,7 @@ export function matchValue(d: DimInfo, props: Props, picks: Picks): number | nul
     if (picks.pol === "right") return (100 - lean) / 2;
     return 100 - Math.abs(lean);
   }
-  if (picks.race !== "diverse") return num(props[`${d.id}_${picks.race}`]);
-  const shares = ["w", "b", "h", "a", "o"].map((k) => num(props[`${d.id}_${k}`]) ?? 0);
-  return 100 - Math.max(...shares);
+  return null;
 }
 
 /** Weighted mean of the matches over the dimensions the hex has; null when none does. */
@@ -35,7 +35,7 @@ export function compositeValue(dims: DimInfo[], weights: Weights, picks: Picks, 
   let numr = 0;
   let den = 0;
   for (const d of dims) {
-    const w = weights[d.id] ?? 0;
+    const w = weightable(d) ? (weights[d.id] ?? 0) : 0;
     if (w <= 0) continue;
     const m = matchValue(d, props, picks);
     if (m === null) continue;
@@ -57,7 +57,7 @@ export interface Bar {
 /** One row per weighted dimension, heaviest first, then registry order. */
 export function priorityBars(props: Props, dims: DimInfo[], weights: Weights, picks: Picks): Bar[] {
   return dims
-    .map((d, i) => ({ d, i, w: weights[d.id] ?? 0 }))
+    .map((d, i) => ({ d, i, w: weightable(d) ? (weights[d.id] ?? 0) : 0 }))
     .filter((x) => x.w > 0)
     .sort((a, b) => b.w - a.w || a.i - b.i)
     .map(({ d, w }) => ({ id: d.id, name: d.name, chip: d.chip, weight: w, match: matchValue(d, props, picks) }));

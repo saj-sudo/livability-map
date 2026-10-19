@@ -20,7 +20,7 @@ const GAP = 14;
 export default function Tooltip({ hover, dims, state }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: hover.x + GAP, top: hover.y + GAP });
-  const m = tooltipModel(hover.props, state.view, dims, state.weights, { pol: state.pol, race: state.race });
+  const m = tooltipModel(hover.props, state.view, dims, state.weights, { pol: state.pol });
 
   useLayoutEffect(() => {
     const el = ref.current;

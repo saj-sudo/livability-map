@@ -107,7 +107,7 @@ function DimRow({ row, theme, pal, track }: { row: LifeRow; theme: Theme; pal: P
 export default function Inspector({ hex, manifest, dims, state, onClose, onCompare, embedded }: Props) {
   const [theme] = useTheme();
   const pal = paletteFor(theme);
-  const picks = useMemo(() => ({ pol: state.pol, race: state.race }), [state.pol, state.race]);
+  const picks = useMemo(() => ({ pol: state.pol }), [state.pol]);
   const m = useMemo(() => describeHex(hex.props, hex.sourceLayer, dims, manifest), [hex, dims, manifest]);
   const bars = useMemo(() => priorityBars(hex.props, dims, state.weights, picks), [hex, dims, state.weights, picks]);
   const summary = summarize(m, bars, dims, state.weights, picks, hex.props);

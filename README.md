@@ -3,20 +3,38 @@
 A free, global, explorable map that puts **projected climate hazard exposure** (heat, riverine
 flood, coastal flood, water stress; one moderate scenario, 2050) beside **present-day wellbeing**
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
-protection and presence, political lean, racial composition, income mix, housing cost burden,
-healthcare, cost of living, rent, travel time to healthcare, internet speed) plus the
-**present-day environment** (air quality, tree cover, wildfire, drought risk), on H3 hexagons at
-tens-of-km resolution, built only from open-licensed data.
+presence, political lean, racial composition, income mix, housing cost burden, healthcare, cost
+of living, rent, travel time to healthcare and to a city, walking time to healthcare, internet
+speed, relative wealth, armed conflict nearby, working water points) plus the **present-day
+environment** (air quality, tree cover, wildfire, drought risk), on H3 hexagons from about
+1,770 km² on all land down to about 5 km² inside urban centres, built only from open-licensed
+data.
+
+LGBTQ+ presence is a proxy and US-only: same-sex couple households per 1,000 households from the
+Census ACS, by tract. LGBTQ+ protection (state and national policy) is not on the map yet; the
+usable sources are waiting on permission from their publishers (SPEC §20.6).
 
 It does **not** recommend where to live. It shows evidence, shows its sources, and shows its
 gaps. Every number on the map is traceable to a dataset, a vintage and a license. Missing data
 renders as missing, never as zero.
 
-Status: Sessions 1-9 built (2026-09-22). The pipeline runs end to end on real data at H3 res 4
-and res 5 (18 dimensions, 146 MB of tiles) and the map app runs locally; publishing to Cloudflare R2 / Pages waits on
-credentials in `.env`, and two registration-gated inputs (Global Data Lab SHDI, MIT Election Lab
-county returns) on a manual download. See [`SPEC.md`](SPEC.md) for the full spec; section
-numbers below refer to it.
+**Status (2026-09-24):** the pipeline runs end to end on real data on a laptop, and the map app
+runs locally against its output. The map is not deployed yet: publishing to Cloudflare R2 /
+Pages needs credentials in `.env` (see [`docs/manual-steps.md`](docs/manual-steps.md)).
+
+The current build has H3 res 4 and 5 on all land, res 6 across the US, EU, UK, EFTA and urban
+clusters, and res 7 inside urban centres, with 27 dimensions (4 hazards, wellbeing, 18 life
+dimensions, 4 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
+`hexes_city` 152 MB). Three inputs wait on a manual download, and until they arrive these layers
+are empty or coarser than designed:
+
+- **Political lean** (MIT Election Lab county returns): empty. It has no other source.
+- **Rent in the US** (HUD Fair Market Rents): empty in the US. Germany, the Netherlands and
+  Australia are populated from their national statistics offices.
+- **Regional wellbeing** (Global Data Lab Subnational HDI): wellbeing falls back to the national
+  World Happiness Report value wherever that report has one.
+
+See [`SPEC.md`](SPEC.md) for the full spec; section numbers below refer to it.
 
 ## Why this and not something that exists
 
@@ -114,8 +132,10 @@ npm run deploy                                     # Cloudflare Pages via wrangl
 
 1. Confirm each source in `pipeline/sources.yaml` first-hand and log it in SPEC §15. The
    `fetch` stage refuses any source whose license or URL is still `VERIFY`.
-2. Two sources are `access: manual`: Aqueduct Floods (one-time Google Earth Engine export, see
-   [`docs/gee-export.md`](docs/gee-export.md)) and Global Data Lab SHDI (free registration).
+2. Some sources need a person: Aqueduct Floods (one-time Google Earth Engine export, see
+   [`docs/gee-export.md`](docs/gee-export.md)), and the registration, browser-check and
+   permission items in [`docs/manual-steps.md`](docs/manual-steps.md) (Global Data Lab SHDI, HUD
+   Fair Market Rents, MIT Election Lab county returns, among others).
 3. `python -m pipeline fetch` then `python -m pipeline --res 4 all` for a first global pass
    (about 35 minutes and 6 GB of RAM on a laptop); use `--bbox minlng,minlat,maxlng,maxlat` to
    iterate on a region (Dhaka, Phoenix, Reykjavik, the Sahel are the spot checks; bbox runs get
@@ -147,9 +167,20 @@ data/                   gitignored raw / interim / out; data/raw/CHECKSUMS is co
 
 ## Licensing posture
 
-Non-commercial for the foreseeable future (SPEC §13.13). All sources are CC BY 4.0, public
-domain, ODC-BY or CC0, except Global Data Lab SHDI (free with citation, non-commercial only),
-which the manifest and `/methodology` state plainly. Sources with non-redistributable terms
-(Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo, SEDA without permission) are excluded.
+Non-commercial for the foreseeable future (SPEC §13.13). Most sources are CC BY 4.0, public
+domain, ODC-BY, CC0 or an open reuse licence from a public publisher (UK OGL, Etalab, Statistics
+Canada, dl-de/by, Eurostat, OECD). The exceptions, which the manifest and `/methodology` state plainly:
 
-Code: MIT.
+- Global Data Lab SHDI: free with citation, non-commercial only.
+- Ookla open data (internet speed): CC BY-NC-SA 4.0, so the derived `net_*` attributes are
+  redistributed under the same licence.
+- Meta Data for Good Relative Wealth Index (relative wealth): CC BY-NC 4.0.
+- WPdx+ water points: recorded as CC BY-SA 4.0 and labelled share-alike, pending the publisher's
+  confirmation (see [`docs/manual-steps.md`](docs/manual-steps.md)).
+
+Sources with non-redistributable terms (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo,
+SEDA without permission) are excluded.
+
+Code: MIT, see [`LICENSE`](LICENSE). The MIT licence covers the code in this repository only;
+data derived from the sources keeps each source's terms, listed per source in
+`pipeline/sources.yaml`.

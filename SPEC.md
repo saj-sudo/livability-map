@@ -678,6 +678,31 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     shows the tract's shares with their source, because knowing a place's demographics is
     legitimate context; ranking or filtering by them is not. Political lean stays weightable
     (not a protected class), labelled US-only as before.
+40. **The web app fails visibly, never blankly** (2026-10-19):
+    - *No WebGL 2*: the map page says so and links to /methodology and /about instead of an
+      empty canvas.
+    - *Basemap down*: the hex sources and layers are added on the first parsed style
+      (`style.load`, not `load`, which also waits for every basemap tile). A basemap style that
+      errors or takes over 8 s is replaced by a plain background style with no external request,
+      with a persistent notice; theme swaps keep the plain background. Later basemap tile or
+      glyph errors only leave a gap behind the hexes.
+    - *Tile archive unreachable*: a persistent `role="alert"` notice naming the archive, kept
+      apart from the transient hints. Logic in `web/src/lib/mapHealth.ts` (vitest).
+    - `app/error.tsx` and `app/global-error.tsx` catch render errors with a retry; nothing is
+      reported anywhere (invariant 7).
+    - *Security headers*: `deploy.mjs` writes `out/_headers` (`scripts/headers.mjs`) with a
+      Content-Security-Policy per page whose `script-src` lists the sha256 of that page's
+      inline scripts (no `unsafe-inline` for scripts), `connect-src` limited to the site, the R2
+      origin and OpenFreeMap, `frame-ancestors 'none'` (revisit for the v2 embed), plus nosniff,
+      referrer, permissions and immutable caching for `/_next/static/*`. The CSP turns
+      invariant 7 and the §17 "no third-party request" criterion into something the browser
+      enforces.
+    - *Accessibility*: search fly-to honours `prefers-reduced-motion`; the phone sheet handle
+      works from a keyboard.
+    - *e2e in CI*: a job builds the fixture world, serves `out/` with its `_headers` applied and
+      Range support (`scripts/serve.mjs`) and runs Playwright (`web/e2e/smoke.spec.ts`): hexes
+      draw and a click opens the place panel with the basemap host blocked, the no-WebGL and
+      missing-archive states, and every page under its CSP with no violation.
 
 ## 14. VERIFY before code depends on it
 
@@ -845,7 +870,8 @@ The Fair Housing Act and its EU equivalents are the reason, not just taste.
   (`sources.yaml` review, `publish` refuses unconfirmed sources, 2026-09-22)
 - [x] `/about` says clearly that the map does not recommend where to live. (2026-09-22)
 - [x] With the site served locally, every request the browser makes goes to the same origin
-  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Search, hover, the
+  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Since §13.40 the
+  per-page CSP enforces it and the CI e2e job fails on any violation. Search, hover, the
   inspector bars, compare, the intro and the phone sheet never show a missing value as zero.
   (Playwright network audit and browser checks on the res-4 build, Session 9, 2026-09-22; the
   R2 half of the zoom-2 load-time criterion above is still open)

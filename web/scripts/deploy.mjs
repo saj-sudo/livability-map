@@ -4,12 +4,13 @@
 //
 // The site is built against the manifest R2 serves now (the one `publish --target r2` switched
 // last), never a local one, so the deployed pages name exactly the content-addressed archives
-// that are live. The archives are checked to exist first, and public/data is kept out of the
-// upload: Pages serves the app, R2 serves the tiles.
+// that are live. The archives are checked to exist first, public/data is kept out of the
+// upload (Pages serves the app, R2 serves the tiles), and _headers gets a CSP per page.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeHeaders } from "./headers.mjs";
 import { releaseProblems } from "./release-check.mjs";
 
 const WRANGLER = "wrangler@4.146.0"; // pinned: a deploy tool should not change under a release
@@ -61,4 +62,7 @@ const run = (cmd, args) => {
 run("npm", ["run", "build"]);
 // public/data (a local publish) is copied into out/ by Next; it must not reach Pages
 rmSync(join(web, "out", "data"), { recursive: true, force: true });
+// security headers: a CSP per page that allows only its own inline scripts and the map's origins
+const pages = writeHeaders(join(web, "out"), new URL(base).origin);
+console.log(`_headers written: CSP for ${pages.map((p) => p.path).join(", ")}`);
 run("npx", ["--yes", WRANGLER, "pages", "deploy", "out", "--project-name", env.CF_PAGES_PROJECT, "--branch", branch, "--commit-dirty=true"]);

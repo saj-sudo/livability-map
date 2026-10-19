@@ -43,7 +43,10 @@ as it was):
 
 `npm run deploy` then reads the live `manifest.json`, refuses it if it is a fixture, bbox or
 local build or names an archive the bucket does not serve, builds the site against it, drops
-`out/data/` (tiles never go to Pages) and deploys with a pinned wrangler.
+`out/data/` (tiles never go to Pages), writes `out/_headers` (a Content-Security-Policy per page
+listing the hashes of its inline scripts and allowing only the R2 origin and OpenFreeMap, SPEC
+§13.40) and deploys with a pinned wrangler. To check the headers locally:
+`npm run build && node scripts/headers.mjs out https://<your R2 domain> && node scripts/serve.mjs out`.
 
 **Rolling back:** in the Cloudflare dashboard, Pages → the project → Deployments → an earlier
 deployment → "Rollback". Its pages name the archives that were live then, and those are still in

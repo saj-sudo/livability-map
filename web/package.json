@@ -10,6 +10,7 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
+    "e2e": "playwright test",
     "serve": "serve out -l 3000",
     "deploy": "node scripts/deploy.mjs"
   },
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@maplibre/maplibre-gl-style-spec": "^23.0.0",
+    "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^24",
     "@types/react": "^19",

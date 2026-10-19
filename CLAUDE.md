@@ -43,6 +43,7 @@ uv run python -m pipeline tiles --archive hexes_nbhd             # one archive o
 uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
+cd web && npm run build && node scripts/headers.mjs out && npm run e2e   # Playwright smoke test (needs a fixture publish --target local)
 ```
 
 On this laptop `uv` lives in `~/.local/bin` (Git Bash: `export PATH="$HOME/.local/bin:$PATH"`)
@@ -160,8 +161,14 @@ its OpenFreeMap style with `setStyle(url, { transformStyle })` so the hex source
 packages, so no request leaves the origin. `MapView` registers map handlers once and reads state
 and callbacks through refs. Place search reads `public/gazetteer.json` (committed; rebuild with
 `uv run python web/scripts/build_gazetteer.py` after `python -m pipeline fetch --only
-natural_earth_places`). Below 640px the panels live in a bottom sheet. Playwright screenshots go
-under `.playwright-mcp/` (ignored).
+natural_earth_places`). Below 640px the panels live in a bottom sheet. Composition dimensions
+(race) are context only: no slider, never in the composite (`weightable()`, SPEC §13.39). Map
+failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
+`lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.40). `scripts/headers.mjs`
+writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
+with those headers and Range support for `web/e2e/` (Playwright 1.56.1, pinned to the container's
+Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go under
+`.playwright-mcp/` (ignored).
 
 ## Rules that are easy to break
 

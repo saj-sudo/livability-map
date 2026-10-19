@@ -4,6 +4,8 @@
 // the hex source and layer stack, re-styles in place when the view or sliders change, and swaps
 // the basemap on a theme change while carrying the hex stack over (no tile refetch).
 // Everything the person sees comes from the vector tile attributes; there is no API.
+// The data never waits on the basemap: hexes are added as soon as a style is parsed, and a
+// basemap that fails or stalls is replaced by a plain background (§13.40, lib/mapHealth.ts).
 
 import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
@@ -11,6 +13,7 @@ import { useEffect, useRef } from "react";
 import { INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/config";
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
+import { classifyError, fallbackStyle, NO_PROBLEMS, noteProblem, STYLE_TIMEOUT_MS, type ErrorKind, type MapProblems } from "../lib/mapHealth";
 import { paletteFor } from "../lib/palette";
 import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, pickVisible, type TileLayer, type ViewOptions } from "../lib/style";
 import { basemapStyleFor, THEME_EVENT, type Theme } from "../lib/theme";
@@ -59,21 +62,24 @@ interface Props {
   onSelect: (hex: SelectedHex | null) => void;
   onHover?: (hex: HoveredHex | null) => void;
   onHint: (text: string | null) => void;
+  /** dependencies that failed (basemap, tile archives); MapApp shows a persistent notice */
+  onProblems?: (problems: MapProblems) => void;
 }
 
-export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint }: Props) {
+export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint, onProblems }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
   const selectedRef = useRef<{ source: string; layer: string; id: string } | null>(null);
   const selectAtRef = useRef<((point: maplibregl.PointLike) => boolean) | null>(null);
   const stateRef = useRef(state);
-  const cbRef = useRef({ onMove, onSelect, onHover, onHint });
+  const cbRef = useRef({ onMove, onSelect, onHover, onHint, onProblems });
   const themeRef = useRef<Theme>("light");
+  const basemapDownRef = useRef(false);
   useEffect(() => {
     // handlers registered once read the latest state and callbacks through refs
     stateRef.current = state;
-    cbRef.current = { onMove, onSelect, onHover, onHint };
+    cbRef.current = { onMove, onSelect, onHover, onHint, onProblems };
   });
 
   const options = (s: AppState): ViewOptions => ({ view: s.view, dims, weights: s.weights, picks: { pol: s.pol }, theme: themeRef.current });
@@ -110,7 +116,29 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       if (e.id === HATCH_IMAGE) addHatch();
     });
 
-    map.on("load", () => {
+    let problems = NO_PROBLEMS;
+    const report = (k: ErrorKind) => {
+      const next = noteProblem(problems, k);
+      if (next === problems) return;
+      problems = next;
+      cbRef.current.onProblems?.(problems);
+    };
+    // the basemap style failed or stalled: draw the hexes on a plain background instead
+    const switchToPlainBackground = () => {
+      if (basemapDownRef.current) return;
+      basemapDownRef.current = true;
+      report({ kind: "basemap" });
+      map.setStyle(fallbackStyle(themeRef.current));
+    };
+    const styleTimer = window.setTimeout(() => {
+      if (!loadedRef.current) switchToPlainBackground();
+    }, STYLE_TIMEOUT_MS);
+
+    // the hex sources and layers go in once, on the first style that parses (style.load, not
+    // load: load also waits for every basemap tile); theme swaps carry them over
+    const addData = () => {
+      if (loadedRef.current) return;
+      window.clearTimeout(styleTimer);
       addHatch();
       for (const a of archives) map.addSource(a.id, { type: "vector", url: `pmtiles://${tilesUrl(a.key)}`, promoteId: "h3" });
       const before = firstSymbolLayerId(map);
@@ -121,7 +149,8 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       }
-    });
+    };
+    map.on("style.load", addData);
 
     // hover readout: feature-state on the hex under the pointer, one query per frame at most;
     // pointer devices only (a touch device selects on tap instead)
@@ -164,11 +193,21 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       themeRef.current = theme;
       if (map.hasImage(HATCH_IMAGE)) map.removeImage(HATCH_IMAGE);
       map.once("style.load", () => applyView(map, options(stateRef.current), stateRef.current.inh, stateRef.current.conf, tileLayers));
-      map.setStyle(basemapStyleFor(theme), { transformStyle: (prev, next) => mergeStyleOnThemeChange(prev, next) });
+      const style = basemapDownRef.current ? fallbackStyle(theme) : basemapStyleFor(theme);
+      map.setStyle(style, { transformStyle: (prev, next) => mergeStyleOnThemeChange(prev, next) });
     };
     window.addEventListener(THEME_EVENT, onTheme);
 
+    const archiveIds = archives.map((a) => a.id);
     map.on("error", (e) => {
+      const k = classifyError(e as Parameters<typeof classifyError>[0], archiveIds);
+      if (k.kind === "tiles") return report(k);
+      if (k.kind === "basemap") {
+        // before the data is up, a basemap failure means its style: switch to the plain
+        // background. Later, a missing basemap tile or glyph only leaves a gap behind the hexes.
+        if (!loadedRef.current) switchToPlainBackground();
+        return;
+      }
       const msg = (e as { error?: { message?: string } }).error?.message ?? "";
       if (msg) cbRef.current.onHint(`Map error: ${msg}`);
     });
@@ -211,6 +250,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     });
 
     return () => {
+      window.clearTimeout(styleTimer);
       window.removeEventListener(THEME_EVENT, onTheme);
       map.remove();
       mapRef.current = null;
@@ -224,7 +264,8 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     const map = mapRef.current;
     if (!map || !flyTo) return;
     const target: [number, number] = [flyTo.lng, flyTo.lat];
-    map.flyTo({ center: target, zoom: flyTo.zoom, duration: 1400, essential: true });
+    // not `essential`: MapLibre then honours prefers-reduced-motion and jumps instead of flying
+    map.flyTo({ center: target, zoom: flyTo.zoom, duration: 1400 });
     const onIdle = () => {
       const hit = selectAtRef.current?.(map.project(target));
       if (hit === false) cbRef.current.onHint("No inhabited hex here; the nearest coloured hexes are the data.");

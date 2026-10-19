@@ -20,6 +20,7 @@ import type { FlyTo, HoveredHex, SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
 import { shouldShowIntro } from "../lib/intro";
+import { NO_PROBLEMS, problemMessage, supportsWebGL2, type MapProblems } from "../lib/mapHealth";
 import { zoomFor, type Place } from "../lib/search";
 import type { Snap } from "../lib/sheet";
 import { DEFAULT_STATE, parseState, writeUrl, type AppState } from "../lib/url";
@@ -49,6 +50,8 @@ export default function MapApp({ manifest, dims }: Props) {
   const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const [helpSlot, setHelpSlot] = useState<HTMLElement | null>(null);
   const [intro, setIntro] = useState(false);
+  const [webgl, setWebgl] = useState(true);
+  const [problems, setProblems] = useState<MapProblems>(NO_PROBLEMS);
   // phone layout: one bottom sheet with two tabs instead of floating panels
   const phone = useMediaQuery(PHONE_QUERY);
   const [snap, setSnap] = useState<Snap>("peek");
@@ -64,6 +67,7 @@ export default function MapApp({ manifest, dims }: Props) {
     setSearchSlot(document.getElementById("search-slot"));
     setHelpSlot(document.getElementById("help-slot"));
     setIntro(shouldShowIntro(window.localStorage));
+    setWebgl(supportsWebGL2());
   }, []);
 
   // write the URL on every state change, debounced so map moves do not thrash history
@@ -141,7 +145,15 @@ export default function MapApp({ manifest, dims }: Props) {
 
   return (
     <div className="map-shell">
-      {ready && <MapView archives={archives} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} />}
+      {ready && webgl && <MapView archives={archives} tileLayers={tileLayers} dims={dims} state={state} flyTo={flyTo} onMove={onMove} onSelect={onSelect} onHover={setHover} onHint={setHint} onProblems={setProblems} />}
+      {ready && !webgl && (
+        <div className="absolute inset-0 grid place-items-center p-6">
+          <div className="max-w-md rounded-panel border border-rule bg-panel-solid p-4 text-[14px] leading-relaxed" role="alert">
+            <p className="font-medium">This map needs WebGL 2, and this browser has it turned off or does not support it.</p>
+            <p className="mt-2 text-muted">Turning on hardware acceleration in the browser settings usually fixes it. The <a className="underline" href="/methodology/">methodology</a> and <a className="underline" href="/about/">about</a> pages work without it.</p>
+          </div>
+        </div>
+      )}
       {searchSlot && createPortal(<Search onPick={onPick} className="mx-auto w-full max-w-md" />, searchSlot)}
       {helpSlot &&
         createPortal(
@@ -156,9 +168,18 @@ export default function MapApp({ manifest, dims }: Props) {
       {intro && <Intro onClose={() => setIntro(false)} />}
       {hover && <Tooltip hover={hover} dims={dims} state={state} />}
       {!phone && <Panel manifest={manifest} dims={dims} state={state} onChange={update} highlight={hover ? hoverBivar(hover) : null} />}
-      {hint && (
-        <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="status">
-          {hint}
+      {(hint || problemMessage(problems)) && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-20 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col items-center gap-2">
+          {problemMessage(problems) && (
+            <div className="rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="alert">
+              {problemMessage(problems)}
+            </div>
+          )}
+          {hint && (
+            <div className="rounded-panel border border-rule bg-panel-solid px-3 py-1.5 text-[13px] shadow-sm" role="status">
+              {hint}
+            </div>
+          )}
         </div>
       )}
       {!phone && place}

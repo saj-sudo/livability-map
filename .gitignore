@@ -32,6 +32,8 @@ web/public/data/
 web/public/maplibre-gl-worker.mjs
 web/.wrangler/
 web/.release/
+web/test-results/
+web/playwright-report/
 data/interim/unzipped/
 .playwright-mcp/
 

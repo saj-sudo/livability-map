@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-09-24.
+Last updated: 2026-10-19.
 
 ## Open
 
@@ -22,8 +22,7 @@ Last updated: 2026-09-24.
 | 9 | [UNICEF Giga API key](#9-unicef-giga-api-key) | school locations and school connectivity | 10 min |
 | 10 | [DHS modeled surfaces](#10-dhs-modeled-surfaces) | 5 km education, vaccination, wealth surfaces | 10 min + read terms |
 | 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
-| 12 | [Flip the repo public](#12-flip-the-repo-public) | the public GitHub repo | 2 min |
-| 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min, before item 12 |
+| 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
 
 Items 2-4 and 6 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
@@ -179,20 +178,6 @@ map records CC BY-SA 4.0 and labels the derived values share-alike (SPEC §13.37
 export. If they say CC BY 4.0, update `license` on `wpdx_water_points` in `pipeline/sources.yaml`
 and drop the share-alike label; nothing needs rebuilding.
 
-### 12. Flip the repo public
-
-First confirm `LICENSE` (MIT) is on `main`: open https://github.com/saj-sudo/livability-map/blob/main/LICENSE .
-If it 404s, merge the branch that adds it (`claude/portfolio-github-updates-ik5ico`) first. If
-you want item 13, do it before this one: once the repo is public, anyone can clone the old
-history.
-
-Then on GitHub: the repo, **Settings**, **General**, scroll to **Danger Zone**, **Change
-visibility**, **Change to public**, and confirm with the repo name.
-
-A check of the tracked files on 2026-09-24 found no personal emails, Windows user paths, tokens or
-keys (`.env.example` holds only empty keys and placeholders). The one personal detail left is in
-git history, item 13.
-
 ### 13. Optional: rewrite the author email on two early commits
 
 Two commits from 2026-09-20/21, `c1156a0` (Session 1) and `e25784a` (CI install fix), carry a
@@ -230,5 +215,6 @@ GitHub's branch protection, if on, has to allow the force-push for that one push
 
 ## Done
 
+- 2026-10-19: item 12, the repo is public (flipped by Saj; LICENSE merged to `main` the same day).
 - 2026-09-23: Norway, Canada, Australia, France, Germany, the Netherlands, England, the EU grid:
   no manual steps needed (all direct downloads, verified in SPEC §15).

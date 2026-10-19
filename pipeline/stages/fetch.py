@@ -24,7 +24,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from ..checksums import CHUNK, read_checksums, sha256_of, write_checksums  # noqa: F401 - re-exported
+from ..checksums import (  # noqa: F401 - re-exported
+    CHUNK,
+    read_checksums,
+    sha256_of,
+    write_checksums,
+)
 from ..config import Settings
 from ..registry import Source, load_sources
 

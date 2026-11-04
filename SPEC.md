@@ -716,7 +716,7 @@ scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US lif
 bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
-**v2.** Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
+**v2.** Candidate new sources (FEMA NRI, CDC PLACES, Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
 panel; population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
 permissions land; drought (JRC GDO) and wildfire (GWIS); GEM seismic as labeled non-climate;
 embeddable iframe.

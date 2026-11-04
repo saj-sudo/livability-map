@@ -37,6 +37,9 @@ LOADERS: dict[str, str] = {
     "epa_sld": "pipeline.prep.epa_sld:load",
     "urban_edu_districts": "pipeline.prep.urban_edu:load",
     "hrsa_ahrf": "pipeline.prep.hrsa:load",
+    # US tract layers from the 2026-11 source triage (SPEC §13.38)
+    "fema_nri": "pipeline.prep.fema_nri:load",
+    "cdc_places": "pipeline.prep.cdc_places:load",
     # cost of living (§20.6 cost / rent): BEA price parities, World Bank price levels, HUD rents
     "bea_rpp_metro": "pipeline.prep.bea:load_metro",
     "bea_rpp_state": "pipeline.prep.bea:load_state",

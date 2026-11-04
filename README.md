@@ -23,8 +23,8 @@ runs locally against its output. The map is not deployed yet: publishing to Clou
 Pages needs credentials in `.env` (see [`docs/manual-steps.md`](docs/manual-steps.md)).
 
 The current build has H3 res 4 and 5 on all land, res 6 across the US, EU, UK, EFTA and urban
-clusters, and res 7 inside urban centres, with 27 dimensions (4 hazards, wellbeing, 18 life
-dimensions, 4 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
+clusters, and res 7 inside urban centres, with 29 dimensions (4 hazards, wellbeing, 19 life
+dimensions, 5 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
 `hexes_city` 152 MB). Three inputs wait on a manual download, and until they arrive these layers
 are empty or coarser than designed:
 

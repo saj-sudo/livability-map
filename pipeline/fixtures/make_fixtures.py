@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 11  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 12  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
@@ -266,6 +266,12 @@ def us_like_layers(land, rng: np.random.Generator):
                     "gini": float(round(0.4 + 0.1 * near_cedar, 3)),
                     "rent_share_income": float(round(0.22 + 0.2 * near_cedar, 3)),
                     "renter_households": float(round(30 + 5000 * near_cedar)),
+                    # FEMA NRI-like building loss (USD per 1,000 per year), highest on the east side,
+                    # and a CDC PLACES-like fair-or-poor health share, blank on the northern edge
+                    # (as PLACES leaves tracts blank) so `phealth` shows missing, never 0
+                    "population": float(round(200 + 20000 * near_cedar)),
+                    "loss_per_1k": float(round(0.2 + 1.2 * max(0.0, 1 - abs(cx - 13.9) / 1.2), 3)),
+                    "poor_health_pct": float(round(12 + 10 * (1 - near_cedar), 1)) if cy < 43.7 else np.nan,
                     "geometry": g,
                 }
             )

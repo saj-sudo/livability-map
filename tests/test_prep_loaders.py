@@ -7,7 +7,20 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
-from pipeline.prep import acs, bea, epa_sld, hrsa, hud, icp, ilostat, medsl, oecd, urban_edu
+from pipeline.prep import (
+    acs,
+    bea,
+    cdc_places,
+    epa_sld,
+    fema_nri,
+    hrsa,
+    hud,
+    icp,
+    ilostat,
+    medsl,
+    oecd,
+    urban_edu,
+)
 
 
 def test_ilostat_prepare_keeps_latest_total_youth_row():
@@ -362,3 +375,23 @@ def test_eurostat_country_without_employment_counts_is_missing_not_zero():
     out = load_frame(df)
     assert out["emp_rate"].iloc[:10].isna().all()  # the whole country is missing
     assert out["emp_rate"].iloc[10:].round(2).tolist() == [0.5, 0.5]
+
+
+def test_fema_nri_loss_rate_prefers_alr_and_keeps_missing():
+    df = pd.DataFrame({"TRACTFIPS": ["1001020100", "06037101110", "06037101120"], "POPULATION": ["1900", "4000", "10"], "ALR_VALB": ["0.0004", "", "-1"], "EAL_VALB": ["10", "20", "30"], "BUILDVALUE": ["1e5", "1e5", "1e5"]})
+    out = fema_nri.prepare(df).set_index("GEOID")
+    assert list(out.index) == ["01001020100"]  # zero-padded; blank and negative rates dropped, never 0
+    assert out.loc["01001020100", "loss_per_1k"] == pytest.approx(0.4)
+
+
+def test_fema_nri_rebuilds_rate_from_eal_when_alr_absent():
+    df = pd.DataFrame({"TRACTFIPS": ["06037101110", "06037101120"], "POPULATION": ["4000", "0"], "EAL_VALB": ["250", "5"], "BUILDVALUE": ["1000000", "0"]})
+    out = fema_nri.prepare(df).set_index("GEOID")
+    assert out.loc["06037101110", "loss_per_1k"] == pytest.approx(0.25) and "06037101120" not in out.index
+
+
+def test_cdc_places_fair_or_poor_health():
+    df = pd.DataFrame({"TractFIPS": ["1001020100", "1001020200", "1001020300"], "TotalPopulation": ["1,912", "2,001", "15"], "GHLTH_CrudePrev": ["18.4", "", "250"], "ACCESS2_CrudePrev": ["9", "8", "7"]})
+    out = cdc_places.prepare(df).set_index("GEOID")
+    assert list(out.index) == ["01001020100"] and out.loc["01001020100", "poor_health_pct"] == 18.4
+    assert out.loc["01001020100", "population"] == 1912

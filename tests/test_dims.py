@@ -83,6 +83,19 @@ def test_us_life_dims_on_fixtures(settings):
     assert (west["transit_res"] == "none").all() and west["transit_raw"].isna().all()
 
 
+def test_nri_and_places_tract_dims_on_fixtures(settings):
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4).set_index("h3")
+    cedar = df.loc[_cell(42.5, 13.0)]
+    assert cedar["nri_res"] == "tract" and cedar["nri_raw"] > 0 and cedar["nri_lbl"] == "nri"
+    assert cedar["phealth_res"] == "tract" and 12 <= cedar["phealth_raw"] <= 22
+    alder = df.loc[_cell(43.0, 11.0)]  # XKA: US-only dimensions are missing
+    assert alder["nri_res"] == "none" and pd.isna(alder["nri_raw"])
+    # PLACES stand-in is blank on XKB's northern edge: missing there, never 0
+    north = df[(df["iso_a2"] == "XB") & (df["lat"] > 43.8)]
+    assert len(north) and north["phealth_raw"].isna().all() and (north["phealth_res"] == "none").all()
+
+
 def test_cost_and_rent_on_fixtures(settings):
     """cost: BEA metro (county) inside the fixture metro, BEA state (admin1) elsewhere in XKB,
     the WDI fallback for the one XKB region the state stand-in leaves out, ICP national in XKA.

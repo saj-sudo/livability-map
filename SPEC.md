@@ -735,6 +735,34 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     and documents written for third parties (the permission requests in docs/manual-steps.md)
     are public too. The site itself is not hosted yet: Cloudflare Pages (app) and R2 (tiles)
     wait on the credentials in docs/manual-steps.md item 1.
+44. **Pipeline hardening** (2026-11-11, from the 2026-10-18 audit follow-ups):
+    - *Atomic writes.* `stage_cache.atomic_path` yields a sibling temp file that replaces the
+      target in one rename and is removed on an error, so a crash never leaves a half-written
+      file under the real name. Every stage parquet, the prep cache, `manifest.json`,
+      `timings.json`, `CHECKSUMS`, the tiles report, the tippecanoe archive, the local publish
+      copies and extracted archive members use it (`os.replace` retries briefly when Windows
+      holds the target). `stage_cache` is in `PLUMBING`, so editing it never rebuilds a stage.
+      `fr_iris` extraction is marked with `.extracted`, as `unzip_prefix` already was.
+    - *Empty sources stop `dims`.* Right after a source is prepared, `dims.check_nonnull` raises
+      `RuntimeError` when the layer has no rows or a joiner field is filled in under 10% of its
+      rows. The share is per field, the default is `MIN_NONNULL`, and a source overrides it with
+      `min_nonnull:` in `sources.yaml` (0 turns the check off). The Eurostat grid is set to 0.05
+      because its employment column is legitimately sparse (§15). This runs on every `dims` run,
+      before any overlay work, and before a live baseline exists for `validate`.
+    - *`dims` memory.* Prepared layers load when a dimension first asks for them and are dropped
+      (`gc.collect()`) after the last dimension that uses them; an overlay chunk is given only
+      the polygons whose bounds meet it (same result, checked by a test); one `CellSet` per
+      resolution serves every raster dimension and centroid sampling reuses the grid's `lat` /
+      `lng`; the up-to-date path reads only the `_res` columns; the partial-recompute merge is a
+      positional concat guarded by `equals` instead of two sets of hex ids and a hash merge; the
+      per-resolution frames are released before the next resolution. Not done, because they touch
+      `pop` / `hazards` or the output format: array accumulators in `h3util`, chunked
+      `point_mean` / `point_radius`, per-dimension flushes, categorical tag columns. The result
+      is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
+      in `timings.json` with 7.9 GB; `scripts/measure_dims_mem.py` gives a rough fixture figure).
+      The first real run after this change rebuilds every stage once (new fingerprints, §13.39).
+    - *Dead code removed:* `config.h3_backend`, `Settings.bbox_or_none`, `h3util.cells_to_int`,
+      `attrs.PARQUET_ONLY_SUFFIXES` and ten unused exports in `web/src/lib`.
 
 ## 14. VERIFY before code depends on it
 
@@ -876,13 +904,15 @@ Map honesty, before or with the first public release:
 
 Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 
-- [ ] `dims` memory: load prepared layers per dimension and free them (peak 7.9 GB at res 6).
-- [ ] Atomic writes for stage parquets and `manifest.json` (temp file, then rename), as the
-  tiler already does.
-- [ ] A per-source minimum non-null share in `prep.load_layer`, so a half-empty layer fails
-  before a live baseline exists for `validate` to compare against.
-- [ ] Tests for `rawfiles` (zip extraction), `timing` and `prep/gsap.py`.
-- [ ] Remove the dead `config.h3_backend()`, which defaults to h3ronpy (rejected, §15.11).
+- [ ] `dims` memory: layers load per dimension and are freed, overlay chunks see only nearby
+  polygons (§13.44). Done in code; still to prove with `python -m pipeline --res 6 dims` on the
+  laptop (peak was 7.9 GB). Open: array accumulators in `h3util`, chunked point joiners,
+  per-dimension flushes, categorical tag columns.
+- [x] Atomic writes for stage parquets, `manifest.json` and the other outputs (§13.44).
+- [x] A per-source minimum non-null share, checked in `dims` right after the layer is prepared
+  (`min_nonnull`, §13.44). Tune it on the first real run if a source trips it.
+- [x] Tests for `rawfiles` (zip extraction), `timing` and the GSAP / SHDI poverty loaders.
+- [x] Remove the dead `config.h3_backend()` (§13.44).
 
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|

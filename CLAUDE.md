@@ -23,6 +23,10 @@ Release safety (2026-10-19, SPEC §13.39-43): code-aware stage caches, a `valida
 content-addressed R2 publish, a per-page CSP, a Playwright e2e job, race as context only, a
 private raw-input mirror, and the public-repo / MIT decision. The first run after §13.39
 rebuilds every stage once (new fingerprints).
+Hardening (2026-11-11, SPEC §13.44): atomic output writes, a `min_nonnull` guard on mostly-empty
+sources in `dims`, lazy per-dimension layers in `dims` (memory gain unproven until a res-6 `dims`
+run on the laptop), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
+real run after §13.44 rebuilds every stage once more.
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
 manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
 decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
@@ -98,6 +102,10 @@ whatever exists. Idempotency is via `stage_cache.is_fresh/record` (a `.meta.json
 fingerprinting inputs + params + code: the AST digest of the stage module and every `pipeline`
 module it imports, incl. lazily registered prep loaders, docstrings and comments ignored, §13.39);
 `--force` bypasses it. `dims` keeps one fingerprint per dimension and recomputes only stale ones.
+Every output file is written through `stage_cache.atomic_path` (temp file, then rename; a plain
+`to_parquet(out)` would leave a torn file after a crash). `dims` loads prepared layers lazily through
+`LayerStore`, frees each after its last dimension, and `check_nonnull` stops the run when a layer is
+empty or a joiner field is under 10% filled (override with `min_nonnull:` on the source).
 `--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
 archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
 

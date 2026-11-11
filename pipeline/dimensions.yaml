@@ -329,3 +329,25 @@
   joiners:
     - {source: wpdx_water_points, joiner: point_radius, res: hex, field: has_water, radius_km: 5, agg: mean, domain: global, label: wpdx, unit: "% of recorded water points within 5 km with water at the last visit", multiply: 100, decimals: 0}
   note: "Share of the community water points recorded within 5 km (WPdx+, 19 countries in Africa and South Asia) that had water when last visited. Missing where no point is recorded, which is common in cities with piped water: no point never means no water. CC BY-SA 4.0"
+
+- id: nri
+  name: Natural hazard losses today (US)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [us]
+  sources: [fema_nri, cb_tracts]
+  joiners:
+    - {source: fema_nri, joiner: area_weighted_overlay, res: tract, field: loss_per_1k, weight_field: population, domain: us, label: nri, unit: "USD lost per year per USD 1,000 of buildings (all 18 NRI hazards)", decimals: 2}
+  note: "FEMA National Risk Index expected annual loss rate for buildings, present day, across all 18 hazards incl. hurricane, tornado, earthquake and landslide that the 2050 layers do not model. A rate per dollar of buildings, so large or wealthy tracts do not look riskier for having more to lose. Present-day environment: never part of the 2050 exposure score"
+
+- id: phealth
+  name: Adults in fair or poor health (US)
+  group: life
+  kind: score
+  higher_is: worse
+  coverage: [us]
+  sources: [cdc_places, cb_tracts]
+  joiners:
+    - {source: cdc_places, joiner: area_weighted_overlay, res: tract, field: poor_health_pct, weight_field: population, domain: us, label: places, unit: "% of adults reporting fair or poor health", decimals: 1}
+  note: "CDC PLACES model-based estimate (BRFSS) of adults who rate their health fair or poor: a health outcome beside `health`, which measures doctor supply. Model estimates, not a survey of each tract"

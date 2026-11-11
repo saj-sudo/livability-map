@@ -457,6 +457,40 @@
 # ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
 # BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
 # padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
+- id: fema_nri
+  name: FEMA National Risk Index, census tracts (table CSV)
+  group: env
+  access: direct
+  # URL pattern from the NRI Data Resources page as remembered; confirm on first fetch (§15)
+  url: https://hazards.fema.gov/nri/Content/StaticDocuments/DataDownload//NRI_Table_CensusTracts/NRI_Table_CensusTracts.zip
+  format: csv-zip
+  geometry: cb_tracts
+  license: Public domain (US federal)
+  verified: search
+  vintage: "NRI v1.20 or newer (search; record the version in the zip's data dictionary)"
+  attribution: "FEMA, National Risk Index"
+  processing: "expected annual loss rate for buildings across all 18 hazards (ALR_VALB, else EAL_VALB / BUILDVALUE) x 1,000 = USD lost per year per USD 1,000 of building value, population-weighted from tracts (area_weighted_overlay)"
+  files: [NRI_Table_CensusTracts.zip]
+
+- id: cdc_places
+  name: CDC PLACES census tract data (GIS-friendly format)
+  group: life
+  access: manual
+  recipe: |
+    data.cdc.gov dataset ids change with every PLACES release, so download by hand:
+    search data.cdc.gov for "PLACES: Census Tract Data (GIS Friendly Format)", open the newest
+    release, Export -> CSV, and save it as data/raw/cdc_places/places_tract_gis.csv
+    (~30-60 MB, public domain). Note the release year in sources.yaml `vintage`.
+  url: https://data.cdc.gov/browse?q=PLACES%20Census%20Tract%20Data%20GIS%20Friendly
+  format: csv
+  geometry: cb_tracts
+  license: Public domain (US federal; CDC PLACES terms ask for citation)
+  verified: search
+  vintage: "newest PLACES release (search; 2024 or 2025 release, BRFSS 2022-2023)"
+  attribution: "CDC, PLACES: Local Data for Better Health"
+  processing: "GHLTH_CrudePrev (% of adults 18+ reporting fair or poor health), population-weighted from tracts (area_weighted_overlay); blank tracts stay missing"
+  files: [places_tract_gis.csv]
+
 - id: bea_rpp_metro
   name: BEA Regional Price Parities by metropolitan statistical area (MARPP), all items
   group: life

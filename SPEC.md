@@ -641,6 +641,17 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     labelled share-alike (confirmation requested in docs/manual-steps.md). The presets use the new
     layers where they fit: Early career weights `city`, Raising kids `conflict` and `water`,
     Retiring `walkcare`.
+38. **US tract layers from the source triage** (2026-11-04, `docs/source-candidates-2026-11.md`):
+    `nri` (group `env`) is FEMA National Risk Index's expected annual loss rate for buildings
+    across all 18 hazards (`ALR_VALB`, else `EAL_VALB / BUILDVALUE`), shown as USD lost per year
+    per USD 1,000 of buildings. The rate is used instead of the dollar EAL or `RISK_SCORE`
+    because the dollar figures grow with a tract's size and wealth and `RISK_SCORE` folds in
+    social vulnerability; as an `env` layer it is present-day and never enters the 2050
+    `exposure`. `phealth` is CDC PLACES' share of adults reporting fair or poor health
+    (`GHLTH`), a health outcome kept apart from `health` (doctor supply) so neither displaces
+    the other. Both are US-only, population-weighted from tracts, and `verified: search` until
+    fetched on the laptop; PLACES is `manual` because data.cdc.gov dataset ids change with each
+    release. Presets are unchanged.
 39. **Release safety** (2026-10-18, before the first R2 publish): a build reaches the live map
     only through checks, and a release can be rolled back.
     - *Code in the cache key.* Every stage fingerprint carries a digest of the stage module and
@@ -799,6 +810,8 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-23 | OPHI global MPI 2025 subnational (not used) | **confirmed** by download (`subnational-results-mpi.xlsx`, 1,359 regions in 101 countries; OPHI FAQ: CC BY 4.0, HDX: CC0). Name match to geoBoundaries ADM1 only 70% (survey regions differ from admin1); not added, §13.36. | https://data.humdata.org/dataset/global-mpi |
 | 2026-09-23 | MAP walking-only travel time to healthcare 2020 | **confirmed** by download via WCS (`Accessibility__202001_Global_Walking_Only_Travel_Time_To_Healthcare`): 3.03 GB float32 GeoTIFF, nodata -9999, minutes 0-138,745 (median 798 over land pixels). CC BY 3.0 per the MAP open-access policy (no layer exceptions); Earth Engine lists CC BY 4.0. | https://malariaatlas.org/open-access-policy/ |
 | 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
+| 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
+| 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
 
 ## 16. Phasing and session plan
 
@@ -808,7 +821,7 @@ scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US lif
 bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
-**v2.** Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
+**v2.** Candidate new sources (FEMA NRI, CDC PLACES, Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
 panel; population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
 permissions land; drought (JRC GDO) and wildfire (GWIS); GEM seismic as labeled non-climate;
 embeddable iframe.
@@ -1028,6 +1041,8 @@ where the hovered or clicked hex has `_res = none`.
 | conflict | Armed conflict nearby | UCDP GED 26.1 deaths per year within 25 km, 2016-2025, CC BY 4.0 (`hex`) | same | ACLED excluded (no redistribution) |
 | walkcare | Walking time to healthcare | MAP walking-only travel time to the nearest facility, 2020, CC BY 3.0 (`hex`) | same | the motorised time is `care` |
 | water | Working water points nearby | WPdx+ share of water points within 5 km with water, 19 countries, CC BY-SA 4.0 (`hex`) | - | missing where no point is recorded |
+| nri | Natural hazard losses today, group `env` | - | FEMA National Risk Index expected annual building loss rate, all 18 hazards (`tract`), public domain | present day; never part of `exposure` |
+| phealth | Adults in fair or poor health | - | CDC PLACES `GHLTH` model estimate (`tract`), public domain | an outcome; `health` stays supply |
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |

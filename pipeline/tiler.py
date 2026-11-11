@@ -75,29 +75,6 @@ def project_unit(lng: np.ndarray, lat: np.ndarray) -> tuple[np.ndarray, np.ndarr
     return x, y
 
 
-def lnglat_to_tile(lng: float, lat: float, z: int) -> tuple[int, int]:
-    x, y = project_unit(np.array([lng]), np.array([lat]))
-    n = 1 << z
-    return int(min(n - 1, max(0, math.floor(x[0] * n)))), int(min(n - 1, max(0, math.floor(y[0] * n))))
-
-
-def split_antimeridian(ring: list[tuple[float, float]]) -> list[shapely.Polygon]:
-    """A lng/lat ring as one polygon, or two when it crosses +-180 (each within [-180, 180])."""
-    arr = np.asarray(ring, dtype="float64")
-    lng, lat = arr[:, 0], arr[:, 1]
-    if lng.max() - lng.min() <= 180.0:
-        return [shapely.Polygon(arr)]
-    lng = np.where(lng < 0, lng + 360.0, lng)  # unwrap eastwards: values in (180 - eps, 360)
-    east = shapely.Polygon(np.column_stack([lng, lat]))
-    west = shapely.Polygon(np.column_stack([lng - 360.0, lat]))
-    parts = []
-    for poly in (east, west):
-        clipped = shapely.clip_by_rect(poly, -180.0, -90.0, 180.0, 90.0)
-        if not clipped.is_empty:
-            parts.append(clipped)
-    return parts
-
-
 def cell_rings(cells: list[str]) -> Rings:
     """Unit-square rings for every cell; antimeridian cells yield two rings, polar-cap cells
     (centroid beyond the Mercator limit) yield none."""

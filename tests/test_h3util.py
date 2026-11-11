@@ -156,3 +156,37 @@ def test_aggregate_rasters_accepts_a_cell_subset(stacked_rasters):
     part = h3util.aggregate_rasters(paths, 5, "frac_above", threshold=0.5, cells=some).set_index("h3")["value"]
     assert set(part.index) == set(some)
     assert (part.sort_index().to_numpy() == full.loc[some].sort_index().to_numpy()).all()
+
+
+@pytest.fixture()
+def varied_raster(tmp_path):
+    """Values that differ pixel to pixel (so sums, means and above-threshold shares all differ by
+    cell), with a nodata hole, over a box several windows wide at window_size=32."""
+    rng = np.random.default_rng(7)
+    arr = rng.uniform(0, 10, size=(100, 100)).astype("float32")
+    arr[:10, :10] = -1
+    path = tmp_path / "varied.tif"
+    with rasterio.open(path, "w", driver="GTiff", height=100, width=100, count=1, dtype="float32", crs="EPSG:4326", transform=from_origin(10.0, 41.0, 0.01, 0.01), nodata=-1) as dst:
+        dst.write(arr, 1)
+    return path
+
+
+@pytest.mark.parametrize(("agg", "kw"), [("sum", {}), ("mean", {}), ("frac_above", {"threshold": 5.0})])
+def test_array_accumulator_matches_the_dict_accumulator_exactly(varied_raster, agg, kw):
+    """With a cell set the totals live in arrays, without one in dicts; the frames must be equal
+    to the last bit, including the counts, across several windows."""
+    import pandas as pd
+
+    full = h3util.aggregate_raster(varied_raster, 6, agg, window_size=32, **kw)  # no cells: dict accumulator
+    assert len(full) > 20 and full["n_pixels"].gt(0).all()
+    far = h3.latlng_to_cell(-30.0, 100.0, 6)  # a cell the raster never touches
+    part = h3util.aggregate_raster(varied_raster, 6, agg, window_size=32, cells=[*full["h3"], far], **kw)
+    pd.testing.assert_frame_equal(part, full, check_exact=True)
+    assert far not in set(part["h3"])
+
+
+def test_array_accumulator_handles_cells_that_only_touch_nodata(varied_raster):
+    """A cell wholly inside the nodata hole has pixels but no valid ones: it stays, with NaN."""
+    hole = h3.latlng_to_cell(40.97, 10.03, 8)  # inside the 0.1 x 0.1 degree hole at the north-west corner
+    got = h3util.aggregate_raster(varied_raster, 8, "mean", cells=[hole]).set_index("h3")
+    assert hole in got.index and got.loc[hole, "n_valid"] == 0 and np.isnan(got.loc[hole, "value"])

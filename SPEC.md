@@ -755,14 +755,20 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       resolution serves every raster dimension and centroid sampling reuses the grid's `lat` /
       `lng`; the up-to-date path reads only the `_res` columns; the partial-recompute merge is a
       positional concat guarded by `equals` instead of two sets of hex ids and a hash merge; the
-      per-resolution frames are released before the next resolution. Not done, because they touch
-      `pop` / `hazards` or the output format: array accumulators in `h3util`, chunked
-      `point_mean` / `point_radius`, per-dimension flushes, categorical tag columns. The result
-      is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
+      per-resolution frames are released before the next resolution. With a cell set, the raster
+      aggregation (`h3util._Acc`, shared with `pop`, `hazards` and `urban`) keeps its totals in
+      four arrays indexed by the cell's place in the set instead of four dicts keyed by H3 id
+      (identical frames to the last bit, tested against the dict path, which stays for the full
+      fill); `point_mean` converts and bins points 1M at a time and `point_radius` queries hexes
+      50k at a time. Not done: per-dimension flushes (crash resume, needs a "partial file"
+      marker `score` and `validate` respect) and categorical tag columns (`score` and the
+      manifest assume plain strings). The result is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
       in `timings.json` with 7.9 GB; `scripts/measure_dims_mem.py` gives a rough fixture figure).
       The first real run after this change rebuilds every stage once (new fingerprints, §13.39).
     - *Dead code removed:* `config.h3_backend`, `Settings.bbox_or_none`, `h3util.cells_to_int`,
-      `attrs.PARQUET_ONLY_SUFFIXES` and ten unused exports in `web/src/lib`.
+      `attrs.PARQUET_ONLY_SUFFIXES`, `tiler.split_antimeridian` (`cell_rings` splits antimeridian
+      cells itself), `tiler.lnglat_to_tile` (now a helper in `tests/test_tiler.py`) and ten
+      unused exports in `web/src/lib`.
 
 ## 14. VERIFY before code depends on it
 
@@ -906,8 +912,8 @@ Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 
 - [ ] `dims` memory: layers load per dimension and are freed, overlay chunks see only nearby
   polygons (§13.44). Done in code; still to prove with `python -m pipeline --res 6 dims` on the
-  laptop (peak was 7.9 GB). Open: array accumulators in `h3util`, chunked point joiners,
-  per-dimension flushes, categorical tag columns.
+  laptop (peak was 7.9 GB). Also done: array accumulators in `h3util`, chunked point joiners.
+  Open: per-dimension flushes (crash resume), categorical tag columns.
 - [x] Atomic writes for stage parquets, `manifest.json` and the other outputs (§13.44).
 - [x] A per-source minimum non-null share, checked in `dims` right after the layer is prepared
   (`min_nonnull`, §13.44). Tune it on the first real run if a source trips it.

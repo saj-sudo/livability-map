@@ -24,8 +24,8 @@ content-addressed R2 publish, a per-page CSP, a Playwright e2e job, race as cont
 private raw-input mirror, and the public-repo / MIT decision. The first run after §13.39
 rebuilds every stage once (new fingerprints).
 Hardening (2026-11-11, SPEC §13.44): atomic output writes, a `min_nonnull` guard on mostly-empty
-sources in `dims`, lazy per-dimension layers in `dims` (memory gain unproven until a res-6 `dims`
-run on the laptop), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
+sources in `dims`, lazy per-dimension layers and array accumulators / chunked point joiners (memory
+gain unproven until a res-6 `dims` run on the laptop), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
 real run after §13.44 rebuilds every stage once more.
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
 manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the

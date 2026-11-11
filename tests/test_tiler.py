@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import math
 
 import h3
 import mapbox_vector_tile
@@ -27,10 +28,12 @@ def _run_all(settings):
     export.run(settings)
 
 
-def test_split_antimeridian_yields_two_parts():
-    ring = [(179.9, 10.0), (-179.9, 10.0), (-179.9, 10.2), (179.9, 10.2)]
-    parts = tiler.split_antimeridian(ring)
-    assert len(parts) == 2 and all(p.bounds[0] >= -180 and p.bounds[2] <= 180 for p in parts)
+def _tile_of(lng: float, lat: float, z: int) -> tuple[int, int]:
+    """The z/x/y tile holding a point, from the tiler's own projection (an independent check of
+    where the encoded tiles should be)."""
+    x, y = tiler.project_unit(np.array([lng]), np.array([lat]))
+    n = 1 << z
+    return int(min(n - 1, max(0, math.floor(x[0] * n)))), int(min(n - 1, max(0, math.floor(y[0] * n))))
 
 
 def test_world_fraction_and_tile_assignment():
@@ -39,7 +42,7 @@ def test_world_fraction_and_tile_assignment():
     bboxes = np.array([[0.49, 0.49, 0.51, 0.51]])  # straddles the four central tiles at z1
     assign = tiler.assign_tiles(bboxes, 1)
     assert set(assign) == {(0, 0), (1, 0), (0, 1), (1, 1)}
-    assert tiler.lnglat_to_tile(13.0, 42.5, 5) == (17, 11)
+    assert _tile_of(13.0, 42.5, 5) == (17, 11)
 
 
 def test_cell_rings_handle_antimeridian_and_pole():
@@ -82,9 +85,9 @@ def test_build_pmtiles_round_trips_fixture_hexes(settings):
         assert h["clustered"] is True
         meta = json.loads(r.metadata()) if isinstance(r.metadata(), (str, bytes)) else r.metadata()
         assert meta["vector_layers"][0]["id"] == "hex4" and meta["vector_layers"][0]["fields"]["bivar"] == "Number"
-        x, y = tiler.lnglat_to_tile(13.0, 42.5, 5)
+        x, y = _tile_of(13.0, 42.5, 5)
         tile = mapbox_vector_tile.decode(gzip.decompress(r.get(5, x, y)))
-        slim_x, slim_y = tiler.lnglat_to_tile(13.0, 42.5, 2)
+        slim_x, slim_y = _tile_of(13.0, 42.5, 2)
         slim = mapbox_vector_tile.decode(gzip.decompress(r.get(2, slim_x, slim_y)))
     feats = tile["hex4"]["features"]
     props = {f["properties"]["h3"]: f["properties"] for f in feats}
@@ -130,7 +133,7 @@ def test_tiles_without_a_plan_in_the_manifest_is_a_plain_error(settings):
 
 
 def _features(settings, archive, z, lng, lat, layer):
-    x, y = tiler.lnglat_to_tile(lng, lat, z)
+    x, y = _tile_of(lng, lat, z)
     with open(settings.out_dir / archive, "rb") as fh:
         data = Reader(MmapSource(fh)).get(z, x, y)
     return mapbox_vector_tile.decode(gzip.decompress(data))[layer]["features"]

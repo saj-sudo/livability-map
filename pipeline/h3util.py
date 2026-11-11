@@ -124,10 +124,26 @@ def cells_overlapping_bbox(bbox: BBox, res: int) -> list[str]:
 
 @dataclass
 class _Acc:
+    """Running totals per cell. With a :class:`CellSet` they are four arrays indexed by the cell's
+    place in the set (a few MB for a million cells, no per-cell Python objects); without one the
+    cells are not known in advance, so they live in dicts keyed by the H3 id."""
+
     sums: dict[str, float] = field(default_factory=dict)
     n_valid: dict[str, int] = field(default_factory=dict)
     n_above: dict[str, int] = field(default_factory=dict)
     n_pixels: dict[str, int] = field(default_factory=dict)
+    cellset: CellSet | None = None
+    a_sums: np.ndarray | None = None
+    a_valid: np.ndarray | None = None
+    a_above: np.ndarray | None = None
+    a_pixels: np.ndarray | None = None
+
+    @classmethod
+    def for_cells(cls, cellset: CellSet | None) -> _Acc:
+        if cellset is None:
+            return cls()
+        n = len(cellset.cells)
+        return cls(cellset=cellset, a_sums=np.zeros(n), a_valid=np.zeros(n, dtype="int64"), a_above=np.zeros(n, dtype="int64"), a_pixels=np.zeros(n, dtype="int64"))
 
 
 @dataclass
@@ -197,10 +213,11 @@ def iter_windows(src: rasterio.DatasetReader, bbox: BBox | None, size: int) -> I
             yield Window(col, row, w, h)
 
 
-def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, decimate: int = 1, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray]:
+def _window_cells_index(src: rasterio.DatasetReader, window: Window, res: int, decimate: int = 1, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray, np.ndarray | None]:
     """Rasterize cell polygons into the window; returns (cells, index array) where index 0 = no
     cell. With ``decimate`` > 1 the index image is built on the block-averaged grid that
-    :func:`block_mean` produces for the same window (pixel size x decimate, same origin)."""
+    :func:`block_mean` produces for the same window (pixel size x decimate, same origin).
+    The third item is the cells' positions in ``cellset`` (None without one)."""
     bounds = rasterio.windows.bounds(window, src.transform)
     transform = src.window_transform(window)
     shape = (int(window.height), int(window.width))
@@ -228,9 +245,11 @@ def block_mean(arr: np.ndarray, valid: np.ndarray, d: int) -> tuple[np.ndarray, 
     return mean, counts > 0
 
 
-def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray]:
-    """(cells, id image) for one window: the given cells that touch it, or a full H3 fill of
-    the window when no cell set was given."""
+def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int, cellset: CellSet | None = None) -> tuple[list[str], np.ndarray, np.ndarray | None]:
+    """(cells, id image, positions in the cell set) for one window: the given cells that touch it,
+    or a full H3 fill of the window when no cell set was given (positions None). Id ``k`` in the
+    image is ``cells[k - 1]``, which is ``cellset.cells[positions[k - 1]]``."""
+    sel = None
     if cellset is not None:
         sel = cellset.in_bounds(*bounds)
         cells = [cellset.cells[i] for i in sel]
@@ -245,7 +264,7 @@ def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int, cell
                 continue
             shapes.append((poly, i))
     if not cells:
-        return [], np.zeros(shape, dtype="int32")
+        return [], np.zeros(shape, dtype="int32"), sel
     idx = features.rasterize(
         shapes,
         out_shape=shape,
@@ -254,7 +273,7 @@ def _cells_index(bounds: BBox, transform, shape: tuple[int, int], res: int, cell
         dtype="int32",
         all_touched=False,
     )
-    return cells, idx
+    return cells, idx, sel
 
 
 def _mask_valid(arr: np.ndarray, nodata: float | None) -> np.ndarray:
@@ -265,9 +284,10 @@ def _mask_valid(arr: np.ndarray, nodata: float | None) -> np.ndarray:
     return valid
 
 
-def _accumulate(acc: _Acc, arr: np.ndarray, valid: np.ndarray, cells: list[str], idx: np.ndarray, agg: str, threshold: float | None) -> None:
+def _accumulate(acc: _Acc, arr: np.ndarray, valid: np.ndarray, cells: list[str], idx: np.ndarray, agg: str, threshold: float | None, sel: np.ndarray | None = None) -> None:
     """Group one window's pixels by hex (np.bincount on the rasterized id image) and add the
-    per-hex sums / valid counts / above-threshold counts to the running totals in ``acc``."""
+    per-hex sums / valid counts / above-threshold counts to the running totals in ``acc``
+    (``sel``: the cells' positions in the accumulator's cell set, when it has one)."""
     n = len(cells) + 1
     flat_idx = idx.ravel()
     flat_valid = valid.ravel()
@@ -279,6 +299,14 @@ def _accumulate(acc: _Acc, arr: np.ndarray, valid: np.ndarray, cells: list[str],
     if agg == "frac_above":
         above = flat_valid & (flat_arr >= threshold)
         nabove = np.bincount(flat_idx, weights=above.astype("float64"), minlength=n)
+    if acc.a_sums is not None:
+        assert sel is not None and len(sel) == len(cells)  # `sel` holds distinct positions, so += cannot collide
+        acc.a_sums[sel] += sums[1:]
+        acc.a_valid[sel] += nvalid[1:].astype("int64")
+        acc.a_pixels[sel] += npix[1:]
+        if nabove is not None:
+            acc.a_above[sel] += nabove[1:].astype("int64")
+        return
     for i, c in enumerate(cells, start=1):
         if npix[i] == 0:
             continue
@@ -292,25 +320,26 @@ def _accumulate(acc: _Acc, arr: np.ndarray, valid: np.ndarray, cells: list[str],
 def _finish(acc: _Acc, agg: str) -> pd.DataFrame:
     """Turn the accumulated totals into the result frame. Cells with no valid pixel get NaN,
     never 0 (invariant 3)."""
-    cells = sorted(acc.n_pixels)
-    df = pd.DataFrame(
-        {
-            "h3": cells,
-            "n_pixels": [acc.n_pixels[c] for c in cells],
-            "n_valid": [acc.n_valid.get(c, 0) for c in cells],
-        }
-    )
-    sums = np.array([acc.sums.get(c, 0.0) for c in cells])
-    nvalid = df["n_valid"].to_numpy(dtype="float64")
+    if acc.a_sums is not None:
+        keep = np.flatnonzero(acc.a_pixels > 0)  # the set is sorted, so this is the sorted order too
+        cells = [acc.cellset.cells[i] for i in keep]
+        n_pixels, n_valid, sums, n_above = acc.a_pixels[keep], acc.a_valid[keep], acc.a_sums[keep], acc.a_above[keep]
+    else:
+        cells = sorted(acc.n_pixels)
+        n_pixels = np.array([acc.n_pixels[c] for c in cells], dtype="int64")
+        n_valid = np.array([acc.n_valid.get(c, 0) for c in cells], dtype="int64")
+        sums = np.array([acc.sums.get(c, 0.0) for c in cells], dtype="float64")
+        n_above = np.array([acc.n_above.get(c, 0) for c in cells], dtype="int64")
+    df = pd.DataFrame({"h3": cells, "n_pixels": n_pixels, "n_valid": n_valid})
+    nvalid = n_valid.astype("float64")
     with np.errstate(divide="ignore", invalid="ignore"):
         if agg == "sum":
             value = np.where(nvalid > 0, sums, np.nan)
         elif agg == "mean":
             value = np.where(nvalid > 0, sums / nvalid, np.nan)
         else:
-            nabove = np.array([acc.n_above.get(c, 0) for c in cells], dtype="float64")
-            df["n_above"] = nabove.astype("int64")
-            value = np.where(nvalid > 0, nabove / nvalid, np.nan)
+            df["n_above"] = n_above
+            value = np.where(nvalid > 0, n_above.astype("float64") / nvalid, np.nan)
     df["value"] = value
     return df
 
@@ -352,8 +381,8 @@ def aggregate_raster(
     _check_agg(agg, threshold)
     if decimate < 1 or (decimate > 1 and agg != "mean"):
         raise ValueError("decimate must be >= 1 and is only meaningful for agg='mean'")
-    acc = _Acc()
     cellset = as_cellset(cells)
+    acc = _Acc.for_cells(cellset)
     with rasterio.open(path) as src:
         if src.crs is None or not src.crs.is_geographic:
             raise ValueError(f"{path}: raster must be in a geographic CRS (EPSG:4326); reproject first")
@@ -367,10 +396,10 @@ def aggregate_raster(
                 continue
             if decimate > 1:
                 arr, valid = block_mean(arr, valid, decimate)
-            window_cells, idx = _window_cells_index(src, window, res, decimate, cellset)
+            window_cells, idx, sel = _window_cells_index(src, window, res, decimate, cellset)
             if not window_cells:
                 continue
-            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold)
+            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold, sel)
     return _finish(acc, agg)
 
 
@@ -400,8 +429,8 @@ def aggregate_rasters(
         raise ValueError("reducer must be 'median' or 'mean'")
     if not paths:
         raise ValueError("aggregate_rasters needs at least one raster")
-    acc = _Acc()
     cellset = as_cellset(cells)
+    acc = _Acc.for_cells(cellset)
     srcs = [rasterio.open(p) for p in paths]
     try:
         first = srcs[0]
@@ -423,10 +452,10 @@ def aggregate_rasters(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN slices are expected
                 arr = np.nanmedian(stack, axis=0) if reducer == "median" else np.nanmean(stack, axis=0)
-            window_cells, idx = _window_cells_index(first, window, res, 1, cellset)
+            window_cells, idx, sel = _window_cells_index(first, window, res, 1, cellset)
             if not window_cells:
                 continue
-            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold)
+            _accumulate(acc, arr, valid, window_cells, idx, agg, threshold, sel)
     finally:
         for s in srcs:
             s.close()

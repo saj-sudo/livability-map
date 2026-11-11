@@ -25,7 +25,8 @@ private raw-input mirror, and the public-repo / MIT decision. The first run afte
 rebuilds every stage once (new fingerprints).
 Hardening (2026-11-11, SPEC §13.44): atomic output writes, a `min_nonnull` guard on mostly-empty
 sources in `dims`, lazy per-dimension layers and array accumulators / chunked point joiners (memory
-gain unproven until a res-6 `dims` run on the laptop), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
+gain unproven until a res-6 `dims` run on the laptop), per-dimension crash resume, the NRI cross-check
+tool (`pipeline/nri_check.py`), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
 real run after §13.44 rebuilds every stage once more.
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
 manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
@@ -54,6 +55,7 @@ uv run python -m pipeline urban                                  # GHS-SMOD -> u
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
 uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
 uv run python -m pipeline mirror                                 # copy recorded raw files to the private R2 raw mirror (§13.42)
+uv run python -m pipeline.nri_check --fixtures --res 4         # NRI cross-check table (after a build with `nri`)
 uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
@@ -105,7 +107,8 @@ module it imports, incl. lazily registered prep loaders, docstrings and comments
 Every output file is written through `stage_cache.atomic_path` (temp file, then rename; a plain
 `to_parquet(out)` would leave a torn file after a crash). `dims` loads prepared layers lazily through
 `LayerStore`, frees each after its last dimension, and `check_nonnull` stops the run when a layer is
-empty or a joiner field is under 10% filled (override with `min_nonnull:` on the source).
+empty or a joiner field is under 10% filled (override with `min_nonnull:` on the source). Each finished
+dimension is also checkpointed to `dims_r{res}.parts/`, so a crashed run resumes instead of restarting.
 `--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
 archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
 

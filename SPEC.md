@@ -760,11 +760,23 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       four arrays indexed by the cell's place in the set instead of four dicts keyed by H3 id
       (identical frames to the last bit, tested against the dict path, which stays for the full
       fill); `point_mean` converts and bins points 1M at a time and `point_radius` queries hexes
-      50k at a time. Not done: per-dimension flushes (crash resume, needs a "partial file"
-      marker `score` and `validate` respect) and categorical tag columns (`score` and the
-      manifest assume plain strings). The result is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
+      50k at a time. Not done: categorical tag columns (`score` and the manifest assume plain
+      strings). The result is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
       in `timings.json` with 7.9 GB; `scripts/measure_dims_mem.py` gives a rough fixture figure).
       The first real run after this change rebuilds every stage once (new fingerprints, §13.39).
+    - *Crash resume.* `dims` writes each finished dimension as a checkpoint shard under
+      `interim/dims_r{res}.parts/`, fingerprinted exactly like the dimension itself (inputs,
+      registry entry, code). A run that dies hours in leaves the shards; the next run adopts every
+      one whose fingerprint still matches (`resumed from checkpoint`) and computes the rest, and
+      the shards are deleted once `dims_r{res}.parquet` is written. The final file, its format and
+      every reader are unchanged, so no "partial" marker is needed. `--force` discards shards;
+      `--only` neither reads, writes nor deletes them.
+    - *NRI cross-check tooling* (§16): `fema_nri` also carries the riverine, coastal and heat-wave
+      building loss rates when the NRI table has them (column names from memory, still
+      `verified: search`), and `python -m pipeline.nri_check` prints Spearman correlations of our
+      three hazard scores against them and the all-hazard rate, overall and by state, as a
+      markdown table for §15. It flags a clearly negative rho "look here" and never fails on a
+      weak one. The fixture world (VERSION 13) carries stand-in columns.
     - *Dead code removed:* `config.h3_backend`, `Settings.bbox_or_none`, `h3util.cells_to_int`,
       `attrs.PARQUET_ONLY_SUFFIXES`, `tiler.split_antimeridian` (`cell_rings` splits antimeridian
       cells itself), `tiler.lnglat_to_tile` (now a helper in `tests/test_tiler.py`) and ten
@@ -899,7 +911,8 @@ Map honesty, before or with the first public release:
   percentile among inhabited land at that resolution, not an absolute risk level. (Shipped
   2026-11-11 as `SCORE_MEANING`; the CMIP6 spread note below stays open.) Optionally
   show the CMIP6 model spread (CCKP p10 / p90) as an uncertainty note on heat.
-- [ ] *Check against FEMA NRI.* With `nri` on the map (§13.38), correlate the riverine, coastal
+- [ ] *Check against FEMA NRI.* Tooling done (`python -m pipeline.nri_check`, §13.44); the real
+  check is still open until a real build. With `nri` on the map (§13.38), correlate the riverine, coastal
   and heat scores with NRI's building loss rate (and its hazard-specific losses) by US tract and
   county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
   constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
@@ -913,7 +926,8 @@ Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 - [ ] `dims` memory: layers load per dimension and are freed, overlay chunks see only nearby
   polygons (§13.44). Done in code; still to prove with `python -m pipeline --res 6 dims` on the
   laptop (peak was 7.9 GB). Also done: array accumulators in `h3util`, chunked point joiners.
-  Open: per-dimension flushes (crash resume), categorical tag columns.
+  Open: categorical tag columns.
+- [x] Per-dimension crash resume for `dims` (checkpoint shards, §13.44).
 - [x] Atomic writes for stage parquets, `manifest.json` and the other outputs (§13.44).
 - [x] A per-source minimum non-null share, checked in `dims` right after the layer is prepared
   (`min_nonnull`, §13.44). Tune it on the first real run if a source trips it.

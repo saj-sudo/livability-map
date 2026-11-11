@@ -390,6 +390,30 @@ def test_fema_nri_rebuilds_rate_from_eal_when_alr_absent():
     assert out.loc["06037101110", "loss_per_1k"] == pytest.approx(0.25) and "06037101120" not in out.index
 
 
+def test_fema_nri_carries_hazard_rates_when_the_table_has_them():
+    df = pd.DataFrame({
+        "TRACTFIPS": ["01001020100", "01001020200", "01001020300"],
+        "POPULATION": ["100", "200", "300"],
+        "ALR_VALB": ["0.001", "0.002", "0.003"],
+        "RFLD_ALRB": ["0.0005", "", "-1"],  # blank = not applicable, negative = not a loss: both missing, never 0
+        "CFLD_ALRB": ["0", "0.0002", "0.0003"],  # a real zero stays zero
+        "HWAV_ALRB": ["0.00001", "0.00002", "0.00003"],
+        "RFLD_ALR_NPCTL": ["50", "60", "70"],  # a similarly named column is not the rate
+    })
+    out = fema_nri.prepare(df).set_index("GEOID")
+    assert out.loc["01001020100", "rflood_per_1k"] == pytest.approx(0.5)
+    assert out["rflood_per_1k"].isna().tolist() == [False, True, True]
+    assert out["cflood_per_1k"].tolist() == [0.0, pytest.approx(0.2), pytest.approx(0.3)]
+    assert out["heat_per_1k"].tolist() == [pytest.approx(0.01), pytest.approx(0.02), pytest.approx(0.03)]
+    assert out.loc["01001020300", "loss_per_1k"] == pytest.approx(3.0)  # the all-hazard rate is unchanged
+
+
+def test_fema_nri_without_hazard_columns_has_only_the_all_hazard_rate():
+    df = pd.DataFrame({"TRACTFIPS": ["01001020100"], "POPULATION": ["100"], "ALR_VALB": ["0.001"]})
+    out = fema_nri.prepare(df)
+    assert list(out.columns) == ["GEOID", "population", "loss_per_1k"]
+
+
 def test_cdc_places_fair_or_poor_health():
     df = pd.DataFrame({"TractFIPS": ["1001020100", "1001020200", "1001020300"], "TotalPopulation": ["1,912", "2,001", "15"], "GHLTH_CrudePrev": ["18.4", "", "250"], "ACCESS2_CrudePrev": ["9", "8", "7"]})
     out = cdc_places.prepare(df).set_index("GEOID")

@@ -25,7 +25,8 @@ private raw-input mirror, and the public-repo / MIT decision. The first run afte
 rebuilds every stage once (new fingerprints).
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
 manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
-decisions taken. A full res-6/7 rebuild takes ~8 hours.
+decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
+rebuild takes ~8 hours.
 
 Manual steps only Saj can do (registrations, browser-only downloads, credentials, permission
 requests) live in `docs/manual-steps.md`: add an item there whenever a session hits one, and move

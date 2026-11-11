@@ -851,6 +851,37 @@ embeddable iframe.
 Never per property: census counts below the block group, racial composition, income, politics.
 The Fair Housing Act and its EU equivalents are the reason, not just taste.
 
+**Next steps (open, unscheduled; logged 2026-11-11).** Not tied to a session yet. Tick or move
+an item when it is done or scheduled.
+
+Map honesty, before or with the first public release:
+
+- [ ] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
+  Gulf coast, West Africa, Southeast Asia) look milder than their heat stress is. Now: say so
+  in `/methodology` and on the heat row of the place panel. Later: a humid-heat layer (CCKP
+  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships.
+- [ ] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
+  percentile among inhabited land at that resolution, not an absolute risk level. Optionally
+  show the CMIP6 model spread (CCKP p10 / p90) as an uncertainty note on heat.
+- [ ] *Check against FEMA NRI.* With `nri` on the map (§13.38), correlate the riverine, coastal
+  and heat scores with NRI's building loss rate (and its hazard-specific losses) by US tract and
+  county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
+  constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
+  gross misses, not a tight fit.
+- [ ] *`--adopt-cache`, only if needed.* A one-time flag that stamps existing outputs with the
+  §13.39 fingerprints instead of rebuilding them. Moot once the release-candidate rebuild has
+  run.
+
+Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
+
+- [ ] `dims` memory: load prepared layers per dimension and free them (peak 7.9 GB at res 6).
+- [ ] Atomic writes for stage parquets and `manifest.json` (temp file, then rename), as the
+  tiler already does.
+- [ ] A per-source minimum non-null share in `prep.load_layer`, so a half-empty layer fails
+  before a live baseline exists for `validate` to compare against.
+- [ ] Tests for `rawfiles` (zip extraction), `timing` and `prep/gsap.py`.
+- [ ] Remove the dead `config.h3_backend()`, which defaults to h3ronpy (rejected, §15.11).
+
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |

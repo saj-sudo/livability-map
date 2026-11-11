@@ -339,3 +339,119 @@ def test_a_missing_download_is_skipped_once_and_reads_as_none(settings, monkeypa
     assert store.get(shared) is None and store.get(shared) is None
     assert capsys.readouterr().out.count("skipping joiner source") == 1
     assert "download it first" in store.skipped[shared]
+
+
+# ---- crash resume (checkpoint shards) -----------------------------------------------------------
+
+
+class _Crash(RuntimeError):
+    pass
+
+
+def _spy_join(monkeypatch, crash_on: int | None = None) -> list[str]:
+    """Record the id of every dimension joined; the ``crash_on``-th call (1-based) raises."""
+    real = dims.join_dimension
+    calls: list[str] = []
+
+    def spy(dim, *args, **kwargs):
+        calls.append(dim.id)
+        if crash_on is not None and len(calls) == crash_on:
+            raise _Crash(f"died while joining {dim.id}")
+        return real(dim, *args, **kwargs)
+
+    monkeypatch.setattr(dims, "join_dimension", spy)
+    return calls
+
+
+def _prepare(settings):
+    fetch.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    hazards.run(settings)
+
+
+def test_a_crashed_dims_run_resumes_from_its_checkpoints(settings, monkeypatch, capsys):
+    _prepare(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    done = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)  # a clean run to learn the dimension order and the expected output
+    order, clean = list(done), pd.read_parquet(settings.stage_path("dims", 4))
+    assert len(order) > 6 and not parts.exists()  # the checkpoints are gone after a successful run
+    settings.stage_path("dims", 4).unlink()
+    stage_cache_meta = settings.stage_path("dims", 4).with_suffix(".parquet.meta.json")
+    stage_cache_meta.unlink()
+
+    settings.force = False
+    _spy_join(monkeypatch, crash_on=5)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    assert sorted(p.stem for p in parts.glob("*.parquet")) == sorted(order[:4])  # four finished, the fifth died
+    assert not settings.stage_path("dims", 4).exists()  # no torn or partial final file
+
+    capsys.readouterr()
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == order[4:]  # only the rest was computed
+    assert capsys.readouterr().out.count("resumed from checkpoint") == 4
+    assert not parts.exists()
+    pd.testing.assert_frame_equal(pd.read_parquet(settings.stage_path("dims", 4)), clean, check_exact=True)
+
+
+def test_a_checkpoint_whose_dimension_changed_is_recomputed(settings, monkeypatch):
+    _prepare(settings)
+    calls = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)
+    order = list(calls)
+    settings.stage_path("dims", 4).unlink()
+    settings.stage_path("dims", 4).with_suffix(".parquet.meta.json").unlink()
+    settings.force = False
+    _spy_join(monkeypatch, crash_on=4)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    first = order[0]
+    real_spec = dims._dim_spec
+    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources: "edited" if dim.id == first else real_spec(dim, sources))
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == [first, *order[3:]]  # the edited dimension is redone, the other two checkpoints are kept
+
+
+def test_force_ignores_checkpoints(settings, monkeypatch):
+    _prepare(settings)
+    calls = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)
+    total = len(calls)
+    settings.stage_path("dims", 4).unlink()
+    settings.stage_path("dims", 4).with_suffix(".parquet.meta.json").unlink()
+    _spy_join(monkeypatch, crash_on=3)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    assert (settings.interim_dir / "dims_r4.parts").exists()
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)  # still forced
+    assert len(calls) == total and not (settings.interim_dir / "dims_r4.parts").exists()
+
+
+def test_only_does_not_touch_another_runs_checkpoints(settings, monkeypatch):
+    _prepare(settings)
+    dims.run(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    parts.mkdir()
+    (parts / "keep.parquet").write_bytes(b"x")  # a leftover from some crashed run
+    dims.run(settings, only=["care"])
+    assert (parts / "keep.parquet").exists() and not (parts / "care.parquet").exists()
+
+
+def test_leftover_checkpoints_are_dropped_when_the_final_file_is_already_fresh(settings, monkeypatch):
+    _prepare(settings)
+    dims.run(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    parts.mkdir()
+    (parts / "care.parquet").write_bytes(b"junk")  # what a crashed forced run would have left behind
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == [] and not parts.exists()

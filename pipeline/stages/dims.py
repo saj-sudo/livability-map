@@ -27,12 +27,18 @@ Memory (SPEC §13.44): prepared layers load when a dimension first needs them an
 after the last dimension that uses them, and an overlay chunk sees only the polygons near it, so
 the peak is the largest dimension's layers, not every layer at once. A layer whose joiner field
 is mostly empty stops the run (``min_nonnull``) instead of silently scoring nothing.
+
+Crash resume (SPEC §13.44): each finished dimension is also written as a checkpoint shard under
+``dims_r{res}.parts/`` with the same fingerprint the dimension would have in the final file. A run
+that dies hours in leaves them, and the next run adopts every shard whose fingerprint still
+matches and computes only the rest; the shards are deleted once ``dims_r{res}.parquet`` is written.
 """
 
 from __future__ import annotations
 
 import gc
 import hashlib
+import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -332,6 +338,26 @@ def dim_fingerprints(settings: Settings, dims: list[Dimension], sources: dict[st
     return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources)}) for d in dims}
 
 
+def _parts_dir(settings: Settings, res: int) -> Path:
+    return settings.interim_dir / f"dims_r{res}.parts"
+
+
+def _shard_key(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict) -> tuple[list, dict]:
+    """The (inputs, params) a dimension's checkpoint shard is fingerprinted with: exactly what
+    ``dim_fingerprints`` uses, so a shard is valid when and only when the dimension is fresh."""
+    return _dim_inputs(settings, dim, sources, res), {**base, "dim": dim.id, "spec": _dim_spec(dim, sources)}
+
+
+def _adoptable(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict, rows: int) -> dict | None:
+    """The checkpoint shard of ``dim`` when it is still valid (its recorded extras), else None."""
+    shard = _parts_dir(settings, res) / f"{dim.id}.parquet"
+    inputs, params = _shard_key(settings, dim, sources, res, base)
+    if not stage_cache.is_fresh(shard, inputs, params):
+        return None
+    meta = stage_cache.read_meta(shard)
+    return meta if meta.get("rows") == rows else None
+
+
 def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str, dict[str, int]]]:
     settings.ensure_dirs()
     sources = load_sources(settings.sources_path)
@@ -365,6 +391,8 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
             inhabited = pd.read_parquet(settings.stage_path("pop", res), columns=["inhabited"])["inhabited"]
             counts[res] = _tag_counts(df, inhabited, all_dims)
             print(f"dims   res {res}: up to date ({len(df)} hexes), skipping")
+            if not only:
+                shutil.rmtree(_parts_dir(settings, res), ignore_errors=True)  # checkpoints of a forced run that died: the final file is good
             continue
         existing: pd.DataFrame | None = None
         if len(todo) < len(all_dims):
@@ -380,15 +408,37 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
             .merge(pd.read_parquet(settings.stage_path("admin", res), columns=["h3", "iso_a2"]), on="h3", how="left")
             .reset_index(drop=True)
         )
-        store = LayerStore(settings, todo, sources, tried, skipped)
-        needs_cells = any(spec.joiner == "raster_mean" for d in todo for spec in d.joiners)
+        parts, base = _parts_dir(settings, res), params
+        if settings.force:
+            shutil.rmtree(parts, ignore_errors=True)
+        resumed: dict[str, dict] = {}
+        if not only and not settings.force:
+            resumed = {d.id: m for d in todo if (m := _adoptable(settings, d, sources, res, base, len(hexes))) is not None}
+        compute = [d for d in todo if d.id not in resumed]
+        store = LayerStore(settings, compute, sources, tried, skipped)
+        needs_cells = any(spec.joiner == "raster_mean" for d in compute for spec in d.joiners)
         cellset = h3util.CellSet.from_cells(hexes["h3"]) if needs_cells else None  # built once, not per raster dimension
         cols: dict[str, pd.Series] = {}
-        for dim in todo:
+        for dim in todo:  # registry order, so the columns come out in the same order with or without a resume
             t1 = time.time()
+            if dim.id in resumed:
+                shard = pd.read_parquet(parts / f"{dim.id}.parquet")
+                cols.update({c: shard[c] for c in shard.columns})
+                tried.update(spec.source for spec in dim.joiners)
+                skipped.update(resumed[dim.id].get("skipped_sources", {}))
+                print(f"dims   res {res}: {dim.id:8s} resumed from checkpoint")
+                continue
             got = join_dimension(dim, hexes, res, store, settings.bbox, cellset)
             store.done(dim)
             cols.update(got)
+            if not only:  # a --only run is a small, deliberate edit; it neither writes nor deletes checkpoints
+                # a crash later in this run keeps this dimension (see the module docstring)
+                parts.mkdir(parents=True, exist_ok=True)
+                shard_path = parts / f"{dim.id}.parquet"
+                with stage_cache.atomic_path(shard_path) as tmp:
+                    pd.DataFrame(got, index=hexes.index).to_parquet(tmp, index=False)
+                inputs_d, params_d = _shard_key(settings, dim, sources, res, base)
+                stage_cache.record(shard_path, inputs_d, params_d, {"rows": len(hexes), "skipped_sources": {src: skipped[src] for src in {sp.source for sp in dim.joiners} if src in skipped}})
             tags = got[f"{dim.id}_res"][hexes["inhabited"].to_numpy(dtype=bool)].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())
             print(f"dims   res {res}: {dim.id:8s} {shares} ({time.time() - t1:.1f}s)")
@@ -411,11 +461,13 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
         used = {spec.source for d in all_dims for spec in d.joiners}
         used_skips = {s: why for s, why in {**carried, **skipped}.items() if s in used}
         stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": used_skips, "dims": recorded, "partial": sorted(only) if only else None})
+        if not only:
+            shutil.rmtree(parts, ignore_errors=True)  # the checkpoints did their job
         inhabited_all = pd.read_parquet(settings.stage_path("pop", res), columns=["h3", "inhabited"]).set_index("h3")["inhabited"].reindex(df["h3"]).to_numpy(dtype=bool)
         counts[res] = _tag_counts(df, pd.Series(inhabited_all), all_dims)
         what = f"{len(todo)} of {len(all_dims)} dimensions" + (" (--only)" if only else "")
         print(f"dims   res {res}: {what} on {len(df)} hexes in {time.time() - t0:.1f}s -> {out.name}")
-        del hexes, cols, new, df, existing, store, cellset  # the next resolution starts from an empty heap
+        del hexes, cols, new, df, existing, store, cellset, resumed, compute  # the next resolution starts from an empty heap
         gc.collect()
     if skipped:
         print(f"dims   note: {len(skipped)} source(s) unavailable, fallbacks used: {', '.join(skipped)}")

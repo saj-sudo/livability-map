@@ -88,10 +88,6 @@ def cell_centroids(cells: Iterable[str]) -> tuple[np.ndarray, np.ndarray]:
     return latlng[:, 0], latlng[:, 1]
 
 
-def cells_to_int(cells: Iterable[str]) -> np.ndarray:
-    return np.array([h3.str_to_int(c) for c in cells], dtype="uint64")
-
-
 def latlng_to_cells(lat: np.ndarray, lng: np.ndarray, res: int) -> list[str]:
     return [h3.latlng_to_cell(float(a), float(b), res) for a, b in zip(lat, lng, strict=True)]
 

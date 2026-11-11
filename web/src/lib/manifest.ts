@@ -106,13 +106,6 @@ export interface Manifest {
   public_base_url?: string | null;
 }
 
-/** The manifest the pipeline writes carries dimension `coverage` as res -> tag counts (the
- *  registry's coverage chips list lives in `coverage` of the registry entry); normalise both. */
-export function coverageChips(d: ManifestDimension | { coverage: unknown }): string[] {
-  const c = (d as { coverage: unknown }).coverage;
-  return Array.isArray(c) ? (c as string[]) : [];
-}
-
 export const EMPTY_MANIFEST: Manifest = {
   built_at: null,
   h3_res: [],

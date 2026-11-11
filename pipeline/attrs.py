@@ -17,7 +17,6 @@ BASE_ATTRS = ["h3", "res", "iso_a2", "admin1_id", "admin1_name", "population", "
 HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"]
 HAZARD_RAW = {"heat": "heat_days", "rflood": "rflood_frac", "cflood": "cflood_frac", "wstress": "wstress_cat"}
 COMPOSITE_ATTRS = ["coverage", "exposure", "wb_value", "wb_score", "wb_source", "wb_res", "bivar", "scenario", "horizon"]
-PARQUET_ONLY_SUFFIXES = ("_src", "_dom", "_lbl")
 
 # decimals kept for floats that ship in tiles; anything else float is rounded to 3 significant digits
 ATTR_ROUNDING = {"heat_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}

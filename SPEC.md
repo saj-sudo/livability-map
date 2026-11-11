@@ -856,12 +856,14 @@ an item when it is done or scheduled.
 
 Map honesty, before or with the first public release:
 
-- [ ] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
+- [x] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
   Gulf coast, West Africa, Southeast Asia) look milder than their heat stress is. Now: say so
-  in `/methodology` and on the heat row of the place panel. Later: a humid-heat layer (CCKP
+  in `/methodology` and on the heat row of the place panel. (Caveat shipped 2026-11-11:
+  `HEAT_CAVEAT` in `web/src/lib/inspect.ts`, the `heat` note in `dimensions.yaml`; the layer below stays open.) Later: a humid-heat layer (CCKP
   `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships.
-- [ ] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
-  percentile among inhabited land at that resolution, not an absolute risk level. Optionally
+- [x] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
+  percentile among inhabited land at that resolution, not an absolute risk level. (Shipped
+  2026-11-11 as `SCORE_MEANING`; the CMIP6 spread note below stays open.) Optionally
   show the CMIP6 model spread (CCKP p10 / p90) as an uncertainty note on heat.
 - [ ] *Check against FEMA NRI.* With `nri` on the map (§13.38), correlate the riverine, coastal
   and heat scores with NRI's building loss rate (and its hazard-specific losses) by US tract and

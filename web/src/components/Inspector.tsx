@@ -5,7 +5,7 @@
 // priorities as bars, every dimension the manifest lists with its resolution or "no data
 // here", and a Sources disclosure. Rows are generated from `dims`, so new dimensions appear.
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import type { SelectedHex } from "./MapView";
 import { useTheme } from "./useTheme";
 import type { Theme } from "../lib/theme";
@@ -142,7 +142,8 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
         <table className="w-full text-[12px]">
           <tbody>
             {m.hazards.map((h) => (
-              <tr key={h.id} className="align-baseline">
+              <Fragment key={h.id}>
+              <tr className="align-baseline">
                 <td className="py-[3px] pr-2" title={h.name}>
                   {shortName(h.name)}
                 </td>
@@ -157,6 +158,14 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
                   )}
                 </td>
               </tr>
+              {h.note && (
+                <tr>
+                  <td colSpan={3} className="pb-[3px] text-[11px] leading-snug text-muted">
+                    {h.note}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -164,6 +173,7 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
           {m.coverage}
           {m.exposure !== null ? `; combined exposure ${formatScore(m.exposure)}` : "; exposure not computed"}
         </p>
+        <p className="mt-1 text-[11px] leading-snug text-muted">{m.scoreNote}</p>
       </Section>
 
       <Section title="Wellbeing">

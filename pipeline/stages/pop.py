@@ -48,7 +48,8 @@ def run(settings: Settings) -> dict[int, int]:
         df["population"] = np.nan_to_num(df["value"].to_numpy(), nan=0.0).round().astype("int64")
         df["inhabited"] = df["population"] >= settings.pop_min
         df = df[["h3", "population", "inhabited"]]
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         stage_cache.record(out, [raster, hexes_path], params, {"rows": len(df)})
         n_inh = int(df["inhabited"].sum())
         print(

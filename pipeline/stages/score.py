@@ -131,7 +131,8 @@ def run(settings: Settings) -> dict[int, dict]:
         result["bivar"] = bivariate_class(result["exposure"].astype("float64"), result["wb_score"].astype("float64"), df["inhabited"], cuts=cuts)
         result["scenario"] = settings.scenario
         result["horizon"] = settings.horizon
-        result.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            result.to_parquet(tmp, index=False)
         inh = df["inhabited"].to_numpy(dtype=bool)
         cov = result["coverage"].to_numpy(dtype="float64")
         rep = {

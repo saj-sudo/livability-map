@@ -139,10 +139,11 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
     loader = getattr(importlib.import_module(module_name), func_name)
     df = loader(settings, source, sources)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if isinstance(df, gpd.GeoDataFrame):
-        df.to_parquet(out, index=False)
-    else:
-        pd.DataFrame(df).to_parquet(out, index=False)
+    with stage_cache.atomic_path(out) as tmp:
+        if isinstance(df, gpd.GeoDataFrame):
+            df.to_parquet(tmp, index=False)
+        else:
+            pd.DataFrame(df).to_parquet(tmp, index=False)
     stage_cache.record(out, inputs, params, {"rows": int(len(df)), "columns": list(map(str, df.columns))})
     print(f"prep   {source_id}: {len(df)} rows -> {out.relative_to(settings.data_dir)}")
     return df

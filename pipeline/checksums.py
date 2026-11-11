@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from . import stage_cache
+
 CHUNK = 1 << 20
 
 
@@ -40,4 +42,4 @@ def write_checksums(path: Path, entries: dict[tuple[str, str], str]) -> None:
     for (sid, fname), digest in sorted(entries.items()):
         lines.append(f"{digest}  {sid}  {fname}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    stage_cache.write_atomic(path, "\n".join(lines) + "\n")

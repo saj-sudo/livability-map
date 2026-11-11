@@ -152,7 +152,6 @@ export const shortName = (name: string): string => name.replace(/\s*\([^)]*\)\s*
 
 export const lifeDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "life");
 export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env");
-export const hazardDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "hazard");
 
 /** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
 export const RES_LABELS: Record<string, string> = { hex: "this hex", grid: "1 km grid", area: "small area", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };

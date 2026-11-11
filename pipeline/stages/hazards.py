@@ -171,7 +171,8 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
         for hz, (_, rawcol) in HAZARDS.items():
             cols += [rawcol, f"{hz}_score", f"{hz}_ok"]
         df = df[cols]
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         stage_cache.record(out, inputs, params, {"rows": len(df)})
         counts[res] = {hz: int(df[f"{hz}_ok"].sum()) for hz in HAZARDS}
         summary = ", ".join(f"{hz} {n}/{len(df)} ok" for hz, n in counts[res].items())

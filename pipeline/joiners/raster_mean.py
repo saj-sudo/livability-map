@@ -55,7 +55,8 @@ def raster_mean(
     if sample not in SAMPLES:
         raise ValueError(f"sample must be one of {SAMPLES}")
     if sample == "centroid":
-        vals = h3util.sample_at_centroids(path, hexes["h3"].tolist(), band=band, nodata=nodata)
+        known = {"lat", "lng"} <= set(hexes.columns)  # the grid's own centroids, when the frame has them
+        vals = h3util.sample_at_centroids(path, hexes["h3"].tolist(), band=band, nodata=nodata, centroids=(hexes["lat"].to_numpy(), hexes["lng"].to_numpy()) if known else None)
         out = pd.Series(vals.to_numpy(dtype="float64"), index=hexes.index, name="raster_mean")
         return out
     with rasterio.open(path) as src:

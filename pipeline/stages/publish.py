@@ -201,13 +201,14 @@ def run(settings: Settings, target: str = "auto", local_dir: Path | None = None,
         dest = local_dir or (settings.root / "web" / "public" / "data")
         dest.mkdir(parents=True, exist_ok=True)
         for f in archives:
-            shutil.copyfile(out / f, dest / f)
+            with stage_cache.atomic_path(dest / f) as tmp:
+                shutil.copyfile(out / f, tmp)
         # an archive an older plan listed (e.g. hexes_fine.pmtiles) would otherwise linger forever
         for stale in sorted(p for p in dest.glob("*.pmtiles") if p.name not in archives):
             stale.unlink()
             print(f"publish local: removed {stale.name} (no longer in the manifest)")
         stamp(m, "local", "/data")
-        (dest / "manifest.json").write_text(manifest.json.dumps(m, indent=2, default=manifest._json_default, ensure_ascii=False), encoding="utf-8")
+        stage_cache.write_atomic(dest / "manifest.json", manifest.json.dumps(m, indent=2, default=manifest._json_default, ensure_ascii=False))
         sizes = ", ".join(f"{f} ({(out / f).stat().st_size / 1e6:.1f} MB)" for f in archives)
         print(f"publish local: {sizes} and manifest.json -> {dest}")
         return {"target": "local", "dest": str(dest)}

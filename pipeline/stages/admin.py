@@ -65,7 +65,8 @@ def run(settings: Settings) -> dict[int, int]:
                 "admin1_name": a1_name.to_numpy(),
             }
         )
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         stage_cache.record(out, [adm0_path, adm1_path, hexes_path], params, {"rows": len(df)})
         n = int(df["iso_a2"].notna().sum())
         print(

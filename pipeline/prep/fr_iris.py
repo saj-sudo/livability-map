@@ -21,6 +21,8 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
+from .. import stage_cache
+
 INSEE_NA = ["ns", "nd", "s", "so", ""]
 
 
@@ -52,12 +54,14 @@ def load_frames(activity_zip, activity_member: str, filo_zip, filo_member: str, 
 def read_contours(archive: Path, extract_to: Path) -> gpd.GeoDataFrame:
     """Every territory's CONTOURS-IRIS.shp from the IGN .7z, reprojected to WGS84 and concatenated.
     The archive is extracted once into ``extract_to``."""
-    if not any(extract_to.rglob("CONTOURS-IRIS.shp")):
+    marker = extract_to / ".extracted"  # written last, so a crash mid-extract is redone
+    if not marker.exists():
         import py7zr
 
         extract_to.mkdir(parents=True, exist_ok=True)
         with py7zr.SevenZipFile(archive, "r") as z:
             z.extractall(extract_to)
+        stage_cache.write_atomic(marker, "ok")
     parts = [gpd.read_file(shp, columns=["CODE_IRIS"]).to_crs(4326) for shp in sorted(extract_to.rglob("CONTOURS-IRIS.shp"))]
     if not parts:
         raise FileNotFoundError(f"{archive.name}: no CONTOURS-IRIS.shp inside; the IGN layout may have changed (SPEC §15)")

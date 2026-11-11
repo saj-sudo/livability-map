@@ -3,9 +3,11 @@ from __future__ import annotations
 import h3
 import numpy as np
 import pandas as pd
+import pytest
 
-from pipeline import sanity
+from pipeline import prep, sanity
 from pipeline.config import RES_TAGS
+from pipeline.registry import load_dimensions, load_sources
 from pipeline.stages import admin, dims, fetch, grid, hazards, pop
 
 
@@ -253,3 +255,203 @@ def test_partial_recompute_keeps_the_record_of_missing_sources(settings):
     _touch(_own_source_input(settings, "care"))
     dims.run(settings)  # recomputes care only; acs_summary was not tried
     assert stage_cache.read_meta(out)["skipped_sources"] == {"acs_summary": "not downloaded"}
+
+
+def test_overlay_prefilter_matches_the_whole_layer(settings, monkeypatch):
+    _run_all(settings)
+    monkeypatch.setattr(dims, "OVERLAY_CHUNK", 7)
+    settings.force = True
+    dims.run(settings)
+    narrowed = pd.read_parquet(settings.stage_path("dims", 4))
+    monkeypatch.setattr(dims, "_layer_near", lambda layer, chunk, res: layer)
+    dims.run(settings)
+    whole = pd.read_parquet(settings.stage_path("dims", 4))
+    pd.testing.assert_frame_equal(narrowed, whole, check_exact=False, rtol=1e-6)
+
+
+def test_check_nonnull_stops_on_an_empty_or_mostly_empty_layer():
+    ok = pd.DataFrame({"a": [1.0, 2.0, None, 4.0], "b": [1, 2, 3, 4]})
+    dims.check_nonnull("src", ok, {"a", "b", "not_a_column"})  # 75% filled; a missing column is the joiner's business
+    sparse = pd.DataFrame({"a": [1.0] + [None] * 19})
+    with pytest.raises(RuntimeError, match=r"src\.a is filled in 5\.0% .*min_nonnull"):
+        dims.check_nonnull("src", sparse, {"a"})
+    dims.check_nonnull("src", sparse, {"a"}, minimum=0.05)  # the source's own override
+    dims.check_nonnull("src", sparse, {"a"}, minimum=0)  # switched off
+    with pytest.raises(RuntimeError, match="no rows"):
+        dims.check_nonnull("src", ok.iloc[:0], {"a"})
+
+
+def test_a_mostly_empty_source_stops_dims_with_a_plain_message(settings, monkeypatch):
+    real = prep.load_layer
+
+    def blank(settings, source_id, sources):
+        df = real(settings, source_id, sources)
+        if source_id == "wb_gsap":
+            df = df.copy()
+            df["nonpoor_share"] = np.nan
+        return df
+
+    monkeypatch.setattr(dims.prep, "load_layer", blank)
+    with pytest.raises(RuntimeError, match=r"wb_gsap\.nonpoor_share is filled in 0\.0%"):
+        _run_all(settings)
+
+
+def _store(settings, monkeypatch):
+    """A LayerStore over the dimensions that share one source, with a fake loader that counts."""
+    sources = load_sources(settings.sources_path)
+    todo = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
+    by_source: dict[str, list] = {}
+    for d in todo:
+        for src in {s.source for s in d.joiners if s.joiner not in ("raster_mean", "point_density")}:
+            by_source.setdefault(src, []).append(d)
+    shared = next(s for s, ds in by_source.items() if len(ds) >= 2)
+    loads: list[str] = []
+
+    def fake(settings, source_id, sources):
+        loads.append(source_id)
+        return pd.DataFrame({f: [1.0, 2.0] for f in store.fields.get(source_id, {"x"})} or {"x": [1.0]})
+
+    monkeypatch.setattr(dims.prep, "load_layer", fake)
+    store = dims.LayerStore(settings, by_source[shared], sources, set(), {})
+    return store, shared, by_source[shared], loads
+
+
+def test_layers_load_when_asked_and_are_freed_after_their_last_dimension(settings, monkeypatch):
+    store, shared, users, loads = _store(settings, monkeypatch)
+    assert loads == [] and not store.layers  # nothing is read up front
+    assert store.get(shared) is not None and store.get(shared) is not None
+    assert loads == [shared]  # loaded once however often it is asked for
+    for d in users[:-1]:
+        store.done(d)
+        assert shared in store.layers  # a later dimension still needs it
+    store.done(users[-1])
+    assert shared not in store.layers  # freed with the last user
+    assert shared in store.tried
+
+
+def test_a_missing_download_is_skipped_once_and_reads_as_none(settings, monkeypatch, capsys):
+    store, shared, _, _ = _store(settings, monkeypatch)
+
+    def gone(settings, source_id, sources):
+        raise FileNotFoundError("download it first")
+
+    monkeypatch.setattr(dims.prep, "load_layer", gone)
+    assert store.get(shared) is None and store.get(shared) is None
+    assert capsys.readouterr().out.count("skipping joiner source") == 1
+    assert "download it first" in store.skipped[shared]
+
+
+# ---- crash resume (checkpoint shards) -----------------------------------------------------------
+
+
+class _Crash(RuntimeError):
+    pass
+
+
+def _spy_join(monkeypatch, crash_on: int | None = None) -> list[str]:
+    """Record the id of every dimension joined; the ``crash_on``-th call (1-based) raises."""
+    real = dims.join_dimension
+    calls: list[str] = []
+
+    def spy(dim, *args, **kwargs):
+        calls.append(dim.id)
+        if crash_on is not None and len(calls) == crash_on:
+            raise _Crash(f"died while joining {dim.id}")
+        return real(dim, *args, **kwargs)
+
+    monkeypatch.setattr(dims, "join_dimension", spy)
+    return calls
+
+
+def _prepare(settings):
+    fetch.run(settings)
+    grid.run(settings)
+    pop.run(settings)
+    admin.run(settings)
+    hazards.run(settings)
+
+
+def test_a_crashed_dims_run_resumes_from_its_checkpoints(settings, monkeypatch, capsys):
+    _prepare(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    done = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)  # a clean run to learn the dimension order and the expected output
+    order, clean = list(done), pd.read_parquet(settings.stage_path("dims", 4))
+    assert len(order) > 6 and not parts.exists()  # the checkpoints are gone after a successful run
+    settings.stage_path("dims", 4).unlink()
+    stage_cache_meta = settings.stage_path("dims", 4).with_suffix(".parquet.meta.json")
+    stage_cache_meta.unlink()
+
+    settings.force = False
+    _spy_join(monkeypatch, crash_on=5)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    assert sorted(p.stem for p in parts.glob("*.parquet")) == sorted(order[:4])  # four finished, the fifth died
+    assert not settings.stage_path("dims", 4).exists()  # no torn or partial final file
+
+    capsys.readouterr()
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == order[4:]  # only the rest was computed
+    assert capsys.readouterr().out.count("resumed from checkpoint") == 4
+    assert not parts.exists()
+    pd.testing.assert_frame_equal(pd.read_parquet(settings.stage_path("dims", 4)), clean, check_exact=True)
+
+
+def test_a_checkpoint_whose_dimension_changed_is_recomputed(settings, monkeypatch):
+    _prepare(settings)
+    calls = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)
+    order = list(calls)
+    settings.stage_path("dims", 4).unlink()
+    settings.stage_path("dims", 4).with_suffix(".parquet.meta.json").unlink()
+    settings.force = False
+    _spy_join(monkeypatch, crash_on=4)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    first = order[0]
+    real_spec = dims._dim_spec
+    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources: "edited" if dim.id == first else real_spec(dim, sources))
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == [first, *order[3:]]  # the edited dimension is redone, the other two checkpoints are kept
+
+
+def test_force_ignores_checkpoints(settings, monkeypatch):
+    _prepare(settings)
+    calls = _spy_join(monkeypatch)
+    settings.force = True
+    dims.run(settings)
+    total = len(calls)
+    settings.stage_path("dims", 4).unlink()
+    settings.stage_path("dims", 4).with_suffix(".parquet.meta.json").unlink()
+    _spy_join(monkeypatch, crash_on=3)
+    with pytest.raises(_Crash):
+        dims.run(settings)
+    assert (settings.interim_dir / "dims_r4.parts").exists()
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)  # still forced
+    assert len(calls) == total and not (settings.interim_dir / "dims_r4.parts").exists()
+
+
+def test_only_does_not_touch_another_runs_checkpoints(settings, monkeypatch):
+    _prepare(settings)
+    dims.run(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    parts.mkdir()
+    (parts / "keep.parquet").write_bytes(b"x")  # a leftover from some crashed run
+    dims.run(settings, only=["care"])
+    assert (parts / "keep.parquet").exists() and not (parts / "care.parquet").exists()
+
+
+def test_leftover_checkpoints_are_dropped_when_the_final_file_is_already_fresh(settings, monkeypatch):
+    _prepare(settings)
+    dims.run(settings)
+    parts = settings.interim_dir / "dims_r4.parts"
+    parts.mkdir()
+    (parts / "care.parquet").write_bytes(b"junk")  # what a crashed forced run would have left behind
+    calls = _spy_join(monkeypatch)
+    dims.run(settings)
+    assert calls == [] and not parts.exists()

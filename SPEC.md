@@ -735,6 +735,52 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     and documents written for third parties (the permission requests in docs/manual-steps.md)
     are public too. The site itself is not hosted yet: Cloudflare Pages (app) and R2 (tiles)
     wait on the credentials in docs/manual-steps.md item 1.
+44. **Pipeline hardening** (2026-11-11, from the 2026-10-18 audit follow-ups):
+    - *Atomic writes.* `stage_cache.atomic_path` yields a sibling temp file that replaces the
+      target in one rename and is removed on an error, so a crash never leaves a half-written
+      file under the real name. Every stage parquet, the prep cache, `manifest.json`,
+      `timings.json`, `CHECKSUMS`, the tiles report, the tippecanoe archive, the local publish
+      copies and extracted archive members use it (`os.replace` retries briefly when Windows
+      holds the target). `stage_cache` is in `PLUMBING`, so editing it never rebuilds a stage.
+      `fr_iris` extraction is marked with `.extracted`, as `unzip_prefix` already was.
+    - *Empty sources stop `dims`.* Right after a source is prepared, `dims.check_nonnull` raises
+      `RuntimeError` when the layer has no rows or a joiner field is filled in under 10% of its
+      rows. The share is per field, the default is `MIN_NONNULL`, and a source overrides it with
+      `min_nonnull:` in `sources.yaml` (0 turns the check off). The Eurostat grid is set to 0.05
+      because its employment column is legitimately sparse (§15). This runs on every `dims` run,
+      before any overlay work, and before a live baseline exists for `validate`.
+    - *`dims` memory.* Prepared layers load when a dimension first asks for them and are dropped
+      (`gc.collect()`) after the last dimension that uses them; an overlay chunk is given only
+      the polygons whose bounds meet it (same result, checked by a test); one `CellSet` per
+      resolution serves every raster dimension and centroid sampling reuses the grid's `lat` /
+      `lng`; the up-to-date path reads only the `_res` columns; the partial-recompute merge is a
+      positional concat guarded by `equals` instead of two sets of hex ids and a hash merge; the
+      per-resolution frames are released before the next resolution. With a cell set, the raster
+      aggregation (`h3util._Acc`, shared with `pop`, `hazards` and `urban`) keeps its totals in
+      four arrays indexed by the cell's place in the set instead of four dicts keyed by H3 id
+      (identical frames to the last bit, tested against the dict path, which stays for the full
+      fill); `point_mean` converts and bins points 1M at a time and `point_radius` queries hexes
+      50k at a time. Not done: categorical tag columns (`score` and the manifest assume plain
+      strings). The result is unproven until `python -m pipeline --res 6 dims` runs on the laptop (compare `peak_rss_mb`
+      in `timings.json` with 7.9 GB; `scripts/measure_dims_mem.py` gives a rough fixture figure).
+      The first real run after this change rebuilds every stage once (new fingerprints, §13.39).
+    - *Crash resume.* `dims` writes each finished dimension as a checkpoint shard under
+      `interim/dims_r{res}.parts/`, fingerprinted exactly like the dimension itself (inputs,
+      registry entry, code). A run that dies hours in leaves the shards; the next run adopts every
+      one whose fingerprint still matches (`resumed from checkpoint`) and computes the rest, and
+      the shards are deleted once `dims_r{res}.parquet` is written. The final file, its format and
+      every reader are unchanged, so no "partial" marker is needed. `--force` discards shards;
+      `--only` neither reads, writes nor deletes them.
+    - *NRI cross-check tooling* (§16): `fema_nri` also carries the riverine, coastal and heat-wave
+      building loss rates when the NRI table has them (column names from memory, still
+      `verified: search`), and `python -m pipeline.nri_check` prints Spearman correlations of our
+      three hazard scores against them and the all-hazard rate, overall and by state, as a
+      markdown table for §15. It flags a clearly negative rho "look here" and never fails on a
+      weak one. The fixture world (VERSION 13) carries stand-in columns.
+    - *Dead code removed:* `config.h3_backend`, `Settings.bbox_or_none`, `h3util.cells_to_int`,
+      `attrs.PARQUET_ONLY_SUFFIXES`, `tiler.split_antimeridian` (`cell_rings` splits antimeridian
+      cells itself), `tiler.lnglat_to_tile` (now a helper in `tests/test_tiler.py`) and ten
+      unused exports in `web/src/lib`.
 
 ## 14. VERIFY before code depends on it
 
@@ -865,7 +911,8 @@ Map honesty, before or with the first public release:
   percentile among inhabited land at that resolution, not an absolute risk level. (Shipped
   2026-11-11 as `SCORE_MEANING`; the CMIP6 spread note below stays open.) Optionally
   show the CMIP6 model spread (CCKP p10 / p90) as an uncertainty note on heat.
-- [ ] *Check against FEMA NRI.* With `nri` on the map (§13.38), correlate the riverine, coastal
+- [ ] *Check against FEMA NRI.* Tooling done (`python -m pipeline.nri_check`, §13.44); the real
+  check is still open until a real build. With `nri` on the map (§13.38), correlate the riverine, coastal
   and heat scores with NRI's building loss rate (and its hazard-specific losses) by US tract and
   county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
   constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
@@ -876,13 +923,16 @@ Map honesty, before or with the first public release:
 
 Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 
-- [ ] `dims` memory: load prepared layers per dimension and free them (peak 7.9 GB at res 6).
-- [ ] Atomic writes for stage parquets and `manifest.json` (temp file, then rename), as the
-  tiler already does.
-- [ ] A per-source minimum non-null share in `prep.load_layer`, so a half-empty layer fails
-  before a live baseline exists for `validate` to compare against.
-- [ ] Tests for `rawfiles` (zip extraction), `timing` and `prep/gsap.py`.
-- [ ] Remove the dead `config.h3_backend()`, which defaults to h3ronpy (rejected, §15.11).
+- [ ] `dims` memory: layers load per dimension and are freed, overlay chunks see only nearby
+  polygons (§13.44). Done in code; still to prove with `python -m pipeline --res 6 dims` on the
+  laptop (peak was 7.9 GB). Also done: array accumulators in `h3util`, chunked point joiners.
+  Open: categorical tag columns.
+- [x] Per-dimension crash resume for `dims` (checkpoint shards, §13.44).
+- [x] Atomic writes for stage parquets, `manifest.json` and the other outputs (§13.44).
+- [x] A per-source minimum non-null share, checked in `dims` right after the layer is prepared
+  (`min_nonnull`, §13.44). Tune it on the first real run if a source trips it.
+- [x] Tests for `rawfiles` (zip extraction), `timing` and the GSAP / SHDI poverty loaders.
+- [x] Remove the dead `config.h3_backend()` (§13.44).
 
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|

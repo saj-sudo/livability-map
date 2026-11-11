@@ -97,7 +97,8 @@ def run(settings: Settings) -> dict[str, int]:
     t0 = time.time()
     nd = src.extra.get("nodata")
     gdf = polygons_from_raster(raster, settings.bbox, None if nd is None else float(nd))
-    gdf.to_parquet(out, index=False)
+    with stage_cache.atomic_path(out) as tmp:
+        gdf.to_parquet(tmp, index=False)
     counts = {k: int((gdf["kind"] == k).sum()) for k in KINDS}
     stage_cache.record(out, [raster], params, {"counts": counts})
     print(f"urban  {counts['centre']} urban centres, {counts['cluster']} urban clusters in {time.time() - t0:.1f}s -> {out.name}")

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -66,7 +67,8 @@ def refresh_refs(settings: Settings) -> list[int]:
         if "ref" in df.columns and df["ref"].astype("boolean").fillna(False).equals(ref.fillna(False)):
             continue
         df["ref"] = ref
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         done.append(e.res)
     return done
 
@@ -87,7 +89,7 @@ def _feature(row: dict, keep: list[str]) -> dict:
 
 def write_geojsonl(df: pd.DataFrame, keep: list[str], path) -> int:
     n = 0
-    with open(path, "w", encoding="utf-8") as fh:
+    with stage_cache.atomic_path(Path(path)) as tmp, open(tmp, "w", encoding="utf-8") as fh:
         for row in df.to_dict("records"):
             fh.write(json.dumps(_feature(row, keep), separators=(",", ":")) + "\n")
             n += 1
@@ -120,7 +122,8 @@ def run(settings: Settings, geojson: bool = False) -> dict[int, int]:
         missing = [c for c in keep if c not in df.columns]
         if missing:
             raise RuntimeError(f"export res {res}: tile attributes missing from the interim stages: {missing}")
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         extra = {"rows": len(df)}
         if geojson:
             gj = settings.out_dir / f"hexes_r{res}.geojsonl"

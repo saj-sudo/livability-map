@@ -5,7 +5,6 @@
 import { BASEMAP_STYLES } from "./config";
 
 export type Theme = "light" | "dark";
-export const THEMES: readonly Theme[] = ["light", "dark"];
 export const THEME_KEY = "lm.theme";
 /** DOM event dispatched on window when the theme changes (the map listens to swap basemaps). */
 export const THEME_EVENT = "lm:theme";

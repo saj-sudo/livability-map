@@ -85,13 +85,9 @@ export const PALETTES: Record<Theme, Palette> = {
 export const paletteFor = (theme: Theme | undefined): Palette => PALETTES[theme ?? "light"];
 
 // aliases for the light palette, kept so callers without a theme still work
-export const BIVAR = PALETTES.light.bivar;
 export const GREY = PALETTES.light.grey;
 export const HATCH_RGBA = PALETTES.light.hatch;
 export const RAMP_HAZARD = PALETTES.light.rampHazard;
-export const RAMP_GOOD = PALETTES.light.rampGood;
-export const RAMP_WELLBEING = PALETTES.light.rampWellbeing;
-export const RAMP_PRIORITY = PALETTES.light.rampPriority;
 
 export const BIVAR_WORDS: Record<number, string> = {
   0: "not classified (missing exposure or wellbeing)",

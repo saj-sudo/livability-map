@@ -33,9 +33,6 @@ export const layerId = (kind: LayerKind, layer: string) => `${kind}-${layer}`;
 export const fillLayerIds = (layers: TileLayer[]) => layers.map((l) => layerId("fill", l.name));
 export const isHexLayerId = (id: string) => LAYER_KINDS.some((k) => id.startsWith(`${k}-`));
 
-/** Every MapLibre source the layers read (one per archive). */
-export const hexSourceIds = (layers: TileLayer[]): string[] => [...new Set(layers.map((l) => l.source))];
-
 /** MapLibre's layer maxzoom is exclusive; a layer that overzooms gets none. */
 function zoomRange(layer: TileLayer): { minzoom: number; maxzoom?: number } {
   return layer.overzoom ? { minzoom: layer.minzoom } : { minzoom: layer.minzoom, maxzoom: layer.maxzoom + 1 };

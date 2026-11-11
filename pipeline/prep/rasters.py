@@ -15,6 +15,7 @@ NetCDFs; :func:`pipeline.prep.load_raster` wires them to the registry and the st
 from __future__ import annotations
 
 import re
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -23,6 +24,8 @@ import rasterio
 import xarray as xr
 from rasterio.transform import from_origin
 from rasterio.windows import Window
+
+from .. import stage_cache
 
 EARTH_RADIUS_KM = 6371.0088
 GFED_YEARS = (2001, 2020)  # the 0.25 degree, five-layer period of GFED5 v0.1 (1997-2000 is 1 degree)
@@ -140,8 +143,8 @@ def gfed5_burned_fraction(zip_path: Path, out: Path, years: tuple[int, int] = GF
         for year, _month, name in members:
             local = work / Path(name).name
             if not local.exists():
-                with z.open(name) as src, open(local, "wb") as dst:
-                    dst.write(src.read())
+                with stage_cache.atomic_path(local) as part, z.open(name) as src, open(part, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
             with xr.open_dataset(local) as ds:
                 var = _burned_variable(ds)
                 da = ds[var].squeeze()

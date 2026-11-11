@@ -24,6 +24,7 @@ from scipy.spatial import cKDTree
 
 EARTH_KM = 6371.0088
 AGGS = ("sum", "mean")
+HEX_CHUNK = 50_000  # hexes queried at a time: the neighbour lists of a res-7 world are huge
 
 
 def _unit(lat: np.ndarray, lng: np.ndarray) -> np.ndarray:
@@ -51,12 +52,13 @@ def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str
         centres = _unit(hexes["lat"].to_numpy(dtype="float64"), hexes["lng"].to_numpy(dtype="float64"))
         values = pts[field].to_numpy(dtype="float64")
         weights = pts[weight_field].to_numpy(dtype="float64") if weight_field else np.ones(len(pts))
-        for i, idx in enumerate(tree.query_ball_point(centres, chord)):
-            if not idx:
-                continue
-            if agg == "sum":
-                out[i] = float(values[idx].sum())
-            else:
-                w = weights[idx]
-                out[i] = float((values[idx] * w).sum() / w.sum())
+        for start in range(0, len(centres), HEX_CHUNK):
+            for i, idx in enumerate(tree.query_ball_point(centres[start : start + HEX_CHUNK], chord), start=start):
+                if not idx:
+                    continue
+                if agg == "sum":
+                    out[i] = float(values[idx].sum())
+                else:
+                    w = weights[idx]
+                    out[i] = float((values[idx] * w).sum() / w.sum())
     return pd.Series(out, index=hexes.index, name="point_radius", dtype="float64")

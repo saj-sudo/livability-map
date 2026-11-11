@@ -109,3 +109,20 @@ def test_point_radius_mean_is_missing_without_points_and_floors_the_radius_at_th
     got = point_radius(hexes, pts, 4, "rwi", radius_km=3, agg="mean", weight_field="w")
     assert edge > 20 and got.iloc[0] == pytest.approx((1.0 * 1 - 1.0 * 3) / 4)  # radius raised to the edge length
     assert pd.isna(got.iloc[1])  # no point near: missing, never 0
+
+
+def test_point_radius_in_hex_chunks_matches_one_pass(monkeypatch):
+    import importlib
+
+    pr = importlib.import_module("pipeline.joiners.point_radius")  # the package re-exports the function under the same name
+
+    rng = np.random.default_rng(5)
+    hexes = _hexes_at([(float(a), float(b)) for a, b in zip(rng.uniform(-1, 1, 40), rng.uniform(-1, 1, 40), strict=True)], 6)
+    pts = pd.DataFrame({"lat": rng.uniform(-1, 1, 200), "lng": rng.uniform(-1, 1, 200), "v": rng.uniform(0, 9, 200), "w": rng.uniform(1, 4, 200)})
+    for agg, w in (("sum", None), ("mean", "w")):
+        one = pr.point_radius(hexes, pts, 6, "v", radius_km=15, agg=agg, weight_field=w)
+        monkeypatch.setattr(pr, "HEX_CHUNK", 3)
+        chunked = pr.point_radius(hexes, pts, 6, "v", radius_km=15, agg=agg, weight_field=w)
+        monkeypatch.setattr(pr, "HEX_CHUNK", 50_000)
+        pd.testing.assert_series_equal(chunked, one, check_exact=True)
+        assert one.notna().any()

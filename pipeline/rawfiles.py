@@ -9,9 +9,11 @@ opened in place with a ``zip://archive!member`` path, which pyogrio handles nati
 
 from __future__ import annotations
 
+import shutil
 import zipfile
 from pathlib import Path
 
+from . import stage_cache
 from .config import Settings
 from .registry import Source
 
@@ -45,8 +47,9 @@ def unzip_member(archive: Path, dest_dir: Path, member: str) -> Path:
         info = z.getinfo(member)
         if target.exists() and target.stat().st_size == info.file_size:
             return target
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        z.extract(member, dest_dir)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with stage_cache.atomic_path(target) as tmp, z.open(info) as src, open(tmp, "wb") as dst:
+            shutil.copyfileobj(src, dst)
     return target
 
 
@@ -63,7 +66,7 @@ def unzip_prefix(archive: Path, dest_dir: Path, prefix: str) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
         z.extractall(dest_dir, members=members)
     target.mkdir(parents=True, exist_ok=True)
-    marker.write_text("ok", encoding="utf-8")
+    stage_cache.write_atomic(marker, "ok")
     return target
 
 

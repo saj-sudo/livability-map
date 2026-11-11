@@ -6,7 +6,6 @@ the §13 decisions; nothing else in the pipeline hardcodes a resolution, thresho
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -135,9 +134,6 @@ class Settings:
             d.mkdir(parents=True, exist_ok=True)
 
     # ---- helpers -----------------------------------------------------------------------
-    def bbox_or_none(self) -> BBox | None:
-        return self.bbox
-
     def describe(self) -> str:
         where = "fixtures" if self.fixtures else "data"
         bbox = f" bbox={self.bbox}" if self.bbox else ""
@@ -154,16 +150,3 @@ def parse_bbox(text: str | None) -> BBox | None:
     if not (minlng < maxlng and minlat < maxlat):
         raise ValueError("bbox must have min < max on both axes")
     return (minlng, minlat, maxlng, maxlat)
-
-
-def h3_backend() -> str:
-    """'h3ronpy' (default when importable) or 'fallback' (pure rasterio + h3). SPEC §14.11."""
-    forced = os.environ.get("PIPELINE_H3_BACKEND")
-    if forced in ("h3ronpy", "fallback"):
-        return forced
-    try:
-        import h3ronpy.raster  # noqa: F401
-
-        return "h3ronpy"
-    except Exception:  # pragma: no cover - depends on environment
-        return "fallback"

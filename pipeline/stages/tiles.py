@@ -20,6 +20,7 @@ archive's sha256, size and layer table.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -85,14 +86,20 @@ def archive_params(name: str, specs: list[tiler.LayerSpec], backend: str) -> dic
 
 def build_with_tippecanoe(specs: list[tiler.LayerSpec], out: Path, binary: str) -> dict:
     """Optional backend: needs the geojsonl written by `export --geojson`."""
-    cmd = [binary, "-o", str(out), "--force", "--no-feature-limit", "--no-tile-size-limit", "--no-tiny-polygon-reduction", "--buffer=5"]
+    # tippecanoe writes to a sibling temp file (it needs the .pmtiles suffix); renamed when done
+    tmp = out.with_name(f".{os.getpid()}-{out.name}")
+    cmd = [binary, "-o", str(tmp), "--force", "--no-feature-limit", "--no-tile-size-limit", "--no-tiny-polygon-reduction", "--buffer=5"]
     for spec in specs:
         gj = spec.parquet.with_suffix(".geojsonl")
         if not gj.exists():
             raise FileNotFoundError(f"{gj} missing: run `export --geojson` before the tippecanoe backend")
         cmd += ["-L", json.dumps({"file": str(gj), "layer": spec.name, "minzoom": spec.minzoom, "maxzoom": spec.maxzoom})]
     t0 = time.time()
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+        stage_cache.replace_file(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
     return {"backend": "tippecanoe", "bytes": out.stat().st_size, "sha256": tiler.sha256_file(out), "seconds": round(time.time() - t0, 1), "layers": [{"name": s.name, "minzoom": s.minzoom, "maxzoom": s.maxzoom} for s in specs]}
 
 

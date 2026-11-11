@@ -94,6 +94,27 @@ def test_point_mean_weights_by_tests_and_leaves_empty_hexes_nan():
     assert unweighted.iloc[0] == pytest.approx(200.0)
 
 
+def test_point_mean_in_chunks_matches_one_pass(monkeypatch):
+    import importlib
+
+    pm = importlib.import_module("pipeline.joiners.point_mean")  # the package re-exports the function under the same name
+
+    rng = np.random.default_rng(3)
+    cells = [_cell(42.5, 13.0), _cell(43.0, 11.0), _cell(41.5, 12.0)]
+    lat, lng = zip(*[h3.cell_to_latlng(c) for c in cells], strict=True)
+    pick = rng.integers(0, 3, size=60)
+    pts = pd.DataFrame({"lat": np.array(lat)[pick], "lng": np.array(lng)[pick], "d": rng.uniform(1, 500, 60), "tests": rng.integers(1, 20, 60)})
+    pts.loc[[5, 40], "d"] = np.nan  # unusable rows scattered across chunks
+    hexes = pd.DataFrame({"h3": [*cells, _cell(40.0, 12.0)]})  # the last hex has no point
+    one = pm.point_mean(hexes, pts, 4, "d", weight_field="tests")
+    monkeypatch.setattr(pm, "POINT_CHUNK", 7)  # cells of one hex spread over many chunks
+    chunked = pm.point_mean(hexes, pts, 4, "d", weight_field="tests")
+    pd.testing.assert_series_equal(chunked, one, check_exact=False, rtol=1e-12)
+    assert np.isnan(chunked.iloc[3]) and chunked.iloc[:3].notna().all()
+    monkeypatch.setattr(pm, "POINT_CHUNK", 7)
+    assert pm.point_mean(hexes, pts.iloc[:0], 4, "d").isna().all()  # no points at all: all missing
+
+
 # ---- prep -----------------------------------------------------------------------------------
 
 

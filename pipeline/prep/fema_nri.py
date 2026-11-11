@@ -20,9 +20,15 @@ from ..config import Settings
 from ..registry import Source
 from .util import find_column
 
+# Hazard-specific building loss rates, carried for `python -m pipeline.nri_check` (they are not a
+# dimension). The NRI column names are from memory (SPEC §13.38, source still `verified: search`),
+# so a table without them just yields a layer without these columns.
+HAZARD_RATES = {"rflood_per_1k": "rfld_alrb", "cflood_per_1k": "cfld_alrb", "heat_per_1k": "hwav_alrb"}
+
 
 def prepare(nri: pd.DataFrame) -> pd.DataFrame:
-    """GEOID (11-digit tract FIPS), population, building loss in USD per 1,000 of value per year."""
+    """GEOID (11-digit tract FIPS), population, building loss in USD per 1,000 of value per year,
+    and, when the table has them, the riverine, coastal and heat-wave rates the same way."""
     fips = find_column(nri.columns, "tractfips")
     pop = find_column(nri.columns, "population")
     out = pd.DataFrame({"GEOID": nri[fips].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(11), "population": pd.to_numeric(nri[pop], errors="coerce")})
@@ -34,6 +40,11 @@ def prepare(nri: pd.DataFrame) -> pd.DataFrame:
         with np.errstate(divide="ignore", invalid="ignore"):
             rate = (eal / value).where(value > 0)
     out["loss_per_1k"] = 1000.0 * rate.where(rate >= 0)  # negative values are not losses: missing, never 0
+    named = {str(c).lower(): c for c in nri.columns}
+    for name, column in HAZARD_RATES.items():
+        if column in named:  # exact name: a prefix match could pick a different measure
+            hazard = pd.to_numeric(nri[named[column]], errors="coerce")
+            out[name] = 1000.0 * hazard.where(hazard >= 0)  # not applicable stays missing, never 0
     return out.dropna(subset=["loss_per_1k"]).reset_index(drop=True)
 
 

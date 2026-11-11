@@ -32,6 +32,8 @@ import pandas as pd
 import shapely
 from shapely import GeometryType
 
+from . import stage_cache
+
 EXTENT = 4096
 BUFFER = 80  # tile units (~2% of the tile, like tippecanoe's default 5/256)
 MAX_LAT = 85.05112878  # Web Mercator limit
@@ -71,29 +73,6 @@ def project_unit(lng: np.ndarray, lat: np.ndarray) -> tuple[np.ndarray, np.ndarr
     x = (np.asarray(lng, dtype="float64") + 180.0) / 360.0
     y = 0.5 - np.log((1.0 + s) / (1.0 - s)) / (4.0 * np.pi)
     return x, y
-
-
-def lnglat_to_tile(lng: float, lat: float, z: int) -> tuple[int, int]:
-    x, y = project_unit(np.array([lng]), np.array([lat]))
-    n = 1 << z
-    return int(min(n - 1, max(0, math.floor(x[0] * n)))), int(min(n - 1, max(0, math.floor(y[0] * n))))
-
-
-def split_antimeridian(ring: list[tuple[float, float]]) -> list[shapely.Polygon]:
-    """A lng/lat ring as one polygon, or two when it crosses +-180 (each within [-180, 180])."""
-    arr = np.asarray(ring, dtype="float64")
-    lng, lat = arr[:, 0], arr[:, 1]
-    if lng.max() - lng.min() <= 180.0:
-        return [shapely.Polygon(arr)]
-    lng = np.where(lng < 0, lng + 360.0, lng)  # unwrap eastwards: values in (180 - eps, 360)
-    east = shapely.Polygon(np.column_stack([lng, lat]))
-    west = shapely.Polygon(np.column_stack([lng - 360.0, lat]))
-    parts = []
-    for poly in (east, west):
-        clipped = shapely.clip_by_rect(poly, -180.0, -90.0, 180.0, 90.0)
-        if not clipped.is_empty:
-            parts.append(clipped)
-    return parts
 
 
 def cell_rings(cells: list[str]) -> Rings:
@@ -457,4 +436,4 @@ def report_json(report: TileReport) -> dict:
 
 
 def write_report(path: Path, report: TileReport) -> None:
-    path.write_text(json.dumps(report_json(report), indent=2), encoding="utf-8")
+    stage_cache.write_atomic(path, json.dumps(report_json(report), indent=2))

@@ -22,18 +22,32 @@ dimensions whose fingerprint moved and merges them into the existing parquet. Th
 layer is added at res 5 without redoing the hour-long US tract overlays. ``run(settings,
 only=[...])`` forces the named dimensions; it never marks the others fresh, so a later plain run
 still catches a dimension that went stale meanwhile.
+
+Memory (SPEC §13.44): prepared layers load when a dimension first needs them and are dropped
+after the last dimension that uses them, and an overlay chunk sees only the polygons near it, so
+the peak is the largest dimension's layers, not every layer at once. A layer whose joiner field
+is mostly empty stops the run (``min_nonnull``) instead of silently scoring nothing.
+
+Crash resume (SPEC §13.44): each finished dimension is also written as a checkpoint shard under
+``dims_r{res}.parts/`` with the same fingerprint the dimension would have in the final file. A run
+that dies hours in leaves them, and the next run adopts every shard whose fingerprint still
+matches and computes only the rest; the shards are deleted once ``dims_r{res}.parquet`` is written.
 """
 
 from __future__ import annotations
 
+import gc
 import hashlib
+import shutil
 import time
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import shapely
 
 from .. import h3util, prep, stage_cache
 from ..config import BBox, Settings
@@ -41,6 +55,7 @@ from ..joiners import JOINERS
 from ..registry import COMPOSITION_KEYS, Dimension, JoinSpec, Source, load_dimensions, load_sources
 
 OVERLAY_CHUNK = 2000  # hexes per area_weighted_overlay call
+MIN_NONNULL = 0.10  # a joiner field must be filled in at least this share of its layer's rows
 
 
 @dataclass(frozen=True)
@@ -75,7 +90,22 @@ def _layer_mask(hexes: pd.DataFrame, layer: pd.DataFrame, res: int) -> np.ndarra
     return (lng >= minx - pad) & (lng <= maxx + pad) & (lat >= miny - pad) & (lat <= maxy + pad)
 
 
-def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, field: str, bbox: BBox | None = None) -> np.ndarray:
+def _layer_near(layer: pd.DataFrame, chunk: pd.DataFrame, res: int) -> pd.DataFrame | None:
+    """The layer rows whose bounds meet the chunk's hexes (centroids padded as in ``_layer_mask``),
+    or None when there are none. Only a polygon layer is narrowed; the overlay result does not
+    change, because a polygon that misses every hex of the chunk contributes nothing to it."""
+    if not isinstance(layer, gpd.GeoDataFrame):
+        return layer
+    pad = h3util.pad_degrees(res)
+    lng, lat = chunk["lng"].to_numpy(), chunk["lat"].to_numpy()
+    box = shapely.box(lng.min() - pad, lat.min() - pad, lng.max() + pad, lat.max() + pad)
+    hit = layer.sindex.query(box, predicate="intersects")
+    if len(hit) == 0:
+        return None
+    return layer if len(hit) == len(layer) else layer.iloc[np.sort(hit)]
+
+
+def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, field: str, bbox: BBox | None = None, cellset: h3util.CellSet | None = None) -> np.ndarray:
     """One joiner over the relevant subset of hexes; float array aligned to ``hexes`` rows."""
     out = np.full(len(hexes), np.nan, dtype="float64")
     if spec.joiner == "iso_lookup":
@@ -84,7 +114,7 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
     if spec.joiner == "raster_mean":
         # hex-level: every hex at once; the joiner reads only the windows inside `bbox`
         assert isinstance(layer, RasterLayer), f"{spec.source}: raster_mean needs a raster layer"
-        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox, cells=hexes["h3"])
+        v = JOINERS["raster_mean"](hexes, layer.path, res, band=spec.band, nodata=layer.nodata, decimate=spec.decimate, sample=spec.sample, bbox=bbox, cells=cellset if cellset is not None else hexes["h3"])
         return v.to_numpy(dtype="float64")
     if spec.joiner == "point_mean":
         v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)
@@ -101,7 +131,11 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
     elif spec.joiner == "area_weighted_overlay":
         # chunked so the intersection frame stays bounded (the US tract overlay peaked at 6 GB
         # for ~7k res-4 hexes; res 5 has four times as many)
-        parts = [JOINERS["area_weighted_overlay"](sub.iloc[i : i + OVERLAY_CHUNK], layer, field, weight_field=spec.weight_field) for i in range(0, len(sub), OVERLAY_CHUNK)]
+        parts = []
+        for i in range(0, len(sub), OVERLAY_CHUNK):
+            chunk = sub.iloc[i : i + OVERLAY_CHUNK]
+            near = _layer_near(layer, chunk, res)  # only the polygons this chunk can touch
+            parts.append(pd.Series(np.nan, index=chunk.index) if near is None else JOINERS["area_weighted_overlay"](chunk, near, field, weight_field=spec.weight_field))
         v = pd.concat(parts) if len(parts) > 1 else parts[0]
     else:  # point_density
         v = JOINERS["point_density"](sub, layer, res, per_capita=spec.per_capita)
@@ -118,7 +152,7 @@ def _largest_remainder(shares: np.ndarray) -> np.ndarray:
     return (floors + (rank < remainder[:, None])).astype("int64")
 
 
-def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[str, Layer | None], bbox: BBox | None = None) -> dict[str, pd.Series]:
+def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: LayerStore | dict[str, Layer | None], bbox: BBox | None = None, cellset: h3util.CellSet | None = None) -> dict[str, pd.Series]:
     """All output columns for one dimension, first-hit-wins across its joiners."""
     n = len(hexes)
     res_tag = np.full(n, "none", dtype=object)
@@ -132,16 +166,16 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
         if layer is None:
             continue  # source not available; reported by run()
         if comps is not None:
-            first = run_joiner(spec, hexes, layer, res, spec.fields["w"], bbox)
+            first = run_joiner(spec, hexes, layer, res, spec.fields["w"], bbox, cellset)
             fill = np.isnan(comps["w"]) & ~np.isnan(first)
             if not fill.any():
                 continue
             comps["w"][fill] = first[fill]
             for k in COMPOSITION_KEYS[1:]:
-                v = run_joiner(spec, hexes, layer, res, spec.fields[k], bbox)
+                v = run_joiner(spec, hexes, layer, res, spec.fields[k], bbox, cellset)
                 comps[k][fill] = v[fill]
         else:
-            v = run_joiner(spec, hexes, layer, res, spec.field, bbox)
+            v = run_joiner(spec, hexes, layer, res, spec.field, bbox, cellset)
             fill = np.isnan(raw) & ~np.isnan(v)
             if not fill.any():
                 continue
@@ -187,27 +221,77 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: dict[s
     return cols
 
 
-def _load_layers(settings: Settings, dims: list[Dimension], sources: dict[str, Source]) -> tuple[dict[str, Layer | None], dict[str, str]]:
-    """Every joiner source once; missing real downloads become None with the reason kept.
-    Raster sources (``raster_mean``) load as a :class:`RasterLayer`, everything else as a
-    prepared (Geo)DataFrame."""
-    layers: dict[str, Layer | None] = {}
-    skipped: dict[str, str] = {}
-    for dim in dims:
-        for spec in dim.joiners:
-            if spec.source in layers:
-                continue
-            try:
-                if spec.joiner == "raster_mean":
-                    nd = sources[spec.source].extra.get("nodata")
-                    layers[spec.source] = RasterLayer(prep.load_raster(settings, spec.source, sources), float(nd) if nd is not None else None)
+def check_nonnull(source_id: str, layer: pd.DataFrame, fields: set[str], minimum: float = MIN_NONNULL) -> None:
+    """Stop early when a prepared layer is empty or a joiner field is mostly empty (SPEC §13.44):
+    that is a broken download or a changed column, and scoring it would quietly show a gap. A
+    ``min_nonnull:`` on the source in ``sources.yaml`` overrides the default (0 turns it off).
+    A field the layer does not have is left to the joiner, which says so itself."""
+    if minimum <= 0:
+        return
+    if len(layer) == 0:
+        raise RuntimeError(f"dims: {source_id} prepared to a layer with no rows; check the download and its prep loader (set `min_nonnull: 0` on the source to allow it)")
+    for field in sorted(fields):
+        if field not in layer.columns:
+            continue
+        share = float(layer[field].notna().mean())
+        if share < minimum:
+            raise RuntimeError(
+                f"dims: {source_id}.{field} is filled in {100 * share:.1f}% of {len(layer)} rows (minimum {100 * minimum:.0f}%); "
+                f"the download or the prep loader is probably broken. If it is really that sparse, set `min_nonnull: {share:.2f}` or lower on the source in sources.yaml"
+            )
+
+
+class LayerStore:
+    """The prepared layers of a ``dims`` run, loaded when first asked for and dropped after the
+    last dimension that uses them (``done``). A real download that is not there is skipped with
+    its recipe printed and reads as None, so the next joiner takes over. ``tried`` and
+    ``skipped`` are shared across resolutions by the caller."""
+
+    def __init__(self, settings: Settings, dims: list[Dimension], sources: dict[str, Source], tried: set[str], skipped: dict[str, str]):
+        self.settings, self.sources, self.tried, self.skipped = settings, sources, tried, skipped
+        self.uses = Counter(spec.source for d in dims for spec in d.joiners)
+        self.fields: dict[str, set[str]] = {}
+        self.first: dict[str, JoinSpec] = {}  # the first joiner naming a source decides how it loads
+        for d in dims:
+            for spec in d.joiners:
+                self.first.setdefault(spec.source, spec)
+                if spec.joiner in ("raster_mean", "point_density"):
                     continue
-                layers[spec.source] = _as_wgs84(prep.load_layer(settings, spec.source, sources))
-            except FileNotFoundError as exc:
-                layers[spec.source] = None
-                skipped[spec.source] = str(exc)
-                print(f"dims   skipping joiner source {spec.source}: not available\n       " + str(exc).replace("\n", "\n       "))
-    return layers, skipped
+                self.fields.setdefault(spec.source, set()).update(spec.fields.values() if spec.fields else [spec.field])
+        self.layers: dict[str, Layer | None] = {}
+
+    def get(self, source_id: str, default=None) -> Layer | None:
+        if source_id not in self.layers:
+            self.layers[source_id] = self._load(source_id)
+        layer = self.layers[source_id]
+        return default if layer is None else layer
+
+    def _load(self, source_id: str) -> Layer | None:
+        spec = self.first[source_id]
+        self.tried.add(source_id)
+        try:
+            if spec.joiner == "raster_mean":
+                nd = self.sources[source_id].extra.get("nodata")
+                return RasterLayer(prep.load_raster(self.settings, source_id, self.sources), float(nd) if nd is not None else None)
+            layer = _as_wgs84(prep.load_layer(self.settings, source_id, self.sources))
+        except FileNotFoundError as exc:
+            if source_id not in self.skipped:
+                print(f"dims   skipping joiner source {source_id}: not available\n       " + str(exc).replace("\n", "\n       "))
+            self.skipped[source_id] = str(exc)
+            return None
+        self.skipped.pop(source_id, None)
+        check_nonnull(source_id, layer, self.fields.get(source_id, set()), float(self.sources[source_id].extra.get("min_nonnull", MIN_NONNULL)))
+        return layer
+
+    def done(self, dim: Dimension) -> None:
+        """``dim`` is joined: free every layer no remaining dimension needs."""
+        freed = False
+        for spec in dim.joiners:
+            self.uses[spec.source] -= 1
+            if self.uses[spec.source] <= 0 and self.layers.pop(spec.source, None) is not None:
+                freed = True
+        if freed:
+            gc.collect()  # GeoDataFrames carry reference cycles and cached spatial indexes
 
 
 def _inputs(settings: Settings, dims: list[Dimension], sources: dict[str, Source], res: int) -> list:
@@ -254,6 +338,26 @@ def dim_fingerprints(settings: Settings, dims: list[Dimension], sources: dict[st
     return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources)}) for d in dims}
 
 
+def _parts_dir(settings: Settings, res: int) -> Path:
+    return settings.interim_dir / f"dims_r{res}.parts"
+
+
+def _shard_key(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict) -> tuple[list, dict]:
+    """The (inputs, params) a dimension's checkpoint shard is fingerprinted with: exactly what
+    ``dim_fingerprints`` uses, so a shard is valid when and only when the dimension is fresh."""
+    return _dim_inputs(settings, dim, sources, res), {**base, "dim": dim.id, "spec": _dim_spec(dim, sources)}
+
+
+def _adoptable(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict, rows: int) -> dict | None:
+    """The checkpoint shard of ``dim`` when it is still valid (its recorded extras), else None."""
+    shard = _parts_dir(settings, res) / f"{dim.id}.parquet"
+    inputs, params = _shard_key(settings, dim, sources, res, base)
+    if not stage_cache.is_fresh(shard, inputs, params):
+        return None
+    meta = stage_cache.read_meta(shard)
+    return meta if meta.get("rows") == rows else None
+
+
 def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str, dict[str, int]]]:
     settings.ensure_dirs()
     sources = load_sources(settings.sources_path)
@@ -262,7 +366,7 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
         unknown = sorted(set(only) - {d.id for d in all_dims})
         if unknown:
             raise ValueError(f"dims --only: unknown dimension id(s) {unknown}; known: {[d.id for d in all_dims]}")
-    layers: dict[str, Layer | None] = {}
+    tried: set[str] = set()  # sources this run attempted to load (anything else keeps its recorded state)
     skipped: dict[str, str] = {}
     counts: dict[int, dict[str, dict[str, int]]] = {}
     for res in settings.res:
@@ -283,10 +387,12 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
         else:
             todo = [d for d in all_dims if have.get(d.id) != want[d.id]]
         if not todo:
-            df = pd.read_parquet(out)
+            df = pd.read_parquet(out, columns=[f"{d.id}_res" for d in all_dims])  # tags only, not the whole width
             inhabited = pd.read_parquet(settings.stage_path("pop", res), columns=["inhabited"])["inhabited"]
             counts[res] = _tag_counts(df, inhabited, all_dims)
             print(f"dims   res {res}: up to date ({len(df)} hexes), skipping")
+            if not only:
+                shutil.rmtree(_parts_dir(settings, res), ignore_errors=True)  # checkpoints of a forced run that died: the final file is good
             continue
         existing: pd.DataFrame | None = None
         if len(todo) < len(all_dims):
@@ -302,39 +408,67 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
             .merge(pd.read_parquet(settings.stage_path("admin", res), columns=["h3", "iso_a2"]), on="h3", how="left")
             .reset_index(drop=True)
         )
-        missing_layers = [d for d in todo if any(spec.source not in layers for spec in d.joiners)]
-        if missing_layers:
-            more, why = _load_layers(settings, missing_layers, sources)
-            layers.update(more)
-            skipped.update(why)
+        parts, base = _parts_dir(settings, res), params
+        if settings.force:
+            shutil.rmtree(parts, ignore_errors=True)
+        resumed: dict[str, dict] = {}
+        if not only and not settings.force:
+            resumed = {d.id: m for d in todo if (m := _adoptable(settings, d, sources, res, base, len(hexes))) is not None}
+        compute = [d for d in todo if d.id not in resumed]
+        store = LayerStore(settings, compute, sources, tried, skipped)
+        needs_cells = any(spec.joiner == "raster_mean" for d in compute for spec in d.joiners)
+        cellset = h3util.CellSet.from_cells(hexes["h3"]) if needs_cells else None  # built once, not per raster dimension
         cols: dict[str, pd.Series] = {}
-        for dim in todo:
+        for dim in todo:  # registry order, so the columns come out in the same order with or without a resume
             t1 = time.time()
-            got = join_dimension(dim, hexes, res, layers, settings.bbox)
+            if dim.id in resumed:
+                shard = pd.read_parquet(parts / f"{dim.id}.parquet")
+                cols.update({c: shard[c] for c in shard.columns})
+                tried.update(spec.source for spec in dim.joiners)
+                skipped.update(resumed[dim.id].get("skipped_sources", {}))
+                print(f"dims   res {res}: {dim.id:8s} resumed from checkpoint")
+                continue
+            got = join_dimension(dim, hexes, res, store, settings.bbox, cellset)
+            store.done(dim)
             cols.update(got)
+            if not only:  # a --only run is a small, deliberate edit; it neither writes nor deletes checkpoints
+                # a crash later in this run keeps this dimension (see the module docstring)
+                parts.mkdir(parents=True, exist_ok=True)
+                shard_path = parts / f"{dim.id}.parquet"
+                with stage_cache.atomic_path(shard_path) as tmp:
+                    pd.DataFrame(got, index=hexes.index).to_parquet(tmp, index=False)
+                inputs_d, params_d = _shard_key(settings, dim, sources, res, base)
+                stage_cache.record(shard_path, inputs_d, params_d, {"rows": len(hexes), "skipped_sources": {src: skipped[src] for src in {sp.source for sp in dim.joiners} if src in skipped}})
             tags = got[f"{dim.id}_res"][hexes["inhabited"].to_numpy(dtype=bool)].value_counts(normalize=True)
             shares = " ".join(f"{k} {100 * v:.1f}%" for k, v in tags.items())
             print(f"dims   res {res}: {dim.id:8s} {shares} ({time.time() - t1:.1f}s)")
         # one concat instead of a column insert per field (a fragmented frame on millions of rows)
-        df = pd.concat([pd.DataFrame({"h3": hexes["h3"]}), pd.DataFrame(cols, index=hexes.index)], axis=1)
+        new = pd.DataFrame(cols, index=hexes.index)
         if existing is not None:
-            # merge the recomputed columns into the kept ones, aligned on h3 (same hex set)
-            if len(existing) != len(df) or not set(existing["h3"]) == set(df["h3"]):
+            # the recomputed columns sit beside the kept ones, row for row (same hex set and order)
+            if len(existing) != len(new) or not existing["h3"].reset_index(drop=True).equals(hexes["h3"]):
                 raise ValueError(f"{out.name} covers a different hex set than the current grid; run `dims` without --only")
-            df = existing.merge(df, on="h3", how="left")
-        df.to_parquet(out, index=False)
+            df = pd.concat([existing.reset_index(drop=True), new], axis=1)
+        else:
+            df = pd.concat([pd.DataFrame({"h3": hexes["h3"]}), new], axis=1)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         recorded = {k: v for k, v in have.items() if k in want} if existing is not None else {}
         recorded.update({d.id: want[d.id] for d in todo})
         # sources this run did not try keep their recorded state (validate reads it to tell a
         # missing download from a layer that loaded and came out empty)
-        carried = {s: why for s, why in meta.get("skipped_sources", {}).items() if s not in layers} if existing is not None else {}
+        carried = {s: why for s, why in meta.get("skipped_sources", {}).items() if s not in tried} if existing is not None else {}
         used = {spec.source for d in all_dims for spec in d.joiners}
         used_skips = {s: why for s, why in {**carried, **skipped}.items() if s in used}
         stage_cache.record(out, inputs, params, {"rows": len(df), "skipped_sources": used_skips, "dims": recorded, "partial": sorted(only) if only else None})
+        if not only:
+            shutil.rmtree(parts, ignore_errors=True)  # the checkpoints did their job
         inhabited_all = pd.read_parquet(settings.stage_path("pop", res), columns=["h3", "inhabited"]).set_index("h3")["inhabited"].reindex(df["h3"]).to_numpy(dtype=bool)
         counts[res] = _tag_counts(df, pd.Series(inhabited_all), all_dims)
         what = f"{len(todo)} of {len(all_dims)} dimensions" + (" (--only)" if only else "")
         print(f"dims   res {res}: {what} on {len(df)} hexes in {time.time() - t0:.1f}s -> {out.name}")
+        del hexes, cols, new, df, existing, store, cellset, resumed, compute  # the next resolution starts from an empty heap
+        gc.collect()
     if skipped:
         print(f"dims   note: {len(skipped)} source(s) unavailable, fallbacks used: {', '.join(skipped)}")
     return counts

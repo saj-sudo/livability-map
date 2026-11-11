@@ -1,3 +1,4 @@
+import { HEAT_CAVEAT, SCORE_MEANING } from "../../lib/inspect";
 import { loadManifest } from "../../lib/manifest";
 import type { Manifest, ManifestDimension } from "../../lib/manifest";
 
@@ -121,6 +122,9 @@ export default async function Methodology() {
       <section>
         <h2 className="text-lg font-semibold">How the scores work</h2>
         <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>{SCORE_MEANING}</strong> A score of 80 means the place ranks above 80% of inhabited land on that layer; it does not mean 80% likely, or twice as bad as 40.
+          </li>
           {m.processing_notes.map((n, i) => (
             <li key={i}>{n}</li>
           ))}
@@ -211,6 +215,7 @@ export default async function Methodology() {
             </ul>
           );
         })}
+        <p className="mt-2">Extreme heat: {HEAT_CAVEAT} A humid-heat layer (heat index or wet-bulb temperature) is planned once its source is checked.</p>
         <p className="mt-2">Small islands and thin coasts whose H3 cell centre falls at sea are not in the grid (Reykjavik&rsquo;s own cell, for example); the spot check falls back to the nearest land hex and says so.</p>
       </section>
 

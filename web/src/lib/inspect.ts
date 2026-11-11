@@ -8,12 +8,22 @@ import { BIVAR_WORDS } from "./palette";
 
 export type Props = Record<string, unknown>;
 
+/** What a score is (SPEC §16 Next steps): shown in the place panel and on /methodology. */
+export const SCORE_MEANING =
+  "Scores are ranks: a percentile among inhabited land at this resolution (100 = highest), not an absolute risk level.";
+
+/** Why the heat layer understates humid heat: shown on the heat row and on /methodology. */
+export const HEAT_CAVEAT =
+  "Counts dry-air days above 35 °C and ignores humidity, so humid places (Bangladesh, the US Gulf coast, West Africa, Southeast Asia) can look milder than their real heat stress.";
+
 export interface HazardRow {
   id: string;
   name: string;
   raw: string | null; // formatted raw value with unit, null when missing
   score: number | null;
   ok: boolean;
+  /** a caveat shown under the row (heat: humidity is not counted) */
+  note?: string;
 }
 
 export interface LifeRow {
@@ -36,6 +46,8 @@ export interface HexModel {
   inhabited: boolean;
   hazards: HazardRow[];
   coverage: string;
+  /** what the scores mean (ranks, not absolute risk) */
+  scoreNote: string;
   exposure: number | null;
   /** number of hazard layers with data, 0-4 */
   coverageN: number;
@@ -78,7 +90,9 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     const raw = num(p[HAZARD_RAW[id].attr]);
     const ok = p[`${id}_ok`] === true;
     const dim = dims.find((d) => d.id === id);
-    return { id, name: dim?.name ?? id, raw: ok ? formatHazardRaw(id, raw) : id === "wstress" && raw === -1 ? formatHazardRaw(id, raw) : null, score: ok ? num(p[`${id}_score`]) : null, ok };
+    const row: HazardRow = { id, name: dim?.name ?? id, raw: ok ? formatHazardRaw(id, raw) : id === "wstress" && raw === -1 ? formatHazardRaw(id, raw) : null, score: ok ? num(p[`${id}_score`]) : null, ok };
+    if (id === "heat") row.note = HEAT_CAVEAT;
+    return row;
   });
   const coverageN = num(p.coverage) ?? hazards.filter((h) => h.ok).length;
   const wbSource = str(p.wb_source) ?? "none";
@@ -123,6 +137,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     inhabited,
     hazards,
     coverage: `${coverageN} of 4 hazard layers`,
+    scoreNote: SCORE_MEANING,
     exposure: num(p.exposure),
     coverageN,
     wellbeing,

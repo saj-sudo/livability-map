@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
-import { describeHex } from "./inspect";
+import { describeHex, HEAT_CAVEAT, SCORE_MEANING } from "./inspect";
 
 // units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
 const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
@@ -141,5 +141,24 @@ describe("hex-level layers in the inspector", () => {
     const props = { h3: "84z", iso_a2: "US", inhabited: true, coverage: 4, wb_res: "none", wb_source: "none", bivar: 0 };
     const m = describeHex(props, "hex4", DIMS, MANIFEST);
     for (const row of m.env) expect(row).toMatchObject({ value: null, score: null, res: "none" });
+  });
+});
+
+describe("honesty notes in the place panel (SPEC §16 Next steps)", () => {
+  it("says scores are ranks and flags that heat ignores humidity, on the heat row only", () => {
+    const m = describeHex({ h3: "84z", iso_a2: "BD", inhabited: true, heat_ok: true, heat_days: 12, heat_score: 40 }, "hex5", DIMS, MANIFEST);
+    expect(m.scoreNote).toBe(SCORE_MEANING);
+    expect(SCORE_MEANING).toMatch(/percentile/);
+    expect(SCORE_MEANING).toMatch(/not an absolute risk/);
+    expect(m.hazards.find((h) => h.id === "heat")!.note).toBe(HEAT_CAVEAT);
+    expect(HEAT_CAVEAT).toMatch(/humidity/);
+    expect(m.hazards.filter((h) => h.id !== "heat").every((h) => h.note === undefined)).toBe(true);
+  });
+
+  it("keeps the heat caveat when the heat layer has no data", () => {
+    const m = describeHex({ h3: "84z", inhabited: true, heat_ok: false }, "hex5", DIMS, MANIFEST);
+    const heat = m.hazards.find((h) => h.id === "heat")!;
+    expect(heat.raw).toBeNull();
+    expect(heat.note).toBe(HEAT_CAVEAT);
   });
 });

@@ -16,6 +16,7 @@ const base: HexModel = {
   inhabited: true,
   hazards: [],
   coverage: "4 of 4 hazard layers",
+  scoreNote: "",
   exposure: 57,
   coverageN: 4,
   wellbeing: { value: "life evaluation 6.82 / 10", score: 85, source: "whr", res: "national" },

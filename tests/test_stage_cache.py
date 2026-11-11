@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pandas as pd
+import pytest
+
 from pipeline import stage_cache
 
 
@@ -60,3 +63,48 @@ def test_a_replaced_output_is_not_fresh(tmp_path):
     assert stage_cache.is_fresh(out, [], {"stage": "pop"})
     out.write_bytes(b"abcdef")  # rewritten by something other than the stage
     assert not stage_cache.is_fresh(out, [], {"stage": "pop"})
+
+
+def test_atomic_path_replaces_the_target_on_success(tmp_path):
+    target = tmp_path / "out.parquet"
+    with stage_cache.atomic_path(target) as tmp:
+        assert tmp.parent == target.parent and tmp.suffix == ".parquet" and tmp != target
+        pd.DataFrame({"a": [1, 2]}).to_parquet(tmp, index=False)
+        assert not target.exists()  # nothing under the real name until the block ends
+    assert list(pd.read_parquet(target)["a"]) == [1, 2]
+    assert [p.name for p in tmp_path.iterdir()] == ["out.parquet"]
+
+
+def test_atomic_path_failure_keeps_the_previous_file_and_leaves_no_temp(tmp_path):
+    target = tmp_path / "out.parquet"
+    pd.DataFrame({"a": [1]}).to_parquet(target, index=False)
+    with pytest.raises(RuntimeError, match="boom"), stage_cache.atomic_path(target) as tmp:
+        tmp.write_bytes(b"half a fi")
+        raise RuntimeError("boom")
+    assert list(pd.read_parquet(target)["a"]) == [1]
+    assert [p.name for p in tmp_path.iterdir()] == ["out.parquet"]
+
+
+def test_write_atomic_creates_and_overwrites(tmp_path):
+    target = tmp_path / "m.json"
+    stage_cache.write_atomic(target, "one")
+    stage_cache.write_atomic(target, "two")
+    assert target.read_text(encoding="utf-8") == "two"
+    assert [p.name for p in tmp_path.iterdir()] == ["m.json"]
+
+
+def test_replace_file_retries_a_busy_target(tmp_path, monkeypatch):
+    src, dst = tmp_path / "a", tmp_path / "b"
+    src.write_text("x")
+    real, calls = stage_cache.os.replace, []
+
+    def flaky(a, b):
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError("held by a scanner")
+        return real(a, b)
+
+    monkeypatch.setattr(stage_cache.os, "replace", flaky)
+    monkeypatch.setattr(stage_cache.time, "sleep", lambda s: None)
+    stage_cache.replace_file(src, dst)
+    assert dst.read_text() == "x" and len(calls) == 3

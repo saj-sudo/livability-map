@@ -163,7 +163,8 @@ def run(settings: Settings) -> dict[int, int]:
             if "countries" in entry.where and adm0 is None:
                 adm0 = gpd.read_file(adm0_path).to_crs(4326)
             df = refine(parents, entry, _land(), urban, adm0, settings.iso_overrides)
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         stage_cache.record(out, inputs, params, {"rows": len(df)})
         how = "land hexes" if entry.complete else f"children of res {entry.parent} cells matching {entry.where}"
         print(f"grid   res {res}: {len(df)} {how} in {time.time() - t0:.1f}s -> {out.name}")

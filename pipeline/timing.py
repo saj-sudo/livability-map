@@ -9,6 +9,7 @@ import json
 import time
 from collections.abc import Iterator
 
+from . import stage_cache
 from .config import Settings
 
 
@@ -34,8 +35,8 @@ def read(settings: Settings) -> dict:
 
 @contextlib.contextmanager
 def timed(settings: Settings, stage: str) -> Iterator[None]:
-    """Record wall seconds and peak RSS for one stage run (only when the stage did real work is
-    not known here, so every run is recorded; the newest overwrites)."""
+    """Record wall seconds and peak RSS for one stage run. Every run is recorded, including a
+    cached no-op (this wrapper cannot tell), and a failed run too; the newest overwrites."""
     t0 = time.time()
     try:
         yield
@@ -53,6 +54,6 @@ def timed(settings: Settings, stage: str) -> Iterator[None]:
             "at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         }
         settings.interim_dir.mkdir(parents=True, exist_ok=True)
-        (settings.interim_dir / "timings.json").write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        stage_cache.write_atomic(settings.interim_dir / "timings.json", json.dumps(data, indent=2, sort_keys=True))
         mem = f", peak RSS {peak / 1e9:.2f} GB" if peak else ""
         print(f"{stage:6s} took {seconds:.1f}s{mem}")

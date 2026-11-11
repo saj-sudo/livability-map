@@ -322,7 +322,8 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
             if len(existing) != len(df) or not set(existing["h3"]) == set(df["h3"]):
                 raise ValueError(f"{out.name} covers a different hex set than the current grid; run `dims` without --only")
             df = existing.merge(df, on="h3", how="left")
-        df.to_parquet(out, index=False)
+        with stage_cache.atomic_path(out) as tmp:
+            df.to_parquet(tmp, index=False)
         recorded = {k: v for k, v in have.items() if k in want} if existing is not None else {}
         recorded.update({d.id: want[d.id] for d in todo})
         # sources this run did not try keep their recorded state (validate reads it to tell a

@@ -32,6 +32,8 @@ import pandas as pd
 import shapely
 from shapely import GeometryType
 
+from . import stage_cache
+
 EXTENT = 4096
 BUFFER = 80  # tile units (~2% of the tile, like tippecanoe's default 5/256)
 MAX_LAT = 85.05112878  # Web Mercator limit
@@ -457,4 +459,4 @@ def report_json(report: TileReport) -> dict:
 
 
 def write_report(path: Path, report: TileReport) -> None:
-    path.write_text(json.dumps(report_json(report), indent=2), encoding="utf-8")
+    stage_cache.write_atomic(path, json.dumps(report_json(report), indent=2))

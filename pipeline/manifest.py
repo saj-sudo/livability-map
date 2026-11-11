@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import sanity, timing
+from . import sanity, stage_cache, timing
 from .attrs import HAZARD_IDS, HAZARD_RAW
 from .checksums import read_checksums
 from .config import NON_COMMERCIAL, Settings
@@ -177,7 +177,7 @@ def _json_default(o):
 def write(settings: Settings, manifest: dict) -> Path:
     settings.out_dir.mkdir(parents=True, exist_ok=True)
     path = settings.out_dir / "manifest.json"
-    path.write_text(json.dumps(manifest, indent=2, default=_json_default, ensure_ascii=False), encoding="utf-8")
+    stage_cache.write_atomic(path, json.dumps(manifest, indent=2, default=_json_default, ensure_ascii=False))
     return path
 
 

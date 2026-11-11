@@ -17,6 +17,9 @@ import importlib.util
 import json
 import os
 import re
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -134,11 +137,36 @@ def is_fresh(output: Path, inputs: list[Path], params: dict[str, Any], force: bo
     return recorded.get("fingerprint") == fingerprint(inputs, params)
 
 
+@contextmanager
+def atomic_path(path: Path) -> Iterator[Path]:
+    """Yield a sibling temp path to write ``path``'s content to; on a clean exit it replaces
+    ``path`` in one rename, so a crash never leaves a half-written file under the real name. The
+    temp name keeps the suffix (writers such as geopandas pick their driver from it). On an
+    exception the temp file is removed and the previous ``path`` is untouched."""
+    tmp = path.with_name(f".{os.getpid()}-{path.name}")
+    try:
+        yield tmp
+        replace_file(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def replace_file(tmp: Path, path: Path, attempts: int = 5) -> None:
+    """``os.replace`` that tolerates a virus scanner briefly holding the target (Windows)."""
+    for i in range(attempts):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.2 * (i + 1))
+
+
 def write_atomic(path: Path, text: str) -> None:
     """Write via a sibling temp file and rename, so a crash never leaves half a file."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    with atomic_path(path) as tmp:
+        tmp.write_text(text, encoding="utf-8")
 
 
 def record(output: Path, inputs: list[Path], params: dict[str, Any], extra: dict[str, Any] | None = None) -> None:

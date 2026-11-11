@@ -22,6 +22,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 
+from .. import stage_cache
 from ..config import Settings
 from ..registry import Source
 from .util import find_column, name_aliases, normalize_name, read_xlsx
@@ -156,7 +157,7 @@ def tl2_geometry(settings: Settings, sources: dict[str, Source]) -> gpd.GeoDataF
     print(f"prep   oecd tl2: {matched}/{total} TL2 regions geolocated ({100 * matched / max(1, total):.0f}%); weakest: " + ", ".join(f"{k} {100 * r:.0f}%" for r, k in worst))
     out = settings.cache_dir / "prep" / "oecd_tl2_report.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({"total": total, "matched": matched, "countries": report}, indent=2), encoding="utf-8")
+    stage_cache.write_atomic(out, json.dumps({"total": total, "matched": matched, "countries": report}, indent=2))
     return gdf
 
 

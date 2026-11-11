@@ -4,7 +4,7 @@ import { tooltipModel } from "./tooltip";
 
 const dim = (id: string, name: string, group: DimInfo["group"] = "life", higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "Extreme heat (days > 35C)", "hazard", "worse"), dim("wb", "Wellbeing", "wellbeing"), dim("jobs", "Early-career job market")];
-const PICKS = { pol: "competitive", race: "diverse" } as const;
+const PICKS = { pol: "competitive" } as const;
 const FULL = { iso_a2: "BD", admin1_name: "Dhaka", population: 13906075, bivar: 6, heat_days: 33.6, heat_score: 66, heat_ok: true, jobs_res: "national", jobs_raw: 84, jobs_score: 40, wb_res: "none" };
 
 describe("hover readout (SPEC §10)", () => {

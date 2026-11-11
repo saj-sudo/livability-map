@@ -28,7 +28,7 @@ const GROUP_TITLES: Record<RowGroup, string> = { summary: "", priorities: "Your 
 const GROUPS: RowGroup[] = ["summary", "priorities", "hazard", "wellbeing", "life"];
 
 export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRepick, onClose, embedded }: Props) {
-  const picks = useMemo(() => ({ pol: state.pol, race: state.race }), [state.pol, state.race]);
+  const picks = useMemo(() => ({ pol: state.pol }), [state.pol]);
   const ma = useMemo(() => describeHex(a.props, a.sourceLayer, dims, manifest), [a, dims, manifest]);
   const mb = useMemo(() => describeHex(b.props, b.sourceLayer, dims, manifest), [b, dims, manifest]);
   const rows = useMemo(() => compareRows({ model: ma, props: a.props }, { model: mb, props: b.props }, dims, state.weights, picks), [ma, mb, a.props, b.props, dims, state.weights, picks]);

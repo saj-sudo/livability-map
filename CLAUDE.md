@@ -19,8 +19,14 @@ everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urba
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
 US tract layers from FEMA NRI (`nri`) and CDC PLACES (`phealth`) are wired but `verified: search`
 until fetched first-hand (SPEC §13.38; PLACES is a manual download).
-Outstanding: the R2/Pages publish (needs `.env` credentials) and three manual downloads (GDL SHDI,
-MEDSL county returns, HUD FMR workbook). SPEC §13 records the decisions taken. A full res-6/7 rebuild takes ~8 hours.
+Release safety (2026-10-19, SPEC §13.39-43): code-aware stage caches, a `validate` gate,
+content-addressed R2 publish, a per-page CSP, a Playwright e2e job, race as context only, a
+private raw-input mirror, and the public-repo / MIT decision. The first run after §13.39
+rebuilds every stage once (new fingerprints).
+Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
+manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
+decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
+rebuild takes ~8 hours.
 
 Manual steps only Saj can do (registrations, browser-only downloads, credentials, permission
 requests) live in `docs/manual-steps.md`: add an item there whenever a session hits one, and move
@@ -29,11 +35,11 @@ it to Done when it is handled.
 ## Commands
 
 ```bash
-uv venv && uv pip install -e ".[dev]"            # one-time setup (Python 3.11+, uv)
+uv sync --locked --extra dev                     # setup with the exact versions in uv.lock (Python 3.11+, uv)
 uv run python -m pipeline --fixtures --res 4 all # full pipeline on the synthetic fixture world
 uv run python -m pipeline --fixtures grid        # one stage; global options go BEFORE the stage name
 uv run python -m pipeline --fixtures sanity      # SPEC §8.5 counts and spot checks
-uv run pytest                                    # all tests (fixtures only, ~3 s)
+uv run pytest                                    # all tests (fixtures only, ~4 min in the cloud container)
 uv run pytest tests/test_joiners.py -k overlay   # one test
 uv run ruff check .                              # lint (line length 100, E501 ignored)
 uv run python -m pipeline.fixtures.make_fixtures # regenerate fixtures (also happens lazily)
@@ -43,8 +49,11 @@ uv run python -m pipeline --res 5 dims --only care --only net     # add layers w
 uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
 uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
+uv run python -m pipeline mirror                                 # copy recorded raw files to the private R2 raw mirror (§13.42)
+uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
+cd web && npm run build && node scripts/headers.mjs out && npm run e2e   # Playwright smoke test (needs a fixture publish --target local)
 ```
 
 On this laptop `uv` lives in `~/.local/bin` (Git Bash: `export PATH="$HOME/.local/bin:$PATH"`)
@@ -86,7 +95,9 @@ set (`h3util.CellSet`) so derived resolutions cost what their cells cost.
 parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin_r{res}`,
 `hazards_r{res}`, `dims_r{res}`, `score_r{res}`) keyed on `h3`, and `sanity.load_merged` joins
 whatever exists. Idempotency is via `stage_cache.is_fresh/record` (a `.meta.json` sidecar
-fingerprinting inputs + params); `--force` bypasses it, and a code change needs `--force` too.
+fingerprinting inputs + params + code: the AST digest of the stage module and every `pipeline`
+module it imports, incl. lazily registered prep loaders, docstrings and comments ignored, §13.39);
+`--force` bypasses it. `dims` keeps one fingerprint per dimension and recomputes only stale ones.
 `--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
 archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
 
@@ -100,14 +111,22 @@ and the next joiner (e.g. WHR for SHDI) takes over.
 source, bivariate class); `hazards` scores itself, `score` does composites and life dims;
 `export` writes `data/out/hexes_r{res}.parquet` + `manifest.json` (`manifest.py`, §6.3);
 `tiles` uses `tiler.py` (pure Python, hex4 z2-4 slim at z2, hex5 z5-7; tippecanoe optional);
+`validate` (between `tiles` and `publish`, and re-run inside `publish`) checks archive sha256 and
+freshness, empty hazards / dimensions and coverage drops against the live build (§13.39);
 `publish` targets `local` (web/public/data) or `r2` (boto3, `.env`) and refuses sources whose
-`verified` is not `confirmed` (only sources actually used count).
+`verified` is not `confirmed` (only sources actually used count). R2 gets real whole-world builds
+only, archives under content-addressed keys, `manifest.json` switched last; `npm run deploy`
+builds the web app against that live manifest (`LIVABILITY_MANIFEST`).
 
 **Registries.** `pipeline/registry.py` loads `sources.yaml` (one entry per dataset; `access` is
 `direct | manual | fixture`; `verified` is `confirmed | search | none`) and `dimensions.yaml`
 (everything a person can weight, incl. hazards and wellbeing; `kind` is `score | signed |
 composition`; each has ordered `joiners`). `fetch` refuses any source whose `license` or direct
-`url` is `VERIFY` (invariant 4). `manual` sources (Aqueduct Floods via Earth Engine, see
+`url` is `VERIFY` (invariant 4). With `R2_RAW_BUCKET` set, `fetch` restores any file with a recorded checksum from the private raw
+mirror (`pipeline/mirror.py`, keyed by sha256) before going upstream; `mirror` uploads them.
+Checksum helpers live in `pipeline/checksums.py` and `.env` reading in `pipeline/envfile.py`
+(leaf modules, so stage code fingerprints do not depend on fetch or publish code).
+`manual` sources (Aqueduct Floods via Earth Engine, see
 `docs/gee-export.md`; GDL SHDI via registration; HUD FMR because huduser.gov's WAF answers
 non-browser clients with an empty 202) are checked for presence, not downloaded. A present file
 with no CHECKSUMS entry is recorded, not re-downloaded; an empty body is an error.
@@ -156,8 +175,14 @@ its OpenFreeMap style with `setStyle(url, { transformStyle })` so the hex source
 packages, so no request leaves the origin. `MapView` registers map handlers once and reads state
 and callbacks through refs. Place search reads `public/gazetteer.json` (committed; rebuild with
 `uv run python web/scripts/build_gazetteer.py` after `python -m pipeline fetch --only
-natural_earth_places`). Below 640px the panels live in a bottom sheet. Playwright screenshots go
-under `.playwright-mcp/` (ignored).
+natural_earth_places`). Below 640px the panels live in a bottom sheet. Composition dimensions
+(race) are context only: no slider, never in the composite (`weightable()`, SPEC §13.40). Map
+failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
+`lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.41). `scripts/headers.mjs`
+writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
+with those headers and Range support for `web/e2e/` (Playwright 1.56.1, pinned to the container's
+Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go under
+`.playwright-mcp/` (ignored).
 
 ## Rules that are easy to break
 

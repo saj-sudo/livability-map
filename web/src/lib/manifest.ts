@@ -130,14 +130,20 @@ export const EMPTY_MANIFEST: Manifest = {
 };
 
 /**
- * Build-time loader (server components only). Order: public/data/manifest.json on disk, then
- * NEXT_PUBLIC_DATA_BASE/manifest.json over HTTP, else the empty manifest with a warning so CI
- * builds without data still succeed (the pages then say that no build is loaded).
+ * Build-time loader (server components only). Order: LIVABILITY_MANIFEST (the live R2 manifest
+ * `npm run deploy` checked and saved; a release never falls back from it), then
+ * public/data/manifest.json on disk, then NEXT_PUBLIC_DATA_BASE/manifest.json over HTTP, else the
+ * empty manifest with a warning so CI builds without data still succeed (the pages then say that
+ * no build is loaded).
  */
 export async function loadManifest(): Promise<Manifest> {
   const { existsSync } = await import("node:fs");
   const { readFile } = await import("node:fs/promises");
   const path = await import("node:path");
+  const release = process.env.LIVABILITY_MANIFEST;
+  if (release) {
+    return JSON.parse(await readFile(release, "utf8")) as Manifest;
+  }
   const local = path.join(process.cwd(), "public", "data", "manifest.json");
   if (existsSync(local)) {
     return JSON.parse(await readFile(local, "utf8")) as Manifest;

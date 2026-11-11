@@ -19,7 +19,6 @@ archive's sha256, size and layer table.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -70,6 +69,20 @@ def layer_specs(settings: Settings) -> dict[str, list[tiler.LayerSpec]]:
     return by_archive
 
 
+def archive_params(name: str, specs: list[tiler.LayerSpec], backend: str) -> dict:
+    """The cache parameters of one archive (``validate`` asks the same question before publish)."""
+    return {
+        "stage": "tiles",
+        "archive": name,
+        "backend": backend,
+        "zooms": [(s.name, s.minzoom, s.maxzoom, s.slim_below_zoom, s.overzoom) for s in specs],
+        "attrs": list(specs[0].attrs),
+        "slim": list(specs[0].slim_attrs),
+        "extent": tiler.EXTENT,
+        "buffer": tiler.BUFFER,
+    }
+
+
 def build_with_tippecanoe(specs: list[tiler.LayerSpec], out: Path, binary: str) -> dict:
     """Optional backend: needs the geojsonl written by `export --geojson`."""
     cmd = [binary, "-o", str(out), "--force", "--no-feature-limit", "--no-tile-size-limit", "--no-tiny-polygon-reduction", "--buffer=5"]
@@ -80,7 +93,7 @@ def build_with_tippecanoe(specs: list[tiler.LayerSpec], out: Path, binary: str) 
         cmd += ["-L", json.dumps({"file": str(gj), "layer": spec.name, "minzoom": spec.minzoom, "maxzoom": spec.maxzoom})]
     t0 = time.time()
     subprocess.run(cmd, check=True)
-    return {"backend": "tippecanoe", "bytes": out.stat().st_size, "sha256": hashlib.sha256(out.read_bytes()).hexdigest(), "seconds": round(time.time() - t0, 1), "layers": [{"name": s.name, "minzoom": s.minzoom, "maxzoom": s.maxzoom} for s in specs]}
+    return {"backend": "tippecanoe", "bytes": out.stat().st_size, "sha256": tiler.sha256_file(out), "seconds": round(time.time() - t0, 1), "layers": [{"name": s.name, "minzoom": s.minzoom, "maxzoom": s.maxzoom} for s in specs]}
 
 
 def _layer_entries(info: dict, specs: list[tiler.LayerSpec]) -> list[dict]:
@@ -106,16 +119,7 @@ def run(settings: Settings, backend: str = "auto", workers: int | None = None, a
             continue
         out = settings.out_dir / f"{name}.pmtiles"
         inputs = [s.parquet for s in specs]
-        params = {
-            "stage": "tiles",
-            "archive": name,
-            "backend": chosen,
-            "zooms": [(s.name, s.minzoom, s.maxzoom, s.slim_below_zoom, s.overzoom) for s in specs],
-            "attrs": list(specs[0].attrs),
-            "slim": list(specs[0].slim_attrs),
-            "extent": tiler.EXTENT,
-            "buffer": tiler.BUFFER,
-        }
+        params = archive_params(name, specs, chosen)
         if stage_cache.is_fresh(out, inputs, params, settings.force):
             info = stage_cache.read_meta(out).get("report", {})
             print(f"tiles  {name}: up to date ({info.get('tiles', '?')} tiles, {info.get('bytes', 0) / 1e6:.1f} MB), skipping")

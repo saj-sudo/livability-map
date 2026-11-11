@@ -3,9 +3,10 @@
 A free, global, explorable map that puts **projected climate hazard exposure** (heat, riverine
 flood, coastal flood, water stress; one moderate scenario, 2050) beside **present-day wellbeing**
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
-presence, political lean, racial composition, income mix, housing cost burden, healthcare, cost
+presence, political lean, income mix, housing cost burden, healthcare, cost
 of living, rent, travel time to healthcare and to a city, walking time to healthcare, internet
-speed, relative wealth, armed conflict nearby, working water points) plus the **present-day
+speed, relative wealth, armed conflict nearby, working water points; racial composition is
+shown per place as context, never weighted, SPEC §13.40) plus the **present-day
 environment** (air quality, tree cover, wildfire, drought risk), on H3 hexagons from about
 1,770 km² on all land down to about 5 km² inside urban centres, built only from open-licensed
 data.
@@ -83,14 +84,18 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
-  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
+  |            no coverage drop > 5% against the live build (§13.39); publish runs it again               |
+  |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
+  |            whole-world builds only; archives under content-addressed keys (immutable),                |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.39)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  on Cloudflare Pages                   |               |  <archive>.<sha12>.pmtiles (immutable)   |
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
   |  views: bivariate | per hazard |       |
@@ -107,7 +112,7 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
 Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv venv && uv pip install -e ".[dev]"      # or: uv sync
+uv sync --locked --extra dev               # exact versions from uv.lock
 uv run python -m pipeline --help
 uv run python -m pipeline --fixtures all   # synthetic 4x4 degree world, runs in seconds
 uv run pytest
@@ -150,7 +155,7 @@ SPEC.md                 the spec; build prompts cite its section numbers
 pipeline/               Python pipeline package (python -m pipeline <stage>)
   sources.yaml          every dataset: url, format, license, vintage, attribution (§6.2)
   dimensions.yaml       everything a person can weight, with joiners (§20.2)
-  stages/               fetch grid pop admin hazards dims score export tiles publish
+  stages/               fetch urban grid pop admin hazards dims score export tiles validate publish
   prep/                 one loader per real source -> the columns dimensions.yaml names
   joiners/              polygon_centroid iso_lookup area_weighted_overlay point_density (§20.3)
   crosswalks/           manual OECD TL2 -> geoBoundaries ADM1 overrides (§13.21)
@@ -165,7 +170,7 @@ web/                    Next.js 16 static export: MapLibre map, inspector, prior
 data/                   gitignored raw / interim / out; data/raw/CHECKSUMS is committed
 ```
 
-## Licensing posture
+## Licensing
 
 Non-commercial for the foreseeable future (SPEC §13.13). Most sources are CC BY 4.0, public
 domain, ODC-BY, CC0 or an open reuse licence from a public publisher (UK OGL, Etalab, Statistics
@@ -181,6 +186,7 @@ Canada, dl-de/by, Eurostat, OECD). The exceptions, which the manifest and `/meth
 Sources with non-redistributable terms (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo,
 SEDA without permission) are excluded.
 
-Code: MIT, see [`LICENSE`](LICENSE). The MIT licence covers the code in this repository only;
-data derived from the sources keeps each source's terms, listed per source in
-`pipeline/sources.yaml`.
+Code: MIT, see [`LICENSE`](LICENSE); the repository is public (SPEC §13.43). The MIT licence
+covers the code in this repository only; data derived from the sources keeps each source's
+terms, listed per source in `pipeline/sources.yaml`. Raw downloads are never committed, and the
+private raw-input mirror (SPEC §13.42) is for rebuilding, not redistribution.

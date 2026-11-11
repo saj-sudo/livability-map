@@ -10,22 +10,32 @@ Rules:
   downloaded. The stage checks the files are present and prints the recipe if not.
 - ``file://`` URLs (fixtures) are copied through the same checksum path as HTTP downloads.
 - Redirects are followed and Git LFS pointer files are rejected (geoBoundaries, §15.7).
+- With a raw mirror configured (``R2_RAW_BUCKET``, SPEC §13.42), a file whose checksum is recorded
+  is restored from the mirror before going upstream: the exact bytes the map was built from.
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from ..checksums import (  # noqa: F401 - re-exported
+    CHUNK,
+    read_checksums,
+    sha256_of,
+    write_checksums,
+)
 from ..config import Settings
 from ..registry import Source, load_sources
 
-CHUNK = 1 << 20
+if TYPE_CHECKING:
+    from ..mirror import Mirror
+
 LFS_MAGIC = b"version https://git-lfs.github.com/spec/v1"
 
 
@@ -37,43 +47,11 @@ class FetchResult:
     detail: str = ""
 
 
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(CHUNK), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def is_lfs_pointer(path: Path) -> bool:
     if path.stat().st_size > 1024:
         return False
     with open(path, "rb") as fh:
         return fh.read(len(LFS_MAGIC)) == LFS_MAGIC
-
-
-def read_checksums(path: Path) -> dict[tuple[str, str], str]:
-    out: dict[tuple[str, str], str] = {}
-    if not path.exists():
-        return out
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split()
-        if len(parts) != 3:
-            continue
-        digest, sid, fname = parts
-        out[(sid, fname)] = digest
-    return out
-
-
-def write_checksums(path: Path, entries: dict[tuple[str, str], str]) -> None:
-    lines = ["# sha256  source_id  filename   (written by `python -m pipeline fetch`, SPEC §11)"]
-    for (sid, fname), digest in sorted(entries.items()):
-        lines.append(f"{digest}  {sid}  {fname}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _resolve_file_url(url: str, root: Path) -> Path:
@@ -85,7 +63,9 @@ def _resolve_file_url(url: str, root: Path) -> Path:
     return p
 
 
-def _download(url: str, dest: Path, root: Path) -> None:
+def _download(url: str, dest: Path, root: Path) -> Path:
+    """Download to ``<dest>.part`` and return that path; the caller checks the checksum before
+    the file takes ``dest``'s place, so a moved vintage never replaces the verified one."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     if url.startswith("file://"):
@@ -108,7 +88,7 @@ def _download(url: str, dest: Path, root: Path) -> None:
     if is_lfs_pointer(tmp):
         tmp.unlink()
         raise RuntimeError("downloaded a Git LFS pointer instead of the file; use a /raw/ URL that redirects to media.githubusercontent.com")
-    tmp.replace(dest)
+    return tmp
 
 
 def dataverse_guestbook(root: Path) -> dict[str, str] | None:
@@ -141,7 +121,7 @@ def _file_url_for(src: Source, fname: str) -> str:
     return src.url
 
 
-def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str], str]) -> list[FetchResult]:
+def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str], str], mirror: Mirror | None = None) -> list[FetchResult]:
     results: list[FetchResult] = []
     dest_dir = settings.raw(src.id)
 
@@ -170,10 +150,18 @@ def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str
                 # A file with no recorded checksum is complete (downloads land under a .part name
                 # and are renamed only when finished), so record it instead of pulling multi-GB
                 # rasters a second time. A recorded checksum that differs still re-downloads.
+                # A hand-placed file that differs from last time is accepted (Saj put it there)
+                # but said out loud, so a new vintage never slips in unnoticed.
+                previous = checksums.get(key)
                 checksums[key] = digest
-                results.append(FetchResult(src.id, fname, "ok", f"present ({src.access}), recorded {digest[:12]}"))
+                note = f"; REPLACES recorded {previous[:12]}: a different file than last time, check its vintage" if previous else ""
+                results.append(FetchResult(src.id, fname, "ok", f"present ({src.access}), recorded {digest[:12]}{note}"))
                 continue
             # else: checksum mismatch -> re-download below
+        expected = checksums.get(key)
+        if expected and mirror is not None and mirror.restore(expected, dest):
+            results.append(FetchResult(src.id, fname, "ok", f"restored {expected[:12]} from the raw mirror"))
+            continue
         if src.access == "manual":
             results.append(FetchResult(src.id, fname, "missing", f"manual source; expected at {dest}"))
             continue
@@ -185,15 +173,20 @@ def fetch_source(src: Source, settings: Settings, checksums: dict[tuple[str, str
                     results.append(FetchResult(src.id, fname, "missing", f"Dataverse guestbook fields are not set in .env; download by hand to {dest}"))
                     continue
                 url = dataverse_signed_url(url, guest)
-            _download(url, dest, settings.root)
+            tmp = _download(url, dest, settings.root)
         except Exception as exc:  # noqa: BLE001 - report and continue with other sources
             results.append(FetchResult(src.id, fname, "error", str(exc)))
             continue
-        digest = sha256_of(dest)
+        digest = sha256_of(tmp)
         expected = checksums.get(key)
         if expected and expected != digest:
-            results.append(FetchResult(src.id, fname, "error", f"checksum changed: expected {expected[:12]}, got {digest[:12]}; source vintage may have moved (update CHECKSUMS deliberately)"))
+            # keep the verified file (if any) and park the new one beside it for a deliberate look
+            aside = dest.with_name(dest.name + ".new")
+            tmp.replace(aside)
+            kept = f"kept {dest.name}, " if dest.exists() else ""
+            results.append(FetchResult(src.id, fname, "error", f"checksum changed: expected {expected[:12]}, got {digest[:12]}; source vintage may have moved. {kept}new download at {aside}; to accept it, move it over {dest.name} and delete its line in CHECKSUMS"))
             continue
+        tmp.replace(dest)
         checksums[key] = digest
         results.append(FetchResult(src.id, fname, "ok", digest[:12]))
     return results
@@ -204,11 +197,16 @@ def run(settings: Settings, only: list[str] | None = None) -> list[FetchResult]:
     sources = load_sources(settings.sources_path)
     checksums_path = settings.raw_dir / "CHECKSUMS"
     checksums = read_checksums(checksums_path)
+    from ..mirror import from_env
+
+    mirror = from_env(settings)
+    if mirror is not None:
+        print(f"fetch  raw mirror: bucket {mirror.bucket} (recorded files come from it first)")
     results: list[FetchResult] = []
     for sid, src in sources.items():
         if only and sid not in only:
             continue
-        for r in fetch_source(src, settings, checksums):
+        for r in fetch_source(src, settings, checksums, mirror):
             results.append(r)
             print(f"fetch  {r.status:8s} {r.source}/{r.file}  {r.detail}")
             if r.status == "missing" and src.recipe:

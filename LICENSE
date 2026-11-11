@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+This licence covers the code in this repository only. The datasets the pipeline downloads,
+and anything derived from them (the tiles, manifest and map), keep their own licences, listed
+per source in pipeline/sources.yaml and on the site's /methodology page. Some of them are
+non-commercial or share-alike; see the "Licensing" section of README.md.

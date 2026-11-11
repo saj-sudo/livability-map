@@ -6,7 +6,7 @@ import { bivarPhrase, summarize } from "./summary";
 
 const dim = (id: string, higher_is: DimInfo["higher_is"] = "better", group: DimInfo["group"] = "life"): DimInfo => ({ id, name: id, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "worse", "hazard"), dim("jobs"), dim("house", "worse")];
-const PICKS = { pol: "competitive", race: "diverse" } as const;
+const PICKS = { pol: "competitive" } as const;
 
 const base: HexModel = {
   title: "Colorado",

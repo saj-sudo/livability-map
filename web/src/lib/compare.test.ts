@@ -7,7 +7,7 @@ import { describeHex } from "./inspect";
 const dim = (id: string, kind: DimInfo["kind"], group: DimInfo["group"], higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name: id, group, kind, higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS: DimInfo[] = [dim("heat", "score", "hazard", "worse"), dim("rflood", "score", "hazard", "worse"), dim("cflood", "score", "hazard", "worse"), dim("wstress", "score", "hazard", "worse"), dim("wb", "score", "wellbeing"), dim("jobs", "score", "life"), dim("house", "score", "life", "worse"), dim("pol", "signed", "life")];
 const MANIFEST: ClientManifest = { built_at: null, scenario: "rcp45_ssp245", horizon: "2050", non_commercial: true, tiles: {}, sources: [], dimensionSources: {}, notes: {} };
-const PICKS = { pol: "competitive", race: "diverse" } as const;
+const PICKS = { pol: "competitive" } as const;
 
 const A = { iso_a2: "US", admin1_name: "Colorado", population: 2000, inhabited: true, heat_days: 37, heat_score: 66, heat_ok: true, rflood_ok: false, cflood_ok: false, wstress_ok: false, coverage: 1, exposure: 66, wb_value: 6.8, wb_score: 85, wb_source: "whr", wb_res: "national", bivar: 9, jobs_res: "tract", jobs_raw: 0.95, jobs_score: 73, house_res: "tract", house_raw: 32, house_score: 81, pol_res: "county", pol_lean: 10 };
 const B = { iso_a2: "BD", admin1_name: "Dhaka", population: 13000000, inhabited: true, heat_days: 90, heat_score: 90, heat_ok: true, rflood_ok: false, cflood_ok: false, wstress_ok: false, coverage: 1, exposure: 90, wb_value: 4.1, wb_score: 35, wb_source: "whr", wb_res: "national", bivar: 3, jobs_res: "national", jobs_raw: 84, jobs_score: 40, house_res: "none", pol_res: "none" };

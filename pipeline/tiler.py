@@ -422,9 +422,18 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
         writer.finalize(header, metadata)
     tmp.replace(out)
     report.bytes = out.stat().st_size
-    report.sha256 = hashlib.sha256(out.read_bytes()).hexdigest()
+    report.sha256 = sha256_file(out)
     report.seconds = time.time() - t0
     return report
+
+
+def sha256_file(path: Path) -> str:
+    """sha256 in 1 MB chunks (archives run to hundreds of MB; never read whole into memory)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _tile_xy_from_id(tileid: int, z: int) -> tuple[int, int]:

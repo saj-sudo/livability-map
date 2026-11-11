@@ -76,7 +76,16 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, children }: Prop
       aria-label="Map panels"
     >
       <div className="touch-none select-none px-3 pb-1 pt-2" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-        <button type="button" className="mx-auto block h-1.5 w-10 rounded-full bg-rule" aria-label={snap === "full" ? "Collapse panels" : "Expand panels"} />
+        <button
+          type="button"
+          className="mx-auto block h-1.5 w-10 rounded-full bg-rule"
+          aria-label={snap === "full" ? "Collapse panels" : "Expand panels"}
+          // keyboard and switch access (detail 0); a pointer tap is already handled by the drag
+          // handlers on the parent, so it must not cycle twice
+          onClick={(e) => {
+            if (e.detail === 0) onSnap(snap === "peek" ? "half" : snap === "half" ? "full" : "peek");
+          }}
+        />
         <div className="mt-2 flex gap-1" role="tablist">
           {tabs.map((t) => (
             <button

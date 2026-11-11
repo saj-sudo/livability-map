@@ -87,8 +87,8 @@ dimension, and the map renders low-confidence areas visibly differently.
 6. **Composite scores are transparent and adjustable.** The default view is a bivariate
    choropleth that needs no weighting. Any single-number composite exposes its weights as sliders.
 7. **No trackers, no analytics scripts, no accounts.**
-8. **Not every dimension has a "better".** Composition dimensions (§20.2) are matched to what the
-   person picks, never ranked by the pipeline.
+8. **Not every dimension has a "better".** Composition dimensions (§20.2) are never ranked by the
+   pipeline and never weighted by the person: they are shown per place as context (§13.40).
 
 ## 5. Architecture and data flow
 
@@ -136,14 +136,18 @@ CORS). No database in the web app.
   |  tiles     python tiler (tippecanoe optional), one archive per plan archive, zooms from the manifest: |
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
-  |  publish   every archive + manifest.json -> R2 via boto3 (.env) or web/public/data (local) (§13.24)   |
+  |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
+  |            no coverage drop > 5% against the live build (§13.39); publish runs it again               |
+  |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
+  |            whole-world builds only; archives under content-addressed keys (immutable),                |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.39)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
   +----------------------------------------+    range      +------------------------------------------+
   |  web/  Next.js 16 static export        | <--requests-- |  Cloudflare R2 (public, custom domain)   |
-  |  on Cloudflare Pages                   |               |  hexes / hexes_nbhd / hexes_city .pmtiles|
-  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json                           |
+  |  on Cloudflare Pages                   |               |  <archive>.<sha12>.pmtiles (immutable)   |
+  |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
   |  views: bivariate | per hazard |       |
@@ -472,6 +476,11 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   only); CA jobs / incmix / house 98%; AU jobs / house / rent 100%.
 - Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
   when one would pass that (§14.10).
+- Releases (§13.39): `validate` checks a build without uploading; `publish --target r2` validates
+  against the live manifest, uploads content-addressed archives and switches `manifest.json`
+  last; `npm run deploy` builds the site against that live manifest. Old archives stay in the
+  bucket (about 0.7 GB per release), so earlier Pages builds keep working; prune by hand when
+  a release is long retired.
 
 ### 11.1 Fixture world
 
@@ -643,6 +652,89 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     the other. Both are US-only, population-weighted from tracts, and `verified: search` until
     fetched on the laptop; PLACES is `manual` because data.cdc.gov dataset ids change with each
     release. Presets are unchanged.
+39. **Release safety** (2026-10-18, before the first R2 publish): a build reaches the live map
+    only through checks, and a release can be rolled back.
+    - *Code in the cache key.* Every stage fingerprint carries a digest of the stage module and
+      every `pipeline` module it imports (transitively, including the lazily registered prep
+      loaders), taken over the syntax tree without docstrings: a comment never rebuilds, a
+      changed expression always does. `--force` is no longer needed after a code change. The
+      first run after this change rebuilds everything once.
+    - *Per-dimension freshness.* `dims` fingerprints each dimension (its sources' raw files, its
+      registry entry, the resolution's hexes / pop / admin, the code) and a plain run recomputes
+      only the stale ones; `--only` forces the named ones and never marks the others fresh.
+    - *Fetch keeps the verified file.* A re-download whose checksum differs from CHECKSUMS is
+      parked as `<file>.new` and reported; the verified file stays. A hand-placed (manual)
+      file that differs from last time is accepted but announced.
+    - *`validate` stage* between `tiles` and `publish` (and run again inside `publish`):
+      archives match the manifest's bytes and sha256 and are fresh for their parquet and code;
+      every hazard and every life dimension reaches an inhabited hex at the land resolutions
+      (a dimension whose sources are all missing downloads is a warning, since the web app
+      disables it); against the live build, no resolution, hazard or dimension loses more than
+      5% of its inhabited coverage (`--max-drop` for an explained drop) and none disappears.
+    - *R2 release order.* Fixture, `--bbox` and partial builds never go to R2 (`auto` resolves
+      to `local` for them). Archives upload as `<archive>.<sha12>.pmtiles` with
+      `immutable` caching, are never overwritten, and are skipped when already present; the
+      first one is range- and CORS-checked; only then is `manifest.json` (`no-cache`) switched,
+      with a dated copy under `manifests/`. `npm run deploy` builds against that live manifest
+      (never a local one), refuses fixture, bbox, local or plain-keyed manifests and archives the
+      bucket does not serve, and keeps `public/data` out of the Pages upload. Tiles and app
+      change together; rollback is redeploying an earlier Pages build, whose archives are still
+      in the bucket.
+40. **Racial composition is context, never a priority** (Saj, 2026-10-19): the priorities view
+    used to let a person pick a group ("majority Black", "diverse", ...) and colour tracts by how
+    well their composition matched. That is sorting neighbourhoods by who lives there, the
+    steering §3 and §16 rule out at every scale, not only per property. Composition dimensions
+    now have no slider and no part in the composite (`weightable()` in `web/src/lib/dims.ts`);
+    old links that weight `race` or carry `race=` are read without it. The place panel still
+    shows the tract's shares with their source, because knowing a place's demographics is
+    legitimate context; ranking or filtering by them is not. Political lean stays weightable
+    (not a protected class), labelled US-only as before.
+41. **The web app fails visibly, never blankly** (2026-10-19):
+    - *No WebGL 2*: the map page says so and links to /methodology and /about instead of an
+      empty canvas.
+    - *Basemap down*: the hex sources and layers are added on the first parsed style
+      (`style.load`, not `load`, which also waits for every basemap tile). A basemap style that
+      errors or takes over 8 s is replaced by a plain background style with no external request,
+      with a persistent notice; theme swaps keep the plain background. Later basemap tile or
+      glyph errors only leave a gap behind the hexes.
+    - *Tile archive unreachable*: a persistent `role="alert"` notice naming the archive, kept
+      apart from the transient hints. Logic in `web/src/lib/mapHealth.ts` (vitest).
+    - `app/error.tsx` and `app/global-error.tsx` catch render errors with a retry; nothing is
+      reported anywhere (invariant 7).
+    - *Security headers*: `deploy.mjs` writes `out/_headers` (`scripts/headers.mjs`) with a
+      Content-Security-Policy per page whose `script-src` lists the sha256 of that page's
+      inline scripts (no `unsafe-inline` for scripts), `connect-src` limited to the site, the R2
+      origin and OpenFreeMap, `frame-ancestors 'none'` (revisit for the v2 embed), plus nosniff,
+      referrer, permissions and immutable caching for `/_next/static/*`. The CSP turns
+      invariant 7 and the §17 "no third-party request" criterion into something the browser
+      enforces.
+    - *Accessibility*: search fly-to honours `prefers-reduced-motion`; the phone sheet handle
+      works from a keyboard.
+    - *e2e in CI*: a job builds the fixture world, serves `out/` with its `_headers` applied and
+      Range support (`scripts/serve.mjs`) and runs Playwright (`web/e2e/smoke.spec.ts`): hexes
+      draw and a click opens the place panel with the basemap host blocked, the no-WebGL and
+      missing-archive states, and every page under its CSP with no violation.
+42. **Raw-input mirror** (2026-10-19): CHECKSUMS pins every input's bytes, but several direct
+    sources serve whatever is current (WPdx, ILOSTAT, OECD, Natural Earth, BEA) and three are
+    manual, so a clean machine could not rebuild a published map. A private R2 bucket
+    (`R2_RAW_BUCKET`, refused if it is the public tiles bucket) holds every recorded raw file
+    under `raw/<sha256>`. `python -m pipeline mirror` uploads what it lacks (only files whose
+    bytes match CHECKSUMS); `fetch` restores a recorded file from it before going upstream and
+    checks the digest, falling back to upstream when the mirror lacks the file or holds bad bytes.
+    Refreshing a vintage stays deliberate: delete its CHECKSUMS line, fetch upstream, `mirror`.
+    `publish --target r2` notes (does not refuse) a release whose inputs are not all mirrored.
+    Keeping private copies for reproducibility is not redistribution, so non-commercial or
+    unlicensed inputs may sit there; they still never reach tiles without a confirmed licence.
+    CI now installs Python dependencies with `uv sync --locked`, so it tests the locked versions.
+43. **Public repository, MIT code** (Saj, 2026-10-19): `saj-sudo/livability-map` is public on
+    GitHub. The code is MIT (`LICENSE`, `pyproject.toml`); the data is not: every source keeps
+    its own licence, the map is non-commercial because of SHDI, Meta RWI and Ookla, and WPdx
+    values are share-alike (README "Licensing"). Consequences of being public: nothing secret
+    or non-redistributable is ever committed (`.env`, `data/raw/` and the outputs stay
+    gitignored; only `data/raw/CHECKSUMS` is tracked), commits use the GitHub noreply address,
+    and documents written for third parties (the permission requests in docs/manual-steps.md)
+    are public too. The site itself is not hosted yet: Cloudflare Pages (app) and R2 (tiles)
+    wait on the credentials in docs/manual-steps.md item 1.
 
 ## 14. VERIFY before code depends on it
 
@@ -759,6 +851,37 @@ embeddable iframe.
 Never per property: census counts below the block group, racial composition, income, politics.
 The Fair Housing Act and its EU equivalents are the reason, not just taste.
 
+**Next steps (open, unscheduled; logged 2026-11-11).** Not tied to a session yet. Tick or move
+an item when it is done or scheduled.
+
+Map honesty, before or with the first public release:
+
+- [ ] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
+  Gulf coast, West Africa, Southeast Asia) look milder than their heat stress is. Now: say so
+  in `/methodology` and on the heat row of the place panel. Later: a humid-heat layer (CCKP
+  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships.
+- [ ] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
+  percentile among inhabited land at that resolution, not an absolute risk level. Optionally
+  show the CMIP6 model spread (CCKP p10 / p90) as an uncertainty note on heat.
+- [ ] *Check against FEMA NRI.* With `nri` on the map (§13.38), correlate the riverine, coastal
+  and heat scores with NRI's building loss rate (and its hazard-specific losses) by US tract and
+  county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
+  constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
+  gross misses, not a tight fit.
+- [ ] *`--adopt-cache`, only if needed.* A one-time flag that stamps existing outputs with the
+  §13.39 fingerprints instead of rebuilding them. Moot once the release-candidate rebuild has
+  run.
+
+Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
+
+- [ ] `dims` memory: load prepared layers per dimension and free them (peak 7.9 GB at res 6).
+- [ ] Atomic writes for stage parquets and `manifest.json` (temp file, then rename), as the
+  tiler already does.
+- [ ] A per-source minimum non-null share in `prep.load_layer`, so a half-empty layer fails
+  before a live baseline exists for `validate` to compare against.
+- [ ] Tests for `rawfiles` (zip extraction), `timing` and `prep/gsap.py`.
+- [ ] Remove the dead `config.h3_backend()`, which defaults to h3ronpy (rejected, §15.11).
+
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |
@@ -812,7 +935,8 @@ The Fair Housing Act and its EU equivalents are the reason, not just taste.
   (`sources.yaml` review, `publish` refuses unconfirmed sources, 2026-09-22)
 - [x] `/about` says clearly that the map does not recommend where to live. (2026-09-22)
 - [x] With the site served locally, every request the browser makes goes to the same origin
-  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Search, hover, the
+  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Since §13.41 the
+  per-page CSP enforces it and the CI e2e job fails on any violation. Search, hover, the
   inspector bars, compare, the intro and the phone sheet never show a missing value as zero.
   (Playwright network audit and browser checks on the res-4 build, Session 9, 2026-09-22; the
   R2 half of the zoom-2 load-time criterion above is still open)
@@ -880,7 +1004,8 @@ Three kinds:
 - `signed`: a lean stored as `{id}_lean` in -100..100 (political two-party margin). The client
   turns it into a match against what the person picks (left, right, competitive).
 - `composition`: integer percent shares (`race_w`, `race_b`, `race_h`, `race_a`, `race_o`) plus
-  `race_maj`. The client lets the person pick a target group or "diverse" and computes a match.
+  `race_maj`. Shown in the place panel as shares; never scored, never weighted, never matched
+  against a group the person picks (§13.40).
   Never scored server-side (invariant 8).
 
 Joiners run in priority order; the first that yields a value sets `{id}_raw` and `{id}_res`.
@@ -911,8 +1036,8 @@ percentile a US-only value against the world.
 ### 20.5 The My-priorities view
 
 Client-side composite: `sum(w_i * match_i * has_i) / sum(w_i * has_i)` as a MapLibre
-expression, where `match_i` is the score (or the derived match for signed and composition
-dims) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
+expression, where `match_i` is the score (or the derived match for the signed dimension;
+composition dimensions are never weighted, §13.40) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
 denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`:
 
 | Preset | Emphasis |

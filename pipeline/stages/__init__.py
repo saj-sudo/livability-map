@@ -1,6 +1,6 @@
 """Pipeline stages in SPEC §5 order. Each exposes ``run(settings)`` and is idempotent."""
 
-STAGE_ORDER = ["fetch", "urban", "grid", "pop", "admin", "hazards", "dims", "score", "export", "tiles", "publish"]
+STAGE_ORDER = ["fetch", "urban", "grid", "pop", "admin", "hazards", "dims", "score", "export", "tiles", "validate", "publish"]
 
 
 class NotImplementedStage(RuntimeError):

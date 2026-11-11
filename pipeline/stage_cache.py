@@ -1,7 +1,7 @@
 """Idempotency helper (SPEC §11): a stage skips work when its output exists and the recorded
 fingerprint of inputs, parameters and code matches. The fingerprint lives in ``<output>.meta.json``.
 
-Code is part of the fingerprint (SPEC §13.38): params that name a ``stage`` (every stage) or a
+Code is part of the fingerprint (SPEC §13.39): params that name a ``stage`` (every stage) or a
 ``loader`` (prep) carry a digest of that module and every ``pipeline`` module it imports,
 transitively, including the ``"pipeline.x:func"`` strings registries import lazily. The digest
 is taken over the syntax tree without docstrings, so a comment or a reflowed line never

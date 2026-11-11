@@ -10,7 +10,7 @@ Rules:
   downloaded. The stage checks the files are present and prints the recipe if not.
 - ``file://`` URLs (fixtures) are copied through the same checksum path as HTTP downloads.
 - Redirects are followed and Git LFS pointer files are rejected (geoBoundaries, §15.7).
-- With a raw mirror configured (``R2_RAW_BUCKET``, SPEC §13.41), a file whose checksum is recorded
+- With a raw mirror configured (``R2_RAW_BUCKET``, SPEC §13.42), a file whose checksum is recorded
   is restored from the mirror before going upstream: the exact bytes the map was built from.
 """
 

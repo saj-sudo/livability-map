@@ -40,7 +40,7 @@ jobs:
       # builds with the empty fallback manifest (no data pulls in CI, SPEC §11)
       - run: npm run build
 
-  # SPEC §13.40: the built site on the fixture world, served with its _headers (CSP enforced),
+  # SPEC §13.41: the built site on the fixture world, served with its _headers (CSP enforced),
   # driven in headless Chromium. The basemap host is blocked inside the tests.
   e2e:
     runs-on: ubuntu-latest

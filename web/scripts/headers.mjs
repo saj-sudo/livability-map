@@ -1,4 +1,4 @@
-// Cloudflare Pages `_headers` for the static export (SPEC §13.40). Run after `next build`:
+// Cloudflare Pages `_headers` for the static export (SPEC §13.41). Run after `next build`:
 //   node scripts/headers.mjs [outDir=out] [dataOrigin]
 // deploy.mjs does this with the R2 origin; the e2e smoke test does it with no data origin
 // (tiles from the same origin) and serves the result with scripts/serve.mjs.

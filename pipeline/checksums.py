@@ -1,6 +1,6 @@
 """``data/raw/CHECKSUMS`` and sha256 helpers (SPEC §11). A leaf module: ``manifest``, ``fetch``
 and ``mirror`` all read checksums, and keeping this import-light keeps stage code fingerprints
-(SPEC §13.38) from depending on code that cannot change their output.
+(SPEC §13.39) from depending on code that cannot change their output.
 """
 
 from __future__ import annotations

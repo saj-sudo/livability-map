@@ -78,7 +78,7 @@ export function matchExpr(d: DimInfo, p: Picks): Expr {
     if (p.pol === "right") return ["/", ["-", 100, lean], 2] as unknown as Expr;
     return ["-", 100, ["abs", lean]] as unknown as Expr; // competitive: closer to even is better
   }
-  throw new Error(`${d.id} is a composition dimension: context only, never weighted (SPEC §13.39)`);
+  throw new Error(`${d.id} is a composition dimension: context only, never weighted (SPEC §13.40)`);
 }
 
 /** sum(w_i * match_i * has_i) / sum(w_i * has_i); -1 when no weighted dimension has data. */

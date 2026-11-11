@@ -1,4 +1,4 @@
-"""Raw-input mirror (SPEC §13.41): a private R2 bucket that holds every raw file recorded in
+"""Raw-input mirror (SPEC §13.42): a private R2 bucket that holds every raw file recorded in
 ``data/raw/CHECKSUMS``, keyed by its sha256 (``raw/<sha256>``), so a clean machine can rebuild the
 same map after an upstream file moves, changes or disappears.
 

@@ -39,7 +39,7 @@ describe("composite (SPEC §20.5)", () => {
     expect(evaluate(comp, { pol_lean: -60 })).toBe(40);
   });
 
-  it("never weights a composition dimension, even when a weight arrives (SPEC §13.39)", () => {
+  it("never weights a composition dimension, even when a weight arrives (SPEC §13.40)", () => {
     const shares = { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2 };
     expect(compositeExpression(DIMS, { race: 3 }, { pol: "competitive" })).toBe(-1);
     expect(evaluate(compositeExpression(DIMS, { race: 3, jobs: 1 }, { pol: "competitive" }), { ...shares, jobs_score: 40 })).toBe(40);

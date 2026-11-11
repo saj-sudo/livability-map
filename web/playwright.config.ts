@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// e2e smoke test (SPEC §13.40): the fixture build served from out/ with its _headers applied.
+// e2e smoke test (SPEC §13.41): the fixture build served from out/ with its _headers applied.
 // Build first: python -m pipeline --fixtures --res 4 all, then npm run build and
 // node scripts/headers.mjs out (CI's e2e job does all three).
 const PORT = 3100;

@@ -1,6 +1,6 @@
 // Shareable URL state (SPEC §10): ?lat&lng&z&view&preset&w=<csv>&pol&conf&inh.
 // Parsing is tolerant (garbage -> defaults); serialising writes only non-default keys. Links from
-// before §13.39 may weight `race` or carry `race=`: both are ignored (context only, never weighted).
+// before §13.40 may weight `race` or carry `race=`: both are ignored (context only, never weighted).
 
 import { CONTEXT_ONLY_IDS, DIM_ORDER } from "./dims";
 import { presetById, type PolPick } from "../presets";

@@ -1,5 +1,5 @@
 // Named weight sets for the My-priorities view (SPEC §20.5). Weights are 0-5 per dimension id;
-// `pol` carries the person's pick for the signed dimension. Composition is never weighted (§13.39).
+// `pol` carries the person's pick for the signed dimension. Composition is never weighted (§13.40).
 
 export type PolPick = "left" | "right" | "competitive";
 

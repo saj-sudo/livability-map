@@ -249,7 +249,7 @@ def _dim_spec(dim: Dimension, sources: dict[str, Source]) -> str:
 def dim_fingerprints(settings: Settings, dims: list[Dimension], sources: dict[str, Source], res: int) -> dict[str, str]:
     """Per dimension: its inputs (the res's hexes, pop, admin and its own sources' raw files),
     its registry entry and the stage code. A plain ``dims`` run recomputes exactly the
-    dimensions whose fingerprint moved (SPEC §13.38)."""
+    dimensions whose fingerprint moved (SPEC §13.39)."""
     params = {"res": res, "bbox": settings.bbox, "prep_version": prep.PREP_VERSION, "stage": "dims"}
     return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources)}) for d in dims}
 

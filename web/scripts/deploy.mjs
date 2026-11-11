@@ -1,4 +1,4 @@
-// Deploy the static export to Cloudflare Pages (SPEC §13.14, §13.24, §13.38).
+// Deploy the static export to Cloudflare Pages (SPEC §13.14, §13.24, §13.39).
 // Reads ../.env (never printed): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, CF_PAGES_PROJECT,
 // NEXT_PUBLIC_DATA_BASE. Usage: npm run deploy [-- --branch preview]
 //

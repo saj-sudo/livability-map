@@ -1,4 +1,4 @@
-// A static server for the e2e smoke test (SPEC §13.40): serves out/ the way Cloudflare does what
+// A static server for the e2e smoke test (SPEC §13.41): serves out/ the way Cloudflare does what
 // matters here, i.e. it applies out/_headers (so the CSP is enforced in the browser), answers
 // Range requests with 206 (PMTiles reads byte ranges) and serves 404.html for unknown paths.
 //   node scripts/serve.mjs [outDir=out] [port=3100]

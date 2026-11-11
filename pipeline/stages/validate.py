@@ -1,4 +1,4 @@
-"""``validate`` stage (SPEC §5, §13.38): the gate between ``tiles`` and ``publish``.
+"""``validate`` stage (SPEC §5, §13.39): the gate between ``tiles`` and ``publish``.
 
 ``publish`` runs the same checks itself and refuses on any error, so a broken build cannot ship
 by skipping this stage; running it alone answers "is this build safe to publish?" without

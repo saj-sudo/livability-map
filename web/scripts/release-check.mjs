@@ -1,4 +1,4 @@
-// What `npm run deploy` checks before it builds the site against the live manifest (SPEC §13.38).
+// What `npm run deploy` checks before it builds the site against the live manifest (SPEC §13.39).
 // Pure so vitest covers it; deploy.mjs does the network and the build.
 
 /**

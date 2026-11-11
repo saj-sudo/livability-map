@@ -4,7 +4,7 @@ import { headersFile, inlineScriptHashes, pageCsp, pagePath } from "./headers.mj
 
 const sha = (s) => `'sha256-${createHash("sha256").update(s, "utf8").digest("base64")}'`;
 
-describe("_headers (SPEC §13.40)", () => {
+describe("_headers (SPEC §13.41)", () => {
   it("hashes inline scripts only", () => {
     const html = `<script>a()</script><script src="/x.js"></script><script id="t">b()</script><script></script><script>a()</script>`;
     expect(inlineScriptHashes(html)).toEqual([sha("a()"), sha("b()")]);

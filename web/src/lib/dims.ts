@@ -84,7 +84,7 @@ const FALLBACK: DimInfo[] = [
 
 /** Composition dimensions (racial and ethnic composition) are context in the place panel, never
  *  a priority: weighting one sorts neighbourhoods by who lives there, which is steering
- *  (SPEC §3, decision §13.39). No slider, no part in the composite, ignored in old links. */
+ *  (SPEC §3, decision §13.40). No slider, no part in the composite, ignored in old links. */
 export const weightable = (d: Pick<DimInfo, "kind">): boolean => d.kind !== "composition";
 export const CONTEXT_ONLY_IDS: ReadonlySet<string> = new Set(FALLBACK.filter((d) => !weightable(d)).map((d) => d.id));
 

@@ -45,7 +45,7 @@ describe("url state", () => {
     expect(back.weights).toEqual({ wb: 2 });
   });
 
-  it("ignores a race weight and pick from links made before §13.39", () => {
+  it("ignores a race weight and pick from links made before §13.40", () => {
     // w= slots: heat, rflood, cflood, wstress, wb, jobs, transit, school, lgbtq, pol, race
     const old = parseState("?view=priorities&w=0,0,0,0,0,2,0,0,0,0,4&race=b");
     expect(old.weights).toEqual({ jobs: 2 });

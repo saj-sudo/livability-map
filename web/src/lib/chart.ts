@@ -11,7 +11,7 @@ export type Props = Record<string, unknown>;
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** 0..100 match of one dimension on a hex, or null when the hex has no value for it (or the
- *  dimension is context only, §13.39). */
+ *  dimension is context only, §13.40). */
 export function matchValue(d: DimInfo, props: Props, picks: Picks): number | null {
   if (!weightable(d)) return null;
   if (!(hasAttr(d) in props) || props[hasAttr(d)] === null || props[hasAttr(d)] === undefined) return null;

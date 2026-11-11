@@ -1,4 +1,4 @@
-# Deploying (SPEC §13.14, §13.24, §13.38, §15.14)
+# Deploying (SPEC §13.14, §13.24, §13.39, §15.14)
 
 Static-first: the pipeline publishes the tile archives + `manifest.json` to Cloudflare R2 and the
 Next.js static export goes to Cloudflare Pages. No servers, no database, no per-request work.
@@ -45,7 +45,7 @@ as it was):
 local build or names an archive the bucket does not serve, builds the site against it, drops
 `out/data/` (tiles never go to Pages), writes `out/_headers` (a Content-Security-Policy per page
 listing the hashes of its inline scripts and allowing only the R2 origin and OpenFreeMap, SPEC
-§13.40) and deploys with a pinned wrangler. To check the headers locally:
+§13.41) and deploys with a pinned wrangler. To check the headers locally:
 `npm run build && node scripts/headers.mjs out https://<your R2 domain> && node scripts/serve.mjs out`.
 
 **Rolling back:** in the Cloudflare dashboard, Pages → the project → Deployments → an earlier
@@ -54,7 +54,7 @@ the bucket, so the site is whole again at once. The browser never reads the buck
 `manifest.json`; only the next `npm run deploy` does. Before deploying again, point it back by
 copying the matching `manifests/<built_at>.json` over `manifest.json` in the bucket.
 
-## Raw-input mirror (SPEC §13.41)
+## Raw-input mirror (SPEC §13.42)
 
 So a published map can be rebuilt after an upstream file moves or disappears, keep a private copy
 of every raw input:

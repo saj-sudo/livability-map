@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Smoke test of the built site on the fixture world (SPEC §13.40). The basemap host is blocked
+// Smoke test of the built site on the fixture world (SPEC §13.41). The basemap host is blocked
 // in every test so CI never depends on a third party, which also exercises the plain-background
 // fallback. Every page must run under its CSP with no violation.
 

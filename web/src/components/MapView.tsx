@@ -5,7 +5,7 @@
 // the basemap on a theme change while carrying the hex stack over (no tile refetch).
 // Everything the person sees comes from the vector tile attributes; there is no API.
 // The data never waits on the basemap: hexes are added as soon as a style is parsed, and a
-// basemap that fails or stalls is replaced by a plain background (§13.40, lib/mapHealth.ts).
+// basemap that fails or stalls is replaced by a plain background (§13.41, lib/mapHealth.ts).
 
 import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";

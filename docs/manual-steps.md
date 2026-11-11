@@ -38,7 +38,7 @@ Needed for `publish --target r2` and `npm run deploy` (SPEC §13.24).
 2. Connect a custom domain to the bucket (public access), or note the r2.dev URL.
 3. Create a Pages project for the web app.
 4. Create a second, private R2 bucket for the raw-input mirror (no public access, no custom
-   domain) and give the API token read and write on it too (SPEC §13.41).
+   domain) and give the API token read and write on it too (SPEC §13.42).
 5. Create `.env` in the repo root (it is gitignored) with:
    `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_RAW_BUCKET`,
    `R2_PUBLIC_BASE_URL` (the public bucket URL), `R2_ALLOWED_ORIGINS` (the Pages URL and

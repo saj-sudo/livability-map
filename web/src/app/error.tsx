@@ -1,6 +1,6 @@
 "use client";
 
-// Error boundary for every page under the root layout (SPEC §13.40): the header stays, the
+// Error boundary for every page under the root layout (SPEC §13.41): the header stays, the
 // page says plainly what happened and offers a retry. Nothing is reported anywhere
 // (invariant 7: no trackers); the error goes to the browser console only.
 

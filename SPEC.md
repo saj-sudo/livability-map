@@ -88,7 +88,7 @@ dimension, and the map renders low-confidence areas visibly differently.
    choropleth that needs no weighting. Any single-number composite exposes its weights as sliders.
 7. **No trackers, no analytics scripts, no accounts.**
 8. **Not every dimension has a "better".** Composition dimensions (§20.2) are never ranked by the
-   pipeline and never weighted by the person: they are shown per place as context (§13.39).
+   pipeline and never weighted by the person: they are shown per place as context (§13.40).
 
 ## 5. Architecture and data flow
 
@@ -137,10 +137,10 @@ CORS). No database in the web app.
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
   |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
-  |            no coverage drop > 5% against the live build (§13.38); publish runs it again               |
+  |            no coverage drop > 5% against the live build (§13.39); publish runs it again               |
   |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
   |            whole-world builds only; archives under content-addressed keys (immutable),                |
-  |            range + CORS check, then manifest.json switched last (§13.24, §13.38)                      |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.39)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
@@ -476,7 +476,7 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   only); CA jobs / incmix / house 98%; AU jobs / house / rent 100%.
 - Each tile archive stays under ~300 MB; the plan's `archive` field splits layers across files
   when one would pass that (§14.10).
-- Releases (§13.38): `validate` checks a build without uploading; `publish --target r2` validates
+- Releases (§13.39): `validate` checks a build without uploading; `publish --target r2` validates
   against the live manifest, uploads content-addressed archives and switches `manifest.json`
   last; `npm run deploy` builds the site against that live manifest. Old archives stay in the
   bucket (about 0.7 GB per release), so earlier Pages builds keep working; prune by hand when
@@ -641,7 +641,7 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     labelled share-alike (confirmation requested in docs/manual-steps.md). The presets use the new
     layers where they fit: Early career weights `city`, Raising kids `conflict` and `water`,
     Retiring `walkcare`.
-38. **Release safety** (2026-10-18, before the first R2 publish): a build reaches the live map
+39. **Release safety** (2026-10-18, before the first R2 publish): a build reaches the live map
     only through checks, and a release can be rolled back.
     - *Code in the cache key.* Every stage fingerprint carries a digest of the stage module and
       every `pipeline` module it imports (transitively, including the lazily registered prep
@@ -669,7 +669,7 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       bucket does not serve, and keeps `public/data` out of the Pages upload. Tiles and app
       change together; rollback is redeploying an earlier Pages build, whose archives are still
       in the bucket.
-39. **Racial composition is context, never a priority** (Saj, 2026-10-19): the priorities view
+40. **Racial composition is context, never a priority** (Saj, 2026-10-19): the priorities view
     used to let a person pick a group ("majority Black", "diverse", ...) and colour tracts by how
     well their composition matched. That is sorting neighbourhoods by who lives there, the
     steering §3 and §16 rule out at every scale, not only per property. Composition dimensions
@@ -678,7 +678,7 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     shows the tract's shares with their source, because knowing a place's demographics is
     legitimate context; ranking or filtering by them is not. Political lean stays weightable
     (not a protected class), labelled US-only as before.
-40. **The web app fails visibly, never blankly** (2026-10-19):
+41. **The web app fails visibly, never blankly** (2026-10-19):
     - *No WebGL 2*: the map page says so and links to /methodology and /about instead of an
       empty canvas.
     - *Basemap down*: the hex sources and layers are added on the first parsed style
@@ -703,7 +703,7 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       Range support (`scripts/serve.mjs`) and runs Playwright (`web/e2e/smoke.spec.ts`): hexes
       draw and a click opens the place panel with the basemap host blocked, the no-WebGL and
       missing-archive states, and every page under its CSP with no violation.
-41. **Raw-input mirror** (2026-10-19): CHECKSUMS pins every input's bytes, but several direct
+42. **Raw-input mirror** (2026-10-19): CHECKSUMS pins every input's bytes, but several direct
     sources serve whatever is current (WPdx, ILOSTAT, OECD, Natural Earth, BEA) and three are
     manual, so a clean machine could not rebuild a published map. A private R2 bucket
     (`R2_RAW_BUCKET`, refused if it is the public tiles bucket) holds every recorded raw file
@@ -715,7 +715,7 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     Keeping private copies for reproducibility is not redistribution, so non-commercial or
     unlicensed inputs may sit there; they still never reach tiles without a confirmed licence.
     CI now installs Python dependencies with `uv sync --locked`, so it tests the locked versions.
-42. **Public repository, MIT code** (Saj, 2026-10-19): `saj-sudo/livability-map` is public on
+43. **Public repository, MIT code** (Saj, 2026-10-19): `saj-sudo/livability-map` is public on
     GitHub. The code is MIT (`LICENSE`, `pyproject.toml`); the data is not: every source keeps
     its own licence, the map is non-commercial because of SHDI, Meta RWI and Ookla, and WPdx
     values are share-alike (README "Licensing"). Consequences of being public: nothing secret
@@ -891,7 +891,7 @@ The Fair Housing Act and its EU equivalents are the reason, not just taste.
   (`sources.yaml` review, `publish` refuses unconfirmed sources, 2026-09-22)
 - [x] `/about` says clearly that the map does not recommend where to live. (2026-09-22)
 - [x] With the site served locally, every request the browser makes goes to the same origin
-  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Since §13.40 the
+  (page, fonts, tiles, gazetteer) or to the basemap provider; nothing else. Since §13.41 the
   per-page CSP enforces it and the CI e2e job fails on any violation. Search, hover, the
   inspector bars, compare, the intro and the phone sheet never show a missing value as zero.
   (Playwright network audit and browser checks on the res-4 build, Session 9, 2026-09-22; the
@@ -961,7 +961,7 @@ Three kinds:
   turns it into a match against what the person picks (left, right, competitive).
 - `composition`: integer percent shares (`race_w`, `race_b`, `race_h`, `race_a`, `race_o`) plus
   `race_maj`. Shown in the place panel as shares; never scored, never weighted, never matched
-  against a group the person picks (§13.39).
+  against a group the person picks (§13.40).
   Never scored server-side (invariant 8).
 
 Joiners run in priority order; the first that yields a value sets `{id}_raw` and `{id}_res`.
@@ -993,7 +993,7 @@ percentile a US-only value against the world.
 
 Client-side composite: `sum(w_i * match_i * has_i) / sum(w_i * has_i)` as a MapLibre
 expression, where `match_i` is the score (or the derived match for the signed dimension;
-composition dimensions are never weighted, §13.39) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
+composition dimensions are never weighted, §13.40) and `has_i` is 1 when the hex has that dimension. Missing dimensions leave the
 denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`:
 
 | Preset | Emphasis |

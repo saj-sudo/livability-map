@@ -19,7 +19,7 @@ const CASES: { name: string; weights: Record<string, number>; picks: Picks; prop
   { name: "signed left", weights: { pol: 2, jobs: 1 }, picks: { pol: "left" }, props: { pol_lean: 60, jobs_score: 10 } },
   { name: "signed right", weights: { pol: 1 }, picks: { pol: "right" }, props: { pol_lean: 60 } },
   { name: "signed competitive", weights: { pol: 1 }, picks: { pol: "competitive" }, props: { pol_lean: -60 } },
-  { name: "a composition weight is ignored (§13.39)", weights: { race: 3, heat: 1 }, picks: { pol: "competitive" }, props: { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, heat_score: 10 } },
+  { name: "a composition weight is ignored (§13.40)", weights: { race: 3, heat: 1 }, picks: { pol: "competitive" }, props: { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, heat_score: 10 } },
 ];
 
 describe("chart model agrees with the map expression (SPEC §20.5)", () => {
@@ -49,7 +49,7 @@ describe("chart model agrees with the map expression (SPEC §20.5)", () => {
     expect(missingCount(bars)).toEqual({ missing: 1, total: 3 });
   });
 
-  it("gives a composition dimension no bar and no match (§13.39)", () => {
+  it("gives a composition dimension no bar and no match (§13.40)", () => {
     const props = { race_w: 20, race_b: 70, race_h: 5, race_a: 3, race_o: 2, jobs_score: 50 };
     expect(matchValue(dim("race", "composition"), props, { pol: "competitive" })).toBeNull();
     expect(priorityBars(props, DIMS, { race: 5, jobs: 1 }, { pol: "competitive" }).map((b) => b.id)).toEqual(["jobs"]);

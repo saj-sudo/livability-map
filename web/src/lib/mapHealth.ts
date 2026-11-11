@@ -1,4 +1,4 @@
-// What the map does when something it depends on fails (SPEC §10, decision §13.40). Pure, so
+// What the map does when something it depends on fails (SPEC §10, decision §13.41). Pure, so
 // vitest covers it; MapView wires it to MapLibre events and MapApp shows the result.
 //
 // - No WebGL 2: MapLibre cannot draw at all, so the page says so instead of a blank canvas.

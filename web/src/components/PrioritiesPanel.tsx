@@ -3,7 +3,7 @@
 // My-priorities controls (SPEC §20.5, decision §13.15): presets as chips, a 0-5 slider per
 // dimension with its coverage chip and a numeric readout, and the pick for the signed (political
 // lean) dimension. Composition dimensions get no slider: they are context in the place panel,
-// never a priority (§13.39). Moving a slider clears the preset; picking a preset replaces the
+// never a priority (§13.40). Moving a slider clears the preset; picking a preset replaces the
 // weights. Dimensions are grouped by the manifest's `group`, so a new dimension lands in the
 // right place with no code change.
 

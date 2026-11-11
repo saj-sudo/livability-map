@@ -1,6 +1,6 @@
 "use client";
 
-// Last-resort boundary for errors in the root layout itself (SPEC §13.40). It replaces the
+// Last-resort boundary for errors in the root layout itself (SPEC §13.41). It replaces the
 // whole document, so it carries its own minimal styling; nothing is reported (invariant 7).
 
 export default function GlobalError({ retry }: { error: Error & { digest?: string }; retry: () => void }) {

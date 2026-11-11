@@ -67,10 +67,10 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |            hexes.pmtiles (hex4 z2-4, slim at z2; hex5 z5-7, overzoomed) + hexes_nbhd.pmtiles (hex6     |
   |            z8-9) + hexes_city.pmtiles (hex7 z10-11), where built (§9.1, §13.18, §13.33)               |
   |  validate  archives match the manifest and are fresh; no hazard / dimension came out empty;           |
-  |            no coverage drop > 5% against the live build (§13.38); publish runs it again               |
+  |            no coverage drop > 5% against the live build (§13.39); publish runs it again               |
   |  publish   local: every archive + manifest.json -> web/public/data. r2 (boto3, .env): real            |
   |            whole-world builds only; archives under content-addressed keys (immutable),                |
-  |            range + CORS check, then manifest.json switched last (§13.24, §13.38)                      |
+  |            range + CORS check, then manifest.json switched last (§13.24, §13.39)                      |
   +-----------------------------------------------+--------------------------------------------------------+
                                                   |  static files only
                                                   v
@@ -152,7 +152,7 @@ data/                   gitignored raw / interim / out; data/raw/CHECKSUMS is co
 
 ## Licensing
 
-**Code:** MIT, see [LICENSE](LICENSE). The repository is public (SPEC §13.42).
+**Code:** MIT, see [LICENSE](LICENSE). The repository is public (SPEC §13.43).
 
 **Data:** not covered by the code licence. Each source keeps its own terms, listed in
 `pipeline/sources.yaml` and on `/methodology`. Most are open with attribution (CC BY 3.0 / 4.0,
@@ -167,4 +167,4 @@ label on every value they feed:
 So the map and its tiles are non-commercial for the foreseeable future (SPEC §13.13, §13.30).
 Sources with non-redistributable terms (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools,
 Numbeo, SEDA without permission) are excluded. Raw downloads are never committed; the private
-raw mirror (SPEC §13.41) is for rebuilding, not redistribution.
+raw mirror (SPEC §13.42) is for rebuilding, not redistribution.

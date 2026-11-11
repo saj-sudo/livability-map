@@ -6,7 +6,7 @@ Targets:
              same origin during development.
 - ``r2``     upload to the Cloudflare R2 bucket with S3-compatible credentials from ``.env``
              (``R2_ACCOUNT_ID``, ``R2_ACCESS_KEY_ID``, ``R2_SECRET_ACCESS_KEY``, ``R2_BUCKET``,
-             ``R2_PUBLIC_BASE_URL``, ``R2_ALLOWED_ORIGINS``). Release order (SPEC §13.38):
+             ``R2_PUBLIC_BASE_URL``, ``R2_ALLOWED_ORIGINS``). Release order (SPEC §13.39):
              1. refuse a fixture, ``--bbox`` or partial build and anything ``validate`` rejects,
                 compared against the manifest that is live now;
              2. upload each archive under a content-addressed key (``hexes.<sha12>.pmtiles``,
@@ -144,12 +144,12 @@ def _live_manifest(base_url: str) -> dict | None:
 
 def _mirror_note(settings: Settings) -> None:
     """A release whose raw inputs are not all in the raw mirror cannot be rebuilt byte for byte
-    once an upstream file moves (SPEC §13.41). Said, not enforced."""
+    once an upstream file moves (SPEC §13.42). Said, not enforced."""
     from .. import mirror
 
     raw = mirror.from_env(settings)
     if raw is None:
-        print("publish r2: note: no raw mirror (R2_RAW_BUCKET), so this release cannot be rebuilt byte for byte if an upstream file moves (SPEC §13.41)")
+        print("publish r2: note: no raw mirror (R2_RAW_BUCKET), so this release cannot be rebuilt byte for byte if an upstream file moves (SPEC §13.42)")
         return
     lacking = mirror.missing_from(settings, raw)
     if lacking:

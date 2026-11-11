@@ -16,9 +16,9 @@ Status (2026-09-23): every stage and the map app run end to end on real data at 
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
 8, three PMTiles archives), with 18 dimensions incl. the Eurostat 1 km grid and England IoD 2025.
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
-Release safety (2026-10-19, SPEC §13.38-41): code-aware stage caches, a `validate` gate,
+Release safety (2026-10-19, SPEC §13.40-42): code-aware stage caches, a `validate` gate,
 content-addressed R2 publish, a per-page CSP, a Playwright e2e job, race as context only, and a
-private raw-input mirror. The first run after §13.38 rebuilds every stage once (new fingerprints).
+private raw-input mirror. The first run after §13.39 rebuilds every stage once (new fingerprints).
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
 manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
 decisions taken. A full res-6/7 rebuild takes ~8 hours.
@@ -44,7 +44,7 @@ uv run python -m pipeline --res 5 dims --only care --only net     # add layers w
 uv run python -m pipeline urban                                  # GHS-SMOD -> urban centre/cluster polygons
 uv run python -m pipeline --res 6 --res 7 grid                   # derived resolutions from the plan (needs res 5 + urban)
 uv run python -m pipeline tiles --archive hexes_nbhd             # one archive of the resolution plan
-uv run python -m pipeline mirror                                 # copy recorded raw files to the private R2 raw mirror (§13.41)
+uv run python -m pipeline mirror                                 # copy recorded raw files to the private R2 raw mirror (§13.42)
 uv run python -m pipeline --fixtures --res 4 validate              # release gate without uploading (--release, --max-drop)
 uv run python -m pipeline --fixtures --res 4 publish --target local  # -> web/public/data/
 cd web && npm run dev | npm test | npm run lint | npm run build | npm run deploy
@@ -91,7 +91,7 @@ parquet per resolution (`hexes_r{res}.parquet` from `grid`; `pop_r{res}`, `admin
 `hazards_r{res}`, `dims_r{res}`, `score_r{res}`) keyed on `h3`, and `sanity.load_merged` joins
 whatever exists. Idempotency is via `stage_cache.is_fresh/record` (a `.meta.json` sidecar
 fingerprinting inputs + params + code: the AST digest of the stage module and every `pipeline`
-module it imports, incl. lazily registered prep loaders, docstrings and comments ignored, §13.38);
+module it imports, incl. lazily registered prep loaders, docstrings and comments ignored, §13.39);
 `--force` bypasses it. `dims` keeps one fingerprint per dimension and recomputes only stale ones.
 `--bbox` runs write to `interim/bbox_*/` and `out/bbox_*/`; `Settings.cache_dir` (extracted
 archives, prepared layers) is shared. `timing.timed` wraps every stage (`timings.json`).
@@ -107,7 +107,7 @@ source, bivariate class); `hazards` scores itself, `score` does composites and l
 `export` writes `data/out/hexes_r{res}.parquet` + `manifest.json` (`manifest.py`, §6.3);
 `tiles` uses `tiler.py` (pure Python, hex4 z2-4 slim at z2, hex5 z5-7; tippecanoe optional);
 `validate` (between `tiles` and `publish`, and re-run inside `publish`) checks archive sha256 and
-freshness, empty hazards / dimensions and coverage drops against the live build (§13.38);
+freshness, empty hazards / dimensions and coverage drops against the live build (§13.39);
 `publish` targets `local` (web/public/data) or `r2` (boto3, `.env`) and refuses sources whose
 `verified` is not `confirmed` (only sources actually used count). R2 gets real whole-world builds
 only, archives under content-addressed keys, `manifest.json` switched last; `npm run deploy`
@@ -171,9 +171,9 @@ packages, so no request leaves the origin. `MapView` registers map handlers once
 and callbacks through refs. Place search reads `public/gazetteer.json` (committed; rebuild with
 `uv run python web/scripts/build_gazetteer.py` after `python -m pipeline fetch --only
 natural_earth_places`). Below 640px the panels live in a bottom sheet. Composition dimensions
-(race) are context only: no slider, never in the composite (`weightable()`, SPEC §13.39). Map
+(race) are context only: no slider, never in the composite (`weightable()`, SPEC §13.40). Map
 failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
-`lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.40). `scripts/headers.mjs`
+`lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.41). `scripts/headers.mjs`
 writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
 with those headers and Range support for `web/e2e/` (Playwright 1.56.1, pinned to the container's
 Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go under

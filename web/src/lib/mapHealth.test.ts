@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BASEMAP_HOSTS, classifyError, fallbackStyle, NO_PROBLEMS, noteProblem, problemMessage, supportsWebGL2 } from "./mapHealth";
 
-describe("map health (SPEC §13.40)", () => {
+describe("map health (SPEC §13.41)", () => {
   it("detects WebGL 2 without throwing", () => {
     expect(supportsWebGL2(() => ({ getContext: (k) => (k === "webgl2" ? {} : null) }))).toBe(true);
     expect(supportsWebGL2(() => ({ getContext: () => null }))).toBe(false);

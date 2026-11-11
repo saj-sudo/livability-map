@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import h3
 import pandas as pd
+import pytest
 
 from pipeline import sanity
 from pipeline.fixtures import make_fixtures
@@ -95,3 +96,25 @@ def test_fixture_world_has_urban_classes_and_grids(fixture_dir):
     assert {"LSOA21CD", "emp_dep_rate", "health_dep", "housing_barriers", "population", "pop_working"} <= set(lsoa.columns)
     minx, _, maxx, maxy = lsoa.total_bounds
     assert minx >= 11.0 - 1e-9 and maxx <= 12.0 + 1e-9 and maxy <= 42.0 + 1e-9  # south-east XKA only
+
+
+def test_a_crash_while_writing_a_stage_parquet_leaves_no_torn_file(settings, monkeypatch):
+    fetch.run(settings)
+    grid.run(settings)
+    real = pd.DataFrame.to_parquet
+
+    def torn(self, path, *args, **kwargs):
+        real(self, path, *args, **kwargs)
+        with open(path, "r+b") as fh:
+            fh.truncate(10)  # the disk filled up half way
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", torn)
+    with pytest.raises(OSError, match="disk full"):
+        pop.run(settings)
+    out = settings.stage_path("pop", 4)
+    assert not out.exists() and not out.with_suffix(".parquet.meta.json").exists()
+    assert not [p for p in settings.interim_dir.iterdir() if p.name.startswith(".")]  # no temp file either
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", real)
+    pop.run(settings)  # the next run starts clean
+    assert len(pd.read_parquet(out)) > 50

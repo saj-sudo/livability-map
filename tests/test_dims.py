@@ -3,9 +3,11 @@ from __future__ import annotations
 import h3
 import numpy as np
 import pandas as pd
+import pytest
 
-from pipeline import sanity
+from pipeline import prep, sanity
 from pipeline.config import RES_TAGS
+from pipeline.registry import load_dimensions, load_sources
 from pipeline.stages import admin, dims, fetch, grid, hazards, pop
 
 
@@ -253,3 +255,87 @@ def test_partial_recompute_keeps_the_record_of_missing_sources(settings):
     _touch(_own_source_input(settings, "care"))
     dims.run(settings)  # recomputes care only; acs_summary was not tried
     assert stage_cache.read_meta(out)["skipped_sources"] == {"acs_summary": "not downloaded"}
+
+
+def test_overlay_prefilter_matches_the_whole_layer(settings, monkeypatch):
+    _run_all(settings)
+    monkeypatch.setattr(dims, "OVERLAY_CHUNK", 7)
+    settings.force = True
+    dims.run(settings)
+    narrowed = pd.read_parquet(settings.stage_path("dims", 4))
+    monkeypatch.setattr(dims, "_layer_near", lambda layer, chunk, res: layer)
+    dims.run(settings)
+    whole = pd.read_parquet(settings.stage_path("dims", 4))
+    pd.testing.assert_frame_equal(narrowed, whole, check_exact=False, rtol=1e-6)
+
+
+def test_check_nonnull_stops_on_an_empty_or_mostly_empty_layer():
+    ok = pd.DataFrame({"a": [1.0, 2.0, None, 4.0], "b": [1, 2, 3, 4]})
+    dims.check_nonnull("src", ok, {"a", "b", "not_a_column"})  # 75% filled; a missing column is the joiner's business
+    sparse = pd.DataFrame({"a": [1.0] + [None] * 19})
+    with pytest.raises(RuntimeError, match=r"src\.a is filled in 5\.0% .*min_nonnull"):
+        dims.check_nonnull("src", sparse, {"a"})
+    dims.check_nonnull("src", sparse, {"a"}, minimum=0.05)  # the source's own override
+    dims.check_nonnull("src", sparse, {"a"}, minimum=0)  # switched off
+    with pytest.raises(RuntimeError, match="no rows"):
+        dims.check_nonnull("src", ok.iloc[:0], {"a"})
+
+
+def test_a_mostly_empty_source_stops_dims_with_a_plain_message(settings, monkeypatch):
+    real = prep.load_layer
+
+    def blank(settings, source_id, sources):
+        df = real(settings, source_id, sources)
+        if source_id == "wb_gsap":
+            df = df.copy()
+            df["nonpoor_share"] = np.nan
+        return df
+
+    monkeypatch.setattr(dims.prep, "load_layer", blank)
+    with pytest.raises(RuntimeError, match=r"wb_gsap\.nonpoor_share is filled in 0\.0%"):
+        _run_all(settings)
+
+
+def _store(settings, monkeypatch):
+    """A LayerStore over the dimensions that share one source, with a fake loader that counts."""
+    sources = load_sources(settings.sources_path)
+    todo = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
+    by_source: dict[str, list] = {}
+    for d in todo:
+        for src in {s.source for s in d.joiners if s.joiner not in ("raster_mean", "point_density")}:
+            by_source.setdefault(src, []).append(d)
+    shared = next(s for s, ds in by_source.items() if len(ds) >= 2)
+    loads: list[str] = []
+
+    def fake(settings, source_id, sources):
+        loads.append(source_id)
+        return pd.DataFrame({f: [1.0, 2.0] for f in store.fields.get(source_id, {"x"})} or {"x": [1.0]})
+
+    monkeypatch.setattr(dims.prep, "load_layer", fake)
+    store = dims.LayerStore(settings, by_source[shared], sources, set(), {})
+    return store, shared, by_source[shared], loads
+
+
+def test_layers_load_when_asked_and_are_freed_after_their_last_dimension(settings, monkeypatch):
+    store, shared, users, loads = _store(settings, monkeypatch)
+    assert loads == [] and not store.layers  # nothing is read up front
+    assert store.get(shared) is not None and store.get(shared) is not None
+    assert loads == [shared]  # loaded once however often it is asked for
+    for d in users[:-1]:
+        store.done(d)
+        assert shared in store.layers  # a later dimension still needs it
+    store.done(users[-1])
+    assert shared not in store.layers  # freed with the last user
+    assert shared in store.tried
+
+
+def test_a_missing_download_is_skipped_once_and_reads_as_none(settings, monkeypatch, capsys):
+    store, shared, _, _ = _store(settings, monkeypatch)
+
+    def gone(settings, source_id, sources):
+        raise FileNotFoundError("download it first")
+
+    monkeypatch.setattr(dims.prep, "load_layer", gone)
+    assert store.get(shared) is None and store.get(shared) is None
+    assert capsys.readouterr().out.count("skipping joiner source") == 1
+    assert "download it first" in store.skipped[shared]

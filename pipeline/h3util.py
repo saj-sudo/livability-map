@@ -437,9 +437,11 @@ def aggregate_rasters(
     return _finish(acc, agg)
 
 
-def sample_at_centroids(path: Path, cells: list[str], band: int = 1, nodata: float | None = None) -> pd.Series:
-    """Point-sample a raster at cell centroids (for rasters coarser than the hex). NaN where nodata."""
-    lat, lng = cell_centroids(cells)
+def sample_at_centroids(path: Path, cells: list[str], band: int = 1, nodata: float | None = None, centroids: tuple[np.ndarray, np.ndarray] | None = None) -> pd.Series:
+    """Point-sample a raster at cell centroids (for rasters coarser than the hex). NaN where nodata.
+    ``centroids`` is an optional ``(lat, lng)`` pair aligned to ``cells`` (the grid parquet
+    already carries them), which saves one ``h3.cell_to_latlng`` call per cell."""
+    lat, lng = centroids if centroids is not None else cell_centroids(cells)
     with rasterio.open(path) as src:
         nd = nodata if nodata is not None else src.nodata
         vals = np.array([v[0] for v in src.sample(zip(lng, lat, strict=True), indexes=band)], dtype="float64")

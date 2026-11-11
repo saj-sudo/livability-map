@@ -716,6 +716,7 @@
   attribution: "© Eurostat / GISCO, Census 2021 1 km population grid (EU-27 and EFTA)"
   processing: "parquet member: GRD_ID (CRS3035RES1000mN{y}E{x}) -> cell centre in EPSG:3035 -> WGS84 point; -8888 (confidential) and -9999 (not available) -> missing; emp_rate = EMP / Y_1564 where both are known and Y_1564 > 0; weighted into hexes by point_mean (prep/eurostat_grid.py)"
   files: [Eurostat_Census-GRID_2021_V3.zip]
+  min_nonnull: 0.05  # employment is missing in over half the cells for DE/FR/CH/LV (SPEC §15); only a near-empty column is a broken load
 
 - id: eng_imd_2025
   name: English Indices of Deprivation 2025, File 7 (all ranks, scores, deciles and population denominators by LSOA 2021)

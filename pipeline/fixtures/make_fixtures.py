@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 15  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 18  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 # the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
 # small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
@@ -449,6 +449,33 @@ def extras_rasters(LNG, LAT, land: np.ndarray):
     return care, pm25, fire, coarse_transform
 
 
+def no2_raster():
+    """Tropospheric NO2 column stand-in (mol/m², 0.05 degree like the real export, §13.49):
+    highest over Cedar, background elsewhere, a -9999 hole in the north-east corner so a hex
+    with no valid pixel stays missing."""
+    minlng, minlat, maxlng, maxlat = BBOX
+    step = 0.05
+    lng = np.arange(minlng + step / 2, maxlng, step)
+    lat = np.arange(maxlat - step / 2, minlat, -step)
+    LNG, LAT = np.meshgrid(lng, lat)
+    near_cedar = np.exp(-((LNG - 13.0) ** 2 + (LAT - 42.5) ** 2) / (2 * 0.4**2))
+    no2 = 2.0e-5 + 8.0e-5 * near_cedar
+    no2[(LNG > 13.5) & (LAT > 43.5)] = -9999.0
+    return no2, from_origin(minlng, maxlat, step, step)
+
+
+def amenity_points() -> pd.DataFrame:
+    """Everyday-amenity stand-ins (Overture-like, §13.49): a dense grid in Cedar and Alder, a few
+    in Birch, none in the desert."""
+    rows = []
+    for (clat, clng), n in (((42.5, 13.0), 9), ((43.0, 11.0), 6), ((41.0, 11.5), 3)):
+        off = np.linspace(-0.03, 0.03, n)
+        for dy in off:
+            for dx in off:
+                rows.append((round(clat + dy, 4), round(clng + dx, 4)))
+    return pd.DataFrame(rows, columns=["lat", "lng"]).assign(one=1.0)
+
+
 def tree_raster(land_geom):
     """Tree-cover fraction at 0.002 degree (five times finer than the other fixture rasters) so
     `decimate: 10` is exercised: 85 percent in the north-west quadrant, 12 elsewhere, 0 in the
@@ -647,6 +674,12 @@ def build(out: Path) -> dict[str, str]:
     fixed, mobile = ookla_points()
     fixed.to_csv(out / "ookla_fixed.csv", index=False)
     mobile.to_csv(out / "ookla_mobile.csv", index=False)
+    no2, no2_transform = no2_raster()
+    _write_tif(out / "no2.tif", no2, no2_transform, -9999.0)
+    amenity_points().to_csv(out / "amenities.csv", index=False)
+    # GEM stand-in: listed by `industry` so the registry and attribution see it; the merge itself
+    # is unit-tested on the real loader (tests/test_prep_ngo.py)
+    pd.DataFrame({"lat": [42.51], "lng": [13.01]}).to_csv(out / "gem_plants.csv", index=False)
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
     (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")

@@ -120,7 +120,7 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
         v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)
         return v.to_numpy(dtype="float64")
     if spec.joiner == "point_radius":
-        v = JOINERS["point_radius"](hexes, layer, res, field, radius_km=spec.radius_km, agg=spec.agg, weight_field=spec.weight_field)
+        v = JOINERS["point_radius"](hexes, layer, res, field, radius_km=spec.radius_km, agg=spec.agg, weight_field=spec.weight_field, per_km2=spec.per_km2)
         return v.to_numpy(dtype="float64")
     mask = _layer_mask(hexes, layer, res)
     if not mask.any():

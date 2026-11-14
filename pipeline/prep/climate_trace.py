@@ -76,5 +76,15 @@ def load(settings, source, sources) -> pd.DataFrame:
     out = pd.concat(frames, ignore_index=True)
     # an asset listed in two packages is still one facility
     out = out.drop_duplicates(subset=["lat", "lng"]).reset_index(drop=True)
-    print(f"prep   climate_trace_assets: {len(out)} facilities in {len(subsectors)} subsectors")
+    n_ct = len(out)
+    # Global Energy Monitor plants, when their workbooks are present (also_uses, §13.49)
+    from . import gem
+
+    for extra_id in source.extra.get("also_uses", []) or []:
+        extra_src = sources.get(extra_id)
+        present = [settings.raw(extra_id) / f for f in (extra_src.files if extra_src else []) if (settings.raw(extra_id) / f).exists()]
+        if present:
+            plants = pd.concat([gem.load_workbook(p) for p in present], ignore_index=True)
+            out = gem.merge(out, plants)
+    print(f"prep   climate_trace_assets: {n_ct} Climate TRACE facilities in {len(subsectors)} subsectors, {len(out) - n_ct} more from GEM")
     return out

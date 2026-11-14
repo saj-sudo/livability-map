@@ -359,7 +359,29 @@
   kind: score
   higher_is: worse
   coverage: [global]
-  sources: [climate_trace_assets]
+  sources: [climate_trace_assets, gem_trackers]
   joiners:
     - {source: climate_trace_assets, joiner: point_radius, res: hex, field: one, radius_km: 10, agg: sum, domain: global, label: ctrace, unit: "large industrial facilities within 10 km", decimals: 0}
-  note: "Large industrial facilities within 10 km (Climate TRACE assets: power plants, refineries, coal mines, steel, cement, chemicals, aluminium, pulp and paper, landfills), counted, not weighted by CO2e, because tons of greenhouse gas measure climate impact rather than local harm. Climate TRACE models large emitters, so small plants and some countries are under-represented: 0 means none recorded nearby, not none. On the coarsest, zoomed-out hexagons the radius is the hexagon size (about 23 km), never smaller. Present-day environment: never part of the 2050 exposure score"
+  note: "Large industrial facilities within 10 km (Climate TRACE assets: power plants, refineries, coal mines, steel, cement, chemicals, aluminium, pulp and paper, landfills), counted, not weighted by CO2e, because tons of greenhouse gas measure climate impact rather than local harm. Climate TRACE models large emitters, so small plants and some countries are under-represented: 0 means none recorded nearby, not none. Global Energy Monitor's coal, gas, steel and cement plants are added where Climate TRACE has no asset within 2 km. On the coarsest, zoomed-out hexagons the radius is the hexagon size (about 23 km), never smaller. Present-day environment: never part of the 2050 exposure score"
+
+- id: no2
+  name: Traffic and combustion pollution (NO2)
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [s5p_no2]
+  joiners:
+    - {source: s5p_no2, joiner: raster_mean, res: hex, field: value, sample: auto, domain: global, label: s5p, unit: "µmol/m² NO2 in the air column (2023 mean)", multiply: 1000000, decimals: 0}
+  note: "Nitrogen dioxide over the place (Sentinel-5P TROPOMI tropospheric column, 2023 mean, about 5 km pixels): a tracer of road traffic, power plants and industry, finer-grained inside cities than PM2.5. A column above the ground, not the concentration at street level, so it ranks places rather than measuring what a person breathes. Present-day environment: never part of the 2050 exposure score"
+
+- id: amen
+  name: Everyday amenities nearby
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [global]
+  sources: [overture_places]
+  joiners:
+    - {source: overture_places, joiner: point_radius, res: hex, field: one, radius_km: 1, agg: sum, per_km2: true, domain: global, label: overture, unit: "everyday amenities per km² (groceries, pharmacies, clinics, schools, parks)", decimals: 1}
+  note: "Groceries, pharmacies, clinics, schools, parks, playgrounds and libraries per km² within 1 km of the place (Overture Maps places). The radius is never smaller than the hexagon, so zoomed out it is a density over the whole hexagon. Overture's coverage is uneven between countries and follows how well places are mapped, so 0 means none recorded, not none"

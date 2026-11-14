@@ -5,7 +5,9 @@ healthcare (1 km), PM2.5 (0.01 degree) and tree cover (100 m, block-averaged to 
 ``decimate``). Rasters coarser than the hex (the 0.25 degree burned-area grid) cannot be
 aggregated this way because a small hex may contain no pixel centre; ``sample="centroid"``
 point-samples them at the hex centroid instead, the same rule the ``hazards`` stage applies to
-the 0.25 degree CCKP heat climatology.
+the 0.25 degree CCKP heat climatology. ``sample="auto"`` picks per resolution: the mean where a hex
+covers at least two pixels' area, the centroid sample where it is smaller (the ~5 km NO2 grid is
+finer than a res-4 hex and coarser than a res-7 one, §13.49).
 
 Missing (no valid pixel, nodata at the centroid, hex outside the raster) is NaN, never 0.
 """
@@ -22,8 +24,16 @@ import rasterio
 from .. import h3util
 from ..config import BBox
 
-SAMPLES = ("mean", "centroid")
+SAMPLES = ("mean", "centroid", "auto")
+KM_PER_DEG = 111.32
 PIXELS_ACROSS = 4  # keep at least this many block-averaged pixels across a hex
+
+
+def auto_sample(res: int, pixel_deg: float) -> str:
+    """``mean`` when a res-``res`` hex covers the area of at least two pixels (at the equator, so
+    typically a few pixel centres fall inside), else ``centroid``."""
+    hex_km2 = h3.average_hexagon_area(res, unit="km^2")
+    return "mean" if hex_km2 >= 2.0 * (pixel_deg * KM_PER_DEG) ** 2 else "centroid"
 
 
 def effective_decimate(decimate: int, res: int, pixel_deg: float) -> int:
@@ -54,6 +64,9 @@ def raster_mean(
     are rasterized, so a derived resolution costs what its cells cost, not a world fill."""
     if sample not in SAMPLES:
         raise ValueError(f"sample must be one of {SAMPLES}")
+    if sample == "auto":
+        with rasterio.open(path) as src:
+            sample = auto_sample(res, abs(src.transform.a))
     if sample == "centroid":
         known = {"lat", "lng"} <= set(hexes.columns)  # the grid's own centroids, when the frame has them
         vals = h3util.sample_at_centroids(path, hexes["h3"].tolist(), band=band, nodata=nodata, centroids=(hexes["lat"].to_numpy(), hexes["lng"].to_numpy()) if known else None)

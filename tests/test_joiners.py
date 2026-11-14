@@ -116,3 +116,28 @@ def test_point_radius_in_hex_chunks_matches_one_pass(monkeypatch):
         monkeypatch.setattr(pr, "HEX_CHUNK", 50_000)
         pd.testing.assert_series_equal(chunked, one, check_exact=True)
         assert one.notna().any()
+
+
+def test_point_radius_per_km2_divides_by_the_area_searched():
+    import h3
+
+    from pipeline.joiners.point_radius import point_radius
+
+    hexes = _hexes_at([(0.0, 0.0)], 4)
+    lat0, lng0 = hexes["lat"].iloc[0], hexes["lng"].iloc[0]
+    pts = pd.DataFrame({"lat": [lat0, lat0], "lng": [lng0, lng0 + 0.01], "one": [1.0, 1.0]})
+    r = h3.average_hexagon_edge_length(4, unit="km")  # 1 km is raised to the res-4 edge
+    got = point_radius(hexes, pts, 4, "one", radius_km=1, agg="sum", per_km2=True)
+    assert got.iloc[0] == pytest.approx(2 / (np.pi * r**2))
+    with pytest.raises(ValueError, match="per_km2 needs agg=sum"):
+        point_radius(hexes, pts, 4, "one", radius_km=1, agg="mean", per_km2=True)
+
+
+def test_raster_mean_auto_sample_follows_hex_size():
+    from pipeline.joiners.raster_mean import auto_sample
+
+    assert auto_sample(4, 0.05) == "mean"  # ~1,770 km² vs ~31 km² pixels
+    assert auto_sample(5, 0.05) == "mean"  # ~250 km²: about eight pixels
+    assert auto_sample(6, 0.05) == "centroid"  # ~36 km²: about one pixel
+    assert auto_sample(7, 0.05) == "centroid"
+    assert auto_sample(7, 0.01) == "mean"  # ~5 km² vs ~1.2 km² pixels

@@ -31,10 +31,12 @@ real run after §13.44 rebuilds every stage once more.
 Review pass (2026-11-14, SPEC §13.45): single-country joiner domains stay in their country
 (`Settings.domain_countries`), prep and unzip caches keyed on what they read, tie-safe terciles,
 inhabited min-max bounds, `point_density` removed; Climate TRACE `industry` env layer (§13.46,
-manual download, `verified: search`); web UX honesty fixes (match vs rank labels,
+manual download, `verified: search`), NO2 `no2`, Overture `amen` and GEM plants in `industry`
+(§13.49, all manual and `verified: search`); web UX honesty fixes (match vs rank labels,
 selection reducer `lib/selection.ts`, compare picking banner, a11y, plain-language /methodology).
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and five
-manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook, CDC PLACES, Climate TRACE). SPEC §13 records the
+manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook, CDC PLACES, Climate TRACE,
+the NO2 Earth Engine export, the Overture extract; GEM optional). SPEC §13 records the
 decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
 rebuild takes ~8 hours.
 
@@ -159,7 +161,10 @@ EPSG:4326.
 and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
 rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
 (weighted mean of points per hex) and `point_radius` (mean or sum of points within a radius of
-the centre; `domain_by_country` ranks such values within each country). All return a Series aligned to the hexes index with NaN for
+the centre; `domain_by_country` ranks such values within each country; `per_km2` turns a sum
+into a density). `raster_mean` `sample: auto` averages where a hex covers two or more pixels and
+samples the centroid where it is smaller (§13.49). A source's `also_uses:` lists optional
+companions whose files count only when present (GEM inside Climate TRACE). All return a Series aligned to the hexes index with NaN for
 missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
 sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km

@@ -87,6 +87,11 @@ def raw_inputs(settings: Settings, source: Source, sources: dict[str, Source]) -
         paths += [settings.raw(geom) / f for f in sources[geom].files]
     for extra_id in source.extra.get("also_needs", []) or []:
         paths += [settings.raw(extra_id) / f for f in sources[extra_id].files]
+    # optional companions (§13.49): their files count only when present, so a missing one never
+    # blocks the source, and adding one later re-runs the loader
+    for extra_id in source.extra.get("also_uses", []) or []:
+        if extra_id in sources:
+            paths += [p for p in (settings.raw(extra_id) / f for f in sources[extra_id].files) if p.exists()]
     return paths
 
 
@@ -106,7 +111,7 @@ def load_spec(source: Source, sources: dict[str, Source]) -> dict:
     geom = source.extra.get("geometry")
     if geom and geom in sources:
         spec["geometry"] = one(sources[geom])
-    for extra_id in source.extra.get("also_needs", []) or []:
+    for extra_id in [*(source.extra.get("also_needs", []) or []), *(source.extra.get("also_uses", []) or [])]:
         if extra_id in sources:
             spec[f"also:{extra_id}"] = one(sources[extra_id])
     return spec

@@ -99,6 +99,7 @@ class JoinSpec:
     # point_radius only (SPEC §13.36): search radius (never below the hex edge length) and sum | mean
     radius_km: float | None = None
     agg: str = "mean"
+    per_km2: bool = False  # point_radius sum divided by the area searched (§13.49)
     # score each country as its own domain ("<domain>:<ISO2>"), for values that are relative within
     # a country (Meta's Relative Wealth Index); never ranked against another country
     domain_by_country: bool = False
@@ -111,6 +112,8 @@ class JoinSpec:
             d["higher_is"] = self.higher_is
         if self.joiner == "point_radius":
             d.update({"radius_km": self.radius_km, "agg": self.agg})
+            if self.per_km2:
+                d["per_km2"] = True
         if self.domain_by_country:
             d["domain_by_country"] = True
         if self.weight_field:
@@ -247,8 +250,8 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                 raise ValueError(f"{did}: {j.get('joiner')} computes per hex, so res must be `hex` or `grid`: {j}")
             if j.get("joiner") not in HEX_JOINERS and j.get("res") in HEX_TAGS:
                 raise ValueError(f"{did}: only {HEX_JOINERS} may carry the `hex` or `grid` resolution tag: {j}")
-            if j.get("sample", "mean") not in ("mean", "centroid"):
-                raise ValueError(f"{did}: sample must be mean or centroid: {j}")
+            if j.get("sample", "mean") not in ("mean", "centroid", "auto"):
+                raise ValueError(f"{did}: sample must be mean, centroid or auto: {j}")
             if j.get("higher_is") not in (None, "better", "worse"):
                 raise ValueError(f"{did}: a joiner's higher_is must be better or worse: {j}")
             if j.get("joiner") == "point_radius":
@@ -256,6 +259,8 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     raise ValueError(f"{did}: point_radius needs a positive radius_km: {j}")
                 if j.get("agg", "mean") not in ("sum", "mean"):
                     raise ValueError(f"{did}: point_radius agg must be sum or mean: {j}")
+                if j.get("per_km2") and j.get("agg", "mean") != "sum":
+                    raise ValueError(f"{did}: point_radius per_km2 needs agg: sum: {j}")
             if j.get("higher_is") and raw.get("scale", "percentile") == "minmax":
                 raise ValueError(f"{did}: a joiner's higher_is only applies to percentile scores, not scale: minmax: {j}")
             if sources is not None and j.get("joiner") == "raster_mean" and sources[j["source"]].format not in RASTER_FORMATS:
@@ -277,6 +282,7 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     higher_is=j.get("higher_is"),
                     radius_km=None if j.get("radius_km") is None else float(j["radius_km"]),
                     agg=str(j.get("agg", "mean")),
+                    per_km2=bool(j.get("per_km2", False)),
                     domain_by_country=bool(j.get("domain_by_country", False)),
                     countries=None if j.get("countries") is None else tuple(str(c) for c in j["countries"]),
                     **dict(zip(("unit", "multiply", "decimals"), _unit_fields(did, j, unit, multiply, decimals), strict=True)),

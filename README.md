@@ -8,7 +8,9 @@ of living, rent, travel time to healthcare and to a city, walking time to health
 speed, relative wealth, armed conflict nearby, working water points, and in the US natural hazard
 losses today (FEMA NRI) and adults in fair or poor health (CDC PLACES); racial composition is
 shown per place as context, never weighted, SPEC §13.40) plus the **present-day
-environment** (air quality, tree cover, wildfire, drought risk, heavy industry nearby), on H3 hexagons from about
+environment** (air quality, traffic and combustion pollution (NO2), tree cover, wildfire, drought
+risk, heavy industry nearby) and everyday amenities nearby (groceries, pharmacies, clinics,
+schools, parks), on H3 hexagons from about
 1,770 km² on all land down to about 5 km² inside urban centres, built only from open-licensed
 data.
 
@@ -39,8 +41,9 @@ are empty or coarser than designed:
   World Happiness Report value wherever that report has one.
 - **Adults in fair or poor health** (CDC PLACES, US tracts): empty until the CSV is saved by hand;
   FEMA NRI and PLACES also need a first-hand licence check before `publish` includes them.
-- **Heavy industry nearby** (Climate TRACE sector downloads): empty until the four zips are saved
-  and checked (`docs/manual-steps.md` item 15).
+- **Heavy industry nearby** (Climate TRACE sector downloads, optionally GEM plants), **NO2**
+  (an Earth Engine export) and **everyday amenities** (an Overture extract): empty until the files
+  are saved and checked (`docs/manual-steps.md` items 15, 18-20).
 
 See [`SPEC.md`](SPEC.md) for the full spec; section numbers below refer to it.
 
@@ -66,7 +69,8 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
-                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE assets;
+                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE + GEM
+                                             plants, Sentinel-5P NO2, Overture places;
                                              US tracts: FEMA NRI, CDC PLACES
         |                                          |                                                |
         v                                          v                                                v

@@ -504,3 +504,17 @@ def test_industry_counts_facilities_nearby_and_zero_far_away(settings):
     assert df.loc[_cell(42.5, 13.0), "industry_raw"] >= 2
     assert df.loc[_cell(40.7, 12.5), "industry_raw"] == 0
     assert (df["industry_res"] == "hex").all() and df["industry_raw"].notna().all()
+
+
+def test_no2_and_amenities_on_fixtures(settings):
+    """§13.49: NO2 peaks over Cedar and is missing (never 0) under the export's nodata hole;
+    amenities per km² are highest in the towns and a real 0 in the desert."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4).set_index("h3")
+    cedar, desert = df.loc[_cell(42.5, 13.0)], df.loc[_cell(40.7, 12.5)]
+    assert cedar["no2_raw"] > desert["no2_raw"] > 0 and cedar["no2_res"] == "hex"
+    hole = df.loc[_cell(43.85, 13.85)] if _cell(43.85, 13.85) in df.index else None
+    if hole is not None:
+        assert pd.isna(hole["no2_raw"]) and hole["no2_res"] == "none"
+    assert cedar["amen_raw"] > 0 and desert["amen_raw"] == 0 and cedar["amen_res"] == "hex"
+    assert df["amen_raw"].notna().all()

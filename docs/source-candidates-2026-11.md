@@ -75,7 +75,8 @@ data hosts, so each one is `verified: search` until checked on Saj's laptop (CLA
 7. **Queer community outside the US:** EU cities survey (lgbtq) + Eurostat grid; still greyed out elsewhere.
 
 **Update 2026-11-14:** FEMA NRI and CDC PLACES are wired (SPEC §13.38); Climate TRACE is wired as
-the `industry` env layer, a count of large facilities within 10 km (SPEC §13.46). GEM is deferred.
+the `industry` env layer, a count of large facilities within 10 km (SPEC §13.46), with GEM plants
+merged in (§13.49). NO2 (`no2`) and Overture everyday amenities (`amen`) are wired too (§13.49).
 
 ## Recommended order, if we build any of it
 

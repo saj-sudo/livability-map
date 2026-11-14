@@ -46,7 +46,7 @@ describe("dimension registry from the manifest", () => {
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
     expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
     expect(DIM_ORDER.slice(22, 27)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
-    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry"]);
+    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry", "no2", "amen"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 
@@ -66,7 +66,7 @@ describe("dimension registry from the manifest", () => {
 
   it("keeps the environment group apart from the life dimensions and labels the new tags", () => {
     const dims = dimensionsFrom(EMPTY_MANIFEST);
-    expect(envDims(dims).map((d) => d.id)).toEqual(["air", "trees", "fire", "drought", "nri", "industry"]);
+    expect(envDims(dims).map((d) => d.id)).toEqual(["air", "trees", "fire", "drought", "nri", "industry", "no2"]);
     expect(lifeDims(dims).map((d) => d.id)).toContain("care");
     expect(lifeDims(dims).map((d) => d.id)).not.toContain("air");
     expect(dims.find((d) => d.id === "cost")!.higher_is).toBe("worse"); // a higher price level is worse for the person

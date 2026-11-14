@@ -38,7 +38,7 @@ export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multi
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry", "no2", "amen"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -84,6 +84,8 @@ const FALLBACK: DimInfo[] = [
   F("nri", "Natural hazard losses today (US)", "env", "score", "worse", "US only"),
   F("phealth", "Adults in fair or poor health (US)", "life", "score", "worse", "US only"),
   F("industry", "Heavy industry nearby", "env", "score", "worse", "Global"),
+  F("no2", "Traffic and combustion pollution (NO2)", "env", "score", "worse", "Global"),
+  F("amen", "Everyday amenities nearby", "life", "score", "better", "Global"),
 ];
 
 /** Composition dimensions (racial and ethnic composition) are context in the place panel, never

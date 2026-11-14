@@ -626,3 +626,37 @@
   verified: confirmed
   vintage: "fixture"
   files: [tracts.gpkg]
+- id: s5p_no2
+  name: fixture NO2 column (mol/m², 0.05 degree, worst over Cedar, -9999 hole in the north-east)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/no2.tif
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [no2.tif]
+- id: overture_places
+  name: fixture everyday amenities (Overture-like points around the towns)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/amenities.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [amenities.csv]
+- id: gem_trackers
+  name: fixture GEM plant (listed by industry; merged only by the real Climate TRACE loader)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/gem_plants.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [gem_plants.csv]

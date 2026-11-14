@@ -113,7 +113,8 @@ CORS). No database in the web app.
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
-                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE assets;
+                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE + GEM
+                                             plants, Sentinel-5P NO2, Overture places;
                                              US tracts: FEMA NRI, CDC PLACES
         |                                          |                                                |
         v                                          v                                                v
@@ -840,6 +841,32 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       file layout, column names and subsector names are from memory, and the loader stops with
       the columns it found when they differ. Fixture world VERSION 15 adds six stand-in facilities.
 
+49. **NO2, everyday amenities and GEM plants** (Saj, 2026-11-14, "add all three plus the worth it
+    later"; humid heat is §13.47, the EU city survey and Opportunity Atlas §13.48):
+    - *`no2`* (env, higher = worse): Sentinel-5P TROPOMI tropospheric NO2 column, 2023 annual
+      mean, exported once from Earth Engine at 0.05° (`docs/gee-export.md`), shown in µmol/m². A
+      column over the place, not street-level concentration, so it ranks places by traffic and
+      combustion rather than measuring what a person breathes. New `raster_mean` mode
+      `sample: auto`: the pixel mean where a hex covers at least two pixels' area (res 4-5 here),
+      the centroid sample where it is smaller (res 6-7), so no small hex goes blank for want of
+      a pixel centre.
+    - *`amen`* (life, higher = better): Overture Maps places in an allow-list of everyday
+      categories (groceries, pharmacies, clinics, schools, parks, playgrounds, libraries; one
+      combined count, Saj's choice) within 1 km, divided by the area searched (`point_radius`
+      `per_km2`), so the value is a density that compares across resolutions even though the
+      radius floors at the hex edge (§13.36). 0 is "none recorded": Overture's coverage follows
+      how well places are mapped. The raw file is a slim extract made on the laptop by
+      `python -m pipeline.prep.overture_places` (DuckDB on the public bucket; optional extra
+      `overture`), so nobody downloads the whole places theme.
+    - *GEM in `industry`:* Global Energy Monitor's coal, gas, steel and cement trackers are an
+      optional companion of `climate_trace_assets` (new `also_uses:` key: files count as inputs
+      only when present). Operating plants are added where no Climate TRACE asset lies within 2 km,
+      so one facility is never counted twice. Listing `gem_trackers` on the dimension means
+      `publish` refuses until it is verified too; remove it from `sources:` to ship without GEM.
+    - All three are `access: manual`, `verified: search` (URLs, column and category names from
+      memory; the loaders stop with what they found when names differ). Fixture world VERSION 18
+      adds a 0.05° NO2 grid with a nodata hole, amenity points around the towns and a GEM stub.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -918,6 +945,9 @@ the live status per source.
 | 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
 | 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
 | 2026-11-14 | Climate TRACE assets (§13.46) | search. From memory, not read here (the container blocks climatetrace.org): per-sector zips on climatetrace.org/data with `*emissions_sources*.csv` (source_id, subsector, lat, lon, gas, emissions_quantity), CC BY 4.0. Confirm the licence, file and column names and the subsector list on the laptop. | https://climatetrace.org/data |
+| 2026-11-14 | Sentinel-5P NO2 (§13.49) | search. Earth Engine collection `COPERNICUS/S5P/OFFL/L3_NO2`, band `tropospheric_NO2_column_number_density` (mol/m²); Copernicus Sentinel data free and open with attribution. From memory; check on the laptop with the export. | https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_OFFL_L3_NO2 |
+| 2026-11-14 | Overture places (§13.49) | search. Public bucket `s3://overturemaps-us-west-2/release/<release>/theme=places/type=place/`, fields `categories.primary` (or `basic_category` in newer releases) and `confidence`; places CDLA-Permissive 2.0. From memory. | https://docs.overturemaps.org/guides/places/ |
+| 2026-11-14 | GEM trackers (§13.49) | search. Coal, oil and gas plant, steel and cement trackers as xlsx behind a short form, CC BY 4.0, Latitude / Longitude / Status columns. From memory. | https://globalenergymonitor.org/projects/ |
 
 ## 16. Phasing and session plan
 
@@ -1010,8 +1040,10 @@ From the 2026-11-14 review pass (§13.45):
   fingerprints use size + mtime. Fix: digest only the loaders a dimension's sources use, and
   content-hash small stage outputs.
 - [x] Climate TRACE facility proximity (`industry`, §13.46); first-hand check is manual-steps item 15.
-- [ ] Global Energy Monitor trackers as a second `industry` joiner (smaller coal plants), and an
-  environmental-justice preset (PM2.5, `industry`, read against `wealth` / `incmix`).
+- [x] NO2, Overture everyday amenities, GEM plants in `industry` (§13.49); first-hand checks are
+  manual-steps items.
+- [ ] An environmental-justice preset (PM2.5, NO2, `industry`, read against `wealth` / `incmix`)
+  and amenities in the Retiring / Raising kids presets: a product call for Saj.
 - [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
   stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
 - [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
@@ -1153,9 +1185,9 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `polygon_centroid` | hex centroid in polygon, pick a field | SHDI admin1, GSAP admin1, OECD TL2, US county, Aqueduct water stress |
 | `iso_lookup` | `iso_a2` to a national table | WHR, ILOSTAT, V-Dem |
 | `area_weighted_overlay` | small polygons to hex, weighted by overlap area x polygon population density | ACS tracts, EPA SLD block groups, school districts |
-| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
+| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex, `sample: auto` picks per resolution (§13.49) | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
 | `point_mean` | weighted mean of point values inside the hex (tag `hex`, or `grid` for statistical grid cells) | Ookla speed tiles at their centroids, weighted by tests; Eurostat 1 km census cells at their centres, weighted by 15-64 population |
-| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km) |
+| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country; `per_km2` divides a sum by the area searched) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km), industrial facilities (sum, 10 km), everyday amenities (sum per km², 1 km) |
 
 All six are idempotent and bbox-aware (`point_density` was removed unused, §13.45). A joiner
 whose domain belongs to one country fills only that country's hexes (§13.45). The pop stage's GHSL sums are the population weights so
@@ -1212,7 +1244,9 @@ where the hovered or clicked hex has `_res = none`.
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |
-| industry | Heavy industry nearby, group `env` | Climate TRACE emitting assets, count within 10 km, CC BY 4.0 (`hex`, §13.46) | same | GEM trackers later |
+| industry | Heavy industry nearby, group `env` | Climate TRACE emitting assets plus GEM operating plants not within 2 km of one, count within 10 km, CC BY 4.0 (`hex`, §13.46, §13.49) | same | - |
+| no2 | Traffic and combustion pollution, group `env` | Sentinel-5P TROPOMI NO2 column 2023 mean, 0.05° (`hex`, sample auto, §13.49) | same | Copernicus Sentinel terms |
+| amen | Everyday amenities nearby | Overture Maps places, everyday categories per km² within 1 km (`hex`, §13.49) | same | CDLA-Permissive 2.0 |
 | fire | Wildfire (burned area), group `env` | GFED5 burned area 2001-2020 mean, 0.25°, CC BY 4.0 (`hex`, centroid) | same | GWIS country profiles (no download) |
 | drought | Drought risk, group `env` | Aqueduct 4.0 baseline `drr_cat` 0-4 (Aqueduct 3.0 lineage), CC BY 4.0 (`basin`) | same | JRC GDO SPI-12 kept as a fallback (1°, CC BY 4.0) |
 

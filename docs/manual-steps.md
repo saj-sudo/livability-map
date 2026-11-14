@@ -25,6 +25,9 @@ Last updated: 2026-11-14.
 | 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
 | 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
 | 15 | [Climate TRACE sector downloads](#15-climate-trace-sector-downloads) | the `industry` layer (heavy industry nearby); lets publish include it | 15 min |
+| 18 | [Sentinel-5P NO2 export](#18-sentinel-5p-no2-export-earth-engine) | the `no2` layer (traffic and combustion pollution) | 20 min |
+| 19 | [Overture everyday-amenities extract](#19-overture-everyday-amenities-extract) | the `amen` layer (everyday amenities nearby) | 20 min, one command |
+| 20 | [Global Energy Monitor trackers (optional)](#20-global-energy-monitor-trackers-optional) | adds smaller plants to `industry` | 15 min, four forms |
 
 Items 2-4, 6 and 15 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
@@ -254,6 +257,39 @@ memory, because the cloud container cannot reach climatetrace.org.
 
 Then: `uv run python -m pipeline fetch` (records checksums), then
 `uv run python -m pipeline --res 5 dims --only industry` and the usual score / export / tiles.
+
+### 18. Sentinel-5P NO2 export (Earth Engine)
+
+Run the NO2 script in [`docs/gee-export.md`](gee-export.md) once (Earth Engine account, free for
+non-commercial use) and save the GeoTIFF as `data/raw/s5p_no2/s5p_no2_2023.tif`. Check the
+collection and band names on the catalog page and the Copernicus Sentinel data terms, then set
+`verified: confirmed` on `s5p_no2` and add a SPEC §15 row. Then `uv run python -m pipeline fetch
+--only s5p_no2` and `uv run python -m pipeline --res 5 dims --only no2`, then score / export / tiles.
+
+### 19. Overture everyday-amenities extract
+
+One command (DuckDB reads Overture's public bucket and keeps only the everyday categories):
+
+```bash
+uv run --extra overture python -m pipeline.prep.overture_places --release <RELEASE>
+```
+
+with the latest release from https://docs.overturemaps.org/release/latest/ (add
+`--category-field basic_category` if the release renamed `categories.primary`). It writes
+`data/raw/overture_places/places.parquet`. Check the places licence (expected CDLA-Permissive
+2.0) and that the `categories:` names in `pipeline/sources.yaml` exist in that release, then set
+`verified: confirmed`, add a §15 row and run `uv run python -m pipeline --res 5 dims --only amen`.
+
+### 20. Global Energy Monitor trackers (optional)
+
+Adds operating coal, gas, steel and cement plants that Climate TRACE misses to `industry`. On
+https://globalenergymonitor.org/projects/ fill in each tracker's download form and save the
+spreadsheets in `data/raw/gem_trackers/` as `gem_coal_plants.xlsx`, `gem_gas_plants.xlsx`,
+`gem_steel_plants.xlsx` and `gem_cement_plants.xlsx` (any subset works). Check the licence (CC BY
+4.0) and the Latitude / Longitude / Status columns, set `verified: confirmed` on `gem_trackers`
+and run `uv run python -m pipeline --res 5 dims --only industry`. To ship without GEM instead,
+remove `gem_trackers` from the `industry` `sources:` list in `pipeline/dimensions.yaml` (publish
+refuses any listed source that is not verified).
 ---
 
 ## Done

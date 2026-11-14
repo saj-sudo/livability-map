@@ -527,7 +527,102 @@
     - petrochemical-steam-cracking
     - pulp-and-paper
     - solid-waste-disposal
+  # Global Energy Monitor plants are merged in when their workbooks are present (§13.49)
+  also_uses: [gem_trackers]
   files: [power.zip, fossil_fuel_operations.zip, manufacturing.zip, waste.zip]
+
+- id: gem_trackers
+  name: Global Energy Monitor plant trackers (coal, gas, steel, cement), operating plants
+  group: env
+  access: manual
+  recipe: |
+    Optional: fills plants Climate TRACE misses (smaller coal and gas plants). On
+    https://globalenergymonitor.org/projects/ open each tracker below, fill in the short download
+    form and save the spreadsheet in data/raw/gem_trackers/ with these names:
+      gem_coal_plants.xlsx   (Global Coal Plant Tracker)
+      gem_gas_plants.xlsx    (Global Oil and Gas Plant Tracker)
+      gem_steel_plants.xlsx  (Global Iron and Steel Tracker / Steel Plant Tracker)
+      gem_cement_plants.xlsx (Global Cement and Concrete Tracker)
+    Any subset works. Check the licence on each page (expected CC BY 4.0) and that a sheet has
+    Latitude, Longitude and Status columns, log it in SPEC §15, set verified: confirmed, then run
+    uv run python -m pipeline --res 5 dims --only industry and score / export / tiles.
+  url: https://globalenergymonitor.org/projects/
+  format: xlsx
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "From memory of GEM's tracker pages (CC BY 4.0, download behind a short form); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (each tracker's release date)
+  attribution: "Global Energy Monitor, Global Coal Plant Tracker, Global Oil and Gas Plant Tracker, Global Iron and Steel Tracker, Global Cement and Concrete Tracker, CC BY 4.0"
+  processing: "operating plants with coordinates, units of one plant collapsed; merged into the Climate TRACE facility points, dropping any GEM plant within 2 km of a Climate TRACE asset (prep/gem.py)"
+  files: [gem_coal_plants.xlsx, gem_gas_plants.xlsx, gem_steel_plants.xlsx, gem_cement_plants.xlsx]
+
+# ---------------------------------------------------------------- traffic air pollution (§13.49, env no2)
+- id: s5p_no2
+  name: Copernicus Sentinel-5P TROPOMI tropospheric NO2 column, annual mean 2023, 0.05 degree (Earth Engine export)
+  group: env
+  access: manual
+  recipe: |
+    Export once from Google Earth Engine with the NO2 script in docs/gee-export.md (collection
+    COPERNICUS/S5P/OFFL/L3_NO2, band tropospheric_NO2_column_number_density, 2023 mean, 0.05
+    degree, EPSG:4326, nodata -9999) and save the GeoTIFF as data/raw/s5p_no2/s5p_no2_2023.tif.
+    Check the Copernicus Sentinel data terms (free and open, attribution required) and log them
+    in SPEC §15, set verified: confirmed, then run
+    uv run python -m pipeline --res 5 dims --only no2 and score / export / tiles.
+  url: https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_OFFL_L3_NO2
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: Copernicus Sentinel data terms (free, full and open; attribution)
+  license_note: "From memory of the Copernicus Sentinel data legal notice: free use and redistribution with the attribution 'Contains modified Copernicus Sentinel data [year]'; not read first-hand from this container (§15)"
+  verified: search
+  vintage: "2023 annual mean (OFFL L3)"
+  attribution: "Contains modified Copernicus Sentinel data 2023, processed by ESA / Google Earth Engine"
+  processing: "annual mean tropospheric NO2 column (mol/m², shown as µmol/m²) per hex: the mean of the 0.05 degree pixels where the hex covers at least two pixels of area (res 4-5), the pixel under the centroid where it is smaller (res 6-7) (raster_mean sample: auto)"
+  files: [s5p_no2_2023.tif]
+
+# ---------------------------------------------------------------- everyday amenities (§13.49, life amen)
+- id: overture_places
+  name: Overture Maps places, everyday amenities extract (groceries, pharmacies, clinics, schools, parks)
+  group: life
+  access: manual
+  recipe: |
+    Make the slim extract once on the laptop (DuckDB reads the public bucket, about 10-20 min):
+      uv run --extra overture python -m pipeline.prep.overture_places --release <RELEASE>
+    with the latest release from https://docs.overturemaps.org/release/latest/ (add
+    --category-field basic_category if the release renamed categories.primary). It writes
+    data/raw/overture_places/places.parquet. Check the places licence (expected CDLA-Permissive
+    2.0) and that the category names below exist in that release's taxonomy, log it in SPEC §15,
+    set verified: confirmed, then run uv run python -m pipeline --res 5 dims --only amen and
+    score / export / tiles.
+  url: https://docs.overturemaps.org/guides/places/
+  format: parquet
+  crs: EPSG:4326
+  license: CDLA-Permissive 2.0
+  license_note: "From memory of Overture's attribution page (places theme CDLA-Permissive 2.0, derived from Meta and Microsoft data); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (the Overture release used)
+  attribution: "© OpenStreetMap contributors, Overture Maps Foundation (places, CDLA-Permissive 2.0)"
+  processing: "places whose primary category is on the list below with confidence >= min_confidence, counted within 1 km of the hex centre (never below the hex edge) and divided by the area searched: everyday amenities per km² (point_radius sum, per_km2; prep/overture_places.py)"
+  min_confidence: 0.6
+  # names from memory of the Overture places taxonomy; check them against the release (§15).
+  # Editing this list re-runs the loader (§13.45)
+  categories:
+    - supermarket
+    - grocery_store
+    - convenience_store
+    - pharmacy
+    - hospital
+    - medical_center
+    - doctor
+    - school
+    - elementary_school
+    - middle_school
+    - high_school
+    - park
+    - playground
+    - library
+  files: [places.parquet]
 
 # ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
 # BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS

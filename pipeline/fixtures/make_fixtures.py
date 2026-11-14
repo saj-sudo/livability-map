@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 14  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 15  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 # the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
 # small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
@@ -582,6 +582,9 @@ def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
     rwi = np.where(west, (glng - 11.0), (glng - 13.0))  # -1..1 within each country
     pd.DataFrame({"lat": np.round(glat[on], 4), "lng": np.round(glng[on], 4), "rwi": np.round(rwi[on], 3)}).to_csv(out / "rwi.csv", index=False)
     pd.DataFrame({"lat": [42.52, 42.45, 42.6], "lng": [13.02, 12.95, 13.1], "fatal_per_year": [3.0, 1.5, 0.5]}).to_csv(out / "ged.csv", index=False)
+    # industrial facilities (Climate TRACE stand-in, §13.46): four beside Cedar, one near Alder,
+    # one on the coast; none in the desert, so far hexes count a real 0
+    pd.DataFrame({"lat": [42.50, 42.52, 42.47, 42.55, 43.02, 41.3], "lng": [13.0, 13.04, 12.97, 13.06, 11.02, 13.5], "one": 1.0}).to_csv(out / "ct_assets.csv", index=False)
     # walking time to care: three times the motorised stand-in; water points around Birch only (so
     # other places are missing, as outside WPdx coverage), with water at most of them
     walk = np.where(land, 30.0 + 1800.0 * dist, -9999.0)

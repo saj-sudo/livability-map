@@ -24,8 +24,9 @@ Last updated: 2026-11-14.
 | 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
 | 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
 | 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
+| 15 | [Climate TRACE sector downloads](#15-climate-trace-sector-downloads) | the `industry` layer (heavy industry nearby); lets publish include it | 15 min |
 
-Items 2-4 and 6 only need a file saved in the right place. After any of them, run
+Items 2-4, 6 and 15 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
 (the commands are listed per item).
 
@@ -234,6 +235,25 @@ refuses them until they are:
    `uv run python -m pipeline --res 5 dims --only nri --only phealth` and the usual score / export /
    tiles.
 
+
+### 15. Climate TRACE sector downloads
+
+The `industry` layer counts large industrial facilities within 10 km (SPEC §13.46). The source is
+wired and tested on the fixture world, but the file layout and column names were written from
+memory, because the cloud container cannot reach climatetrace.org.
+
+1. On https://climatetrace.org/data download the latest release (all countries) of four sectors
+   and save them in `data/raw/climate_trace_assets/` as `power.zip`, `fossil_fuel_operations.zip`,
+   `manufacturing.zip` and `waste.zip`.
+2. Check: the licence on the page (expected CC BY 4.0); that each zip holds
+   `*emissions_sources*.csv` files with `source_id`, `subsector`, `lat` and `lon` columns; and that
+   the `subsectors:` names in `pipeline/sources.yaml` match the ones in the files (ask Claude to
+   adjust the list or the loader if not).
+3. Set `verified: confirmed` and `vintage` on `climate_trace_assets` in `pipeline/sources.yaml`
+   and add the result to SPEC §15.
+
+Then: `uv run python -m pipeline fetch` (records checksums), then
+`uv run python -m pipeline --res 5 dims --only industry` and the usual score / export / tiles.
 ---
 
 ## Done

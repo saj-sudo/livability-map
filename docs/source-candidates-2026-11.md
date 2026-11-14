@@ -74,6 +74,9 @@ data hosts, so each one is `verified: search` until checked on Saj's laptop (CLA
 6. **Health supply vs need:** HRSA physicians + PLACES outcomes + MAP travel time.
 7. **Queer community outside the US:** EU cities survey (lgbtq) + Eurostat grid; still greyed out elsewhere.
 
+**Update 2026-11-14:** FEMA NRI and CDC PLACES are wired (SPEC §13.38); Climate TRACE is wired as
+the `industry` env layer, a count of large facilities within 10 km (SPEC §13.46). GEM is deferred.
+
 ## Recommended order, if we build any of it
 
 1. FEMA NRI + CDC PLACES (US, public domain, tract, uses the existing `area_weighted_overlay`: lowest effort)

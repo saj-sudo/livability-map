@@ -489,6 +489,46 @@
   processing: "GHLTH_CrudePrev (% of adults 18+ reporting fair or poor health), population-weighted from tracts (area_weighted_overlay); blank tracts stay missing"
   files: [places_tract_gis.csv]
 
+# ---------------------------------------------------------------- heavy industry nearby (§13.46, env industry)
+- id: climate_trace_assets
+  name: Climate TRACE emitting assets, sector download packages (power, fossil fuel operations, manufacturing, waste)
+  group: env
+  access: manual
+  recipe: |
+    Climate TRACE publishes one zip per sector on its data page (https://climatetrace.org/data).
+    Download the latest release (all countries) of these four sectors and save them under
+    data/raw/climate_trace_assets/ with these names:
+      power.zip, fossil_fuel_operations.zip, manufacturing.zip, waste.zip
+    Then check, first-hand: the licence on the download page (expected CC BY 4.0), that each zip
+    holds *emissions_sources*.csv files with source_id, subsector, lat and lon columns, and that
+    the subsector names below match. Log it in SPEC §15, set verified: confirmed and vintage, then
+    run: uv run python -m pipeline fetch (records checksums), then
+    uv run python -m pipeline --res 5 dims --only industry, then score, export, tiles.
+  url: https://climatetrace.org/data
+  format: csv-zip
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "From memory of climatetrace.org/data ('Climate TRACE data is licensed under CC BY 4.0'); not yet read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (the release named on the download page)
+  attribution: "Climate TRACE - Tracking Real-time Atmospheric Carbon Emissions (climatetrace.org), CC BY 4.0"
+  processing: "assets in the subsectors below with coordinates, one point per asset (rows per gas and year deduplicated by source_id), counted within 10 km of the hex centre (point_radius sum); 0 = none recorded nearby (prep/climate_trace.py)"
+  # point-like heavy industry; area-like assets (oil and gas fields, pipelines, farms, roads) are left out.
+  # Names from memory of the v4 packages: check them against the files (§15). Editing this list
+  # re-runs the loader (the prep cache key carries it, §13.45).
+  subsectors:
+    - electricity-generation
+    - oil-and-gas-refining
+    - coal-mining
+    - iron-and-steel
+    - cement
+    - chemicals
+    - aluminum
+    - petrochemical-steam-cracking
+    - pulp-and-paper
+    - solid-waste-disposal
+  files: [power.zip, fossil_fuel_operations.zip, manufacturing.zip, waste.zip]
+
 # ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
 # BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
 # padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).

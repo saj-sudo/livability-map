@@ -352,3 +352,14 @@
   joiners:
     - {source: cdc_places, joiner: area_weighted_overlay, res: tract, field: poor_health_pct, weight_field: population, domain: us, label: places, unit: "% of adults reporting fair or poor health", decimals: 1}
   note: "CDC PLACES model-based estimate (BRFSS) of adults who rate their health fair or poor: a health outcome beside `health`, which measures doctor supply. Model estimates, not a survey of each tract"
+
+- id: industry
+  name: Heavy industry nearby
+  group: env
+  kind: score
+  higher_is: worse
+  coverage: [global]
+  sources: [climate_trace_assets]
+  joiners:
+    - {source: climate_trace_assets, joiner: point_radius, res: hex, field: one, radius_km: 10, agg: sum, domain: global, label: ctrace, unit: "large industrial facilities within 10 km", decimals: 0}
+  note: "Large industrial facilities within 10 km (Climate TRACE assets: power plants, refineries, coal mines, steel, cement, chemicals, aluminium, pulp and paper, landfills), counted, not weighted by CO2e, because tons of greenhouse gas measure climate impact rather than local harm. Climate TRACE models large emitters, so small plants and some countries are under-represented: 0 means none recorded nearby, not none. On the coarsest, zoomed-out hexagons the radius is the hexagon size (about 23 km), never smaller. Present-day environment: never part of the 2050 exposure score"

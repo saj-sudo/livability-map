@@ -494,3 +494,13 @@ def test_a_single_country_joiner_leaves_other_countries_to_the_next_joiner():
     # without the map the old first-hit-wins behaviour returns: both hexes take the US value
     loose = dims.join_dimension(dim, hexes, 4, {"tracts": tracts, "world": world})
     assert list(loose["t_raw"]) == [7.0, 7.0]
+
+
+def test_industry_counts_facilities_nearby_and_zero_far_away(settings):
+    """§13.46: a hex beside the fixture's Cedar cluster counts several facilities; the desert,
+    far from every facility, counts a real 0 (the asset list is global), never NaN."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4).set_index("h3")
+    assert df.loc[_cell(42.5, 13.0), "industry_raw"] >= 2
+    assert df.loc[_cell(40.7, 12.5), "industry_raw"] == 0
+    assert (df["industry_res"] == "hex").all() and df["industry_raw"].notna().all()

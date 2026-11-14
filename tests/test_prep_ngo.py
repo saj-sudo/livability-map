@@ -53,3 +53,45 @@ def test_wpdx_loader_scores_water_present_and_drops_duplicates_and_unknowns(tmp_
     out = load_csv(path)
     assert list(out.columns) == ["lat", "lng", "has_water"]
     assert out["has_water"].tolist() == [1.0, 0.0]  # Unknown -> dropped, duplicate -> dropped
+
+
+def _ct_zip(path, members: dict[str, str]):
+    with zipfile.ZipFile(path, "w") as z:
+        for name, text in members.items():
+            z.writestr(name, text)
+    return path
+
+
+def test_climate_trace_loader_counts_each_allowed_asset_once(tmp_path):
+    """§13.46: one point per asset (rows per gas and year collapse), allowed subsectors only,
+    no point without coordinates, either coordinate spelling."""
+    from pipeline.prep.climate_trace import load_zip
+
+    power = (
+        "source_id,source_name,subsector,lat,lon,gas,start_time,emissions_quantity\n"
+        "1,Plant A,electricity-generation,10.0,20.0,co2,2023-01-01,5\n"
+        "1,Plant A,electricity-generation,10.0,20.0,ch4,2023-01-01,1\n"
+        "1,Plant A,electricity-generation,10.0,20.0,co2,2024-01-01,6\n"
+        "2,Plant B,electricity-generation,,,co2,2024-01-01,3\n"
+    )
+    oil = (
+        "source_id,subsector,latitude,longitude,gas\n"
+        "7,oil-and-gas-refining,11.0,21.0,co2\n"
+        "8,oil-and-gas-production-and-transport,12.0,22.0,co2\n"
+    )
+    path = _ct_zip(tmp_path / "power.zip", {"DATA/power/electricity-generation_emissions_sources_v4_5.csv": power, "DATA/fossil/oil-and-gas-refining_emissions_sources.csv": oil, "README.txt": "x"})
+    out = load_zip(path, ["electricity-generation", "oil-and-gas-refining"])
+    assert list(out.columns) == ["lat", "lng", "one"]
+    assert sorted(zip(out["lat"], out["lng"], strict=True)) == [(10.0, 20.0), (11.0, 21.0)]
+    assert (out["one"] == 1.0).all()
+
+
+def test_climate_trace_loader_says_which_columns_it_found(tmp_path):
+    from pipeline.prep.climate_trace import load_zip
+
+    path = _ct_zip(tmp_path / "waste.zip", {"waste_emissions_sources.csv": "source_id,subsector,x,y\n1,solid-waste-disposal,1,2\n"})
+    with pytest.raises(ValueError, match="no latitude column.*found"):
+        load_zip(path, ["solid-waste-disposal"])
+    empty = _ct_zip(tmp_path / "empty.zip", {"readme.txt": "x"})
+    with pytest.raises(ValueError, match="no \\*emissions_sources\\*.csv member"):
+        load_zip(empty, ["solid-waste-disposal"])

@@ -113,7 +113,8 @@ CORS). No database in the web app.
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
-                                             GFED5 fire, Meta RWI, UCDP, WPdx; US tracts: FEMA NRI, CDC PLACES
+                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE assets;
+                                             US tracts: FEMA NRI, CDC PLACES
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
@@ -822,6 +823,23 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     The first real run after this rebuilds `dims` and later stages once more, which the release
     rebuild already does.
 
+46. **Heavy industry nearby** (Saj, 2026-11-14): a new env dimension `industry` counts large
+    industrial facilities within 10 km of the hex centre from Climate TRACE's emitting assets
+    (`climate_trace_assets`, CC BY 4.0, `point_radius` sum of one point per asset). Decisions:
+    - *Count, not CO2e.* Tons of greenhouse gas measure climate impact, not local harm; a big gas
+      plant would outrank a small coal plant. Each facility counts once.
+    - *Point-like heavy industry only:* the `subsectors:` allow-list in sources.yaml (power,
+      refining, coal mining, steel, cement, chemicals, aluminium, steam cracking, pulp and paper,
+      landfills). Area-like assets (oil and gas fields, pipelines, farms, roads) are left out.
+    - *0 is real* (the asset list is global, like UCDP), labelled "none recorded nearby", because
+      Climate TRACE models large emitters and under-represents small plants and some countries.
+      The radius floors at the hex edge (§13.36), so the coarsest hexes count within ~23 km.
+    - *Climate TRACE only;* Global Energy Monitor trackers (form-gated, overlapping) come later.
+    - Group `env`: present-day, never part of the 2050 exposure (§13.28); no preset weights it yet.
+    - `access: manual` (four sector zips, `docs/manual-steps.md` item 15), `verified: search`:
+      file layout, column names and subsector names are from memory, and the loader stops with
+      the columns it found when they differ. Fixture world VERSION 15 adds six stand-in facilities.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -899,6 +917,7 @@ the live status per source.
 | 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 | 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
 | 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
+| 2026-11-14 | Climate TRACE assets (§13.46) | search. From memory, not read here (the container blocks climatetrace.org): per-sector zips on climatetrace.org/data with `*emissions_sources*.csv` (source_id, subsector, lat, lon, gas, emissions_quantity), CC BY 4.0. Confirm the licence, file and column names and the subsector list on the laptop. | https://climatetrace.org/data |
 
 ## 16. Phasing and session plan
 
@@ -990,6 +1009,9 @@ From the 2026-11-14 review pass (§13.45):
   `--only` meanwhile); and a `grid` rerun that writes identical bytes still cascades because
   fingerprints use size + mtime. Fix: digest only the loaders a dimension's sources use, and
   content-hash small stage outputs.
+- [x] Climate TRACE facility proximity (`industry`, §13.46); first-hand check is manual-steps item 15.
+- [ ] Global Energy Monitor trackers as a second `industry` joiner (smaller coal plants), and an
+  environmental-justice preset (PM2.5, `industry`, read against `wealth` / `incmix`).
 - [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
   stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
 - [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
@@ -1190,6 +1212,7 @@ where the hovered or clicked hex has `_res = none`.
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |
+| industry | Heavy industry nearby, group `env` | Climate TRACE emitting assets, count within 10 km, CC BY 4.0 (`hex`, §13.46) | same | GEM trackers later |
 | fire | Wildfire (burned area), group `env` | GFED5 burned area 2001-2020 mean, 0.25°, CC BY 4.0 (`hex`, centroid) | same | GWIS country profiles (no download) |
 | drought | Drought risk, group `env` | Aqueduct 4.0 baseline `drr_cat` 0-4 (Aqueduct 3.0 lineage), CC BY 4.0 (`basin`) | same | JRC GDO SPI-12 kept as a fallback (1°, CC BY 4.0) |
 

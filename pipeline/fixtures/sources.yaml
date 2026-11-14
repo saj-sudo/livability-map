@@ -570,6 +570,17 @@
   verified: confirmed
   vintage: "fixture"
   files: [ged.csv]
+- id: climate_trace_assets
+  name: fixture industrial facilities (Climate TRACE-like points, a cluster near Cedar)
+  group: env
+  access: fixture
+  url: file://pipeline/fixtures/data/ct_assets.csv
+  format: csv
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [ct_assets.csv]
 - id: map_walking_healthcare
   name: fixture walking time to care (minutes)
   group: life

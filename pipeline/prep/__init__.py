@@ -64,6 +64,8 @@ LOADERS: dict[str, str] = {
     "meta_rwi": "pipeline.prep.meta_rwi:load",
     "ucdp_ged": "pipeline.prep.ucdp_ged:load",
     "wpdx_water_points": "pipeline.prep.wpdx:load",
+    # heavy industry nearby (SPEC §13.46)
+    "climate_trace_assets": "pipeline.prep.climate_trace:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read

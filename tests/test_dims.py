@@ -302,7 +302,7 @@ def _store(settings, monkeypatch):
     todo = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
     by_source: dict[str, list] = {}
     for d in todo:
-        for src in {s.source for s in d.joiners if s.joiner not in ("raster_mean", "point_density")}:
+        for src in {s.source for s in d.joiners if s.joiner != "raster_mean"}:
             by_source.setdefault(src, []).append(d)
     shared = next(s for s, ds in by_source.items() if len(ds) >= 2)
     loads: list[str] = []
@@ -413,7 +413,7 @@ def test_a_checkpoint_whose_dimension_changed_is_recomputed(settings, monkeypatc
         dims.run(settings)
     first = order[0]
     real_spec = dims._dim_spec
-    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources: "edited" if dim.id == first else real_spec(dim, sources))
+    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources, countries=None: "edited" if dim.id == first else real_spec(dim, sources, countries))
     calls = _spy_join(monkeypatch)
     dims.run(settings)
     assert calls == [first, *order[3:]]  # the edited dimension is redone, the other two checkpoints are kept
@@ -455,3 +455,42 @@ def test_leftover_checkpoints_are_dropped_when_the_final_file_is_already_fresh(s
     calls = _spy_join(monkeypatch)
     dims.run(settings)
     assert calls == [] and not parts.exists()
+
+
+def test_us_layers_never_spill_into_the_neighbouring_country(settings):
+    """§13.45: the fixture's US-like tracts reach a few XKA border hexes; those hexes stay missing
+    (and unranked against XKB) instead of taking a US value."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4)
+    xa = df[df["iso_a2"] == "XA"]
+    for dim in ("lgbtq", "incmix", "nri", "phealth", "school"):
+        assert not (xa[f"{dim}_dom"] == "us").any(), dim
+    assert not (xa["race_dom"] == "us").any() and xa.loc[xa["race_res"] == "tract"].empty
+
+
+def test_a_single_country_joiner_leaves_other_countries_to_the_next_joiner():
+    """A polygon covering two countries fills only its own country's hexes; the hex across the
+    border falls through to the next joiner (here a global one)."""
+    import geopandas as gpd
+    import shapely
+
+    from pipeline.registry import Dimension, JoinSpec
+
+    cells = [_cell(42.0, 12.0), _cell(42.0, 13.0)]
+    lat, lng = zip(*(h3.cell_to_latlng(c) for c in cells), strict=True)
+    hexes = pd.DataFrame({"h3": cells, "lat": lat, "lng": lng, "iso_a2": ["XA", "XB"], "inhabited": [True, True]})
+    tracts = gpd.GeoDataFrame({"v": [7.0]}, geometry=[shapely.box(10, 40, 14, 44)], crs=4326)
+    world = gpd.GeoDataFrame({"v": [1.0]}, geometry=[shapely.box(10, 40, 14, 44)], crs=4326)
+    dim = Dimension(
+        id="t", name="t", group="life", kind="score", higher_is="better", coverage=[],
+        joiners=[
+            JoinSpec(source="tracts", joiner="area_weighted_overlay", res="tract", field="v", domain="us"),
+            JoinSpec(source="world", joiner="polygon_centroid", res="admin1", field="v", domain="global"),
+        ],
+    )
+    got = dims.join_dimension(dim, hexes, 4, {"tracts": tracts, "world": world}, domain_countries={"us": ("XB",)})
+    assert list(got["t_raw"]) == [1.0, 7.0]
+    assert list(got["t_dom"]) == ["global", "us"] and list(got["t_res"]) == ["admin1", "tract"]
+    # without the map the old first-hit-wins behaviour returns: both hexes take the US value
+    loose = dims.join_dimension(dim, hexes, 4, {"tracts": tracts, "world": world})
+    assert list(loose["t_raw"]) == [7.0, 7.0]

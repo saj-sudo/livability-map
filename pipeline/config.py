@@ -19,11 +19,25 @@ NON_COMMERCIAL: bool = True  # §13.13
 # invariant 2 (SPEC §6.1). hex = computed per hex from a raster or point set; basin = a
 # hydrological sub-basin polygon (Aqueduct) sampled at the hex centroid
 # grid = a statistical grid (Eurostat 1 km census cells) aggregated per hex (Session 8, SPEC §13.34)
-# area = a small statistical area outside the US (England LSOA; later IRIS, DAs, SA2), kept apart from
-# `tract` so each carries its own unit text on the hex
+# area = a small statistical area outside the US (England LSOA, French IRIS, Canadian DAs, Australian
+# SA2), kept apart from `tract` so each carries its own unit text on the hex
 RES_TAGS = ("hex", "grid", "basin", "admin1", "county", "tract", "area", "national", "none")
 
 BBox = tuple[float, float, float, float]  # minlng, minlat, maxlng, maxlat
+
+# Scoring domains that belong to one country (SPEC §20.4, §13.45): a joiner tagged with one of these
+# fills only hexes whose ISO2 is listed, so a Canadian border hex never takes a US tract value (and a
+# US rank) just because 5% of it overlaps a tract. Domains not listed (global, oecd, eu, country) are
+# not restricted. A joiner's own `countries:` in dimensions.yaml overrides this map.
+DOMAIN_COUNTRIES: dict[str, tuple[str, ...]] = {
+    "us": ("US", "PR", "VI", "GU", "AS", "MP"),
+    "uk": ("GB",),
+    "de": ("DE",),
+    "nl": ("NL",),
+    "fr": ("FR", "GP", "MQ", "GF", "RE", "YT"),
+    "ca": ("CA",),
+    "au": ("AU",),
+}
 
 
 def find_root(start: Path | None = None) -> Path:
@@ -48,6 +62,8 @@ class Settings:
     force: bool = False  # ignore stage cache
     # ISO3 -> ISO2 overrides for codes pycountry does not know (fixtures use user-assigned codes)
     iso_overrides: dict[str, str] = field(default_factory=dict)
+    # scoring domain -> ISO2 codes it may fill (see DOMAIN_COUNTRIES; fixtures map them onto XA/XB)
+    domain_countries: dict[str, tuple[str, ...]] = field(default_factory=lambda: dict(DOMAIN_COUNTRIES))
 
     def __post_init__(self) -> None:
         if not self.res:

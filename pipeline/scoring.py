@@ -95,12 +95,22 @@ def bivariate_cuts(exposure: pd.Series, wb: pd.Series, inhabited: pd.Series) -> 
     return np.nanpercentile(e.to_numpy()[dom], q), np.nanpercentile(w.to_numpy()[dom], q)
 
 
+def _tercile(v: np.ndarray, cuts: np.ndarray) -> np.ndarray:
+    """0 / 1 / 2 for low / middle / high; NaN comes out 0 and is masked by the caller."""
+    with np.errstate(invalid="ignore"):
+        return (v >= cuts[0]).astype("int64") + (v > cuts[1]).astype("int64")
+
+
 def bivariate_class(exposure: pd.Series, wb: pd.Series, inhabited: pd.Series, cuts: tuple[np.ndarray, np.ndarray] | None = None) -> pd.Series:
     """3x3 bivariate class 1-9 (SPEC §8.4): terciles of ``exposure`` and ``wb`` computed over
     inhabited hexes that have both values; ``class = 1 + exposure_tercile + 3 * wb_tercile``
     (tercile 0 = lowest). So 1 = low exposure / low wellbeing, 3 = high exposure / low wellbeing,
     7 = low exposure / high wellbeing, 9 = high / high. 0 when either value is missing.
     Uninhabited hexes are classed with the inhabited cut points; ``cuts`` overrides them.
+
+    Ties (§13.45): a value at or above the lower cut is at least middle, strictly above the upper
+    cut is high. So when every value is equal (both cuts collapse onto it) every hex is middle,
+    not high, and a value exactly on the upper cut is middle.
     """
     e, w = _num(exposure), _num(wb)
     both = (e.notna() & w.notna()).to_numpy()
@@ -109,6 +119,6 @@ def bivariate_class(exposure: pd.Series, wb: pd.Series, inhabited: pd.Series, cu
     if cuts is None:
         return out
     e_cuts, w_cuts = cuts
-    cls = 1 + np.searchsorted(e_cuts, e.to_numpy(), side="right") + 3 * np.searchsorted(w_cuts, w.to_numpy(), side="right")
+    cls = 1 + _tercile(e.to_numpy(), e_cuts) + 3 * _tercile(w.to_numpy(), w_cuts)
     out.iloc[np.flatnonzero(both)] = cls[both].astype("int8")
     return out

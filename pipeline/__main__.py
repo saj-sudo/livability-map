@@ -40,7 +40,7 @@ def main(
         from .fixtures import make_fixtures
 
         make_fixtures.ensure(settings.fixture_data_dir)
-        settings.iso_overrides = dict(make_fixtures.ISO_OVERRIDES)
+        make_fixtures.apply(settings)
     ctx.obj = settings
     print(f"pipeline {settings.describe()}")
 

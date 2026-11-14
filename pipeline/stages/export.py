@@ -69,8 +69,24 @@ def refresh_refs(settings: Settings) -> list[int]:
         df["ref"] = ref
         with stage_cache.atomic_path(out) as tmp:
             df.to_parquet(tmp, index=False)
+        _rerecord(settings, e.res, out, len(df))
         done.append(e.res)
     return done
+
+
+def _rerecord(settings: Settings, res: int, out, rows: int) -> None:
+    """After ``refresh_refs`` rewrote ``out``, record it against its current children so the next
+    export does not redo it (§13.45). A build that also wrote GeoJSONL keeps its stale record:
+    that file still carries the old ``ref``, so the next export must rebuild both."""
+    params = dict(stage_cache.read_meta(out).get("params") or {})
+    if not params or params.get("geojson"):
+        return
+    kids = child_paths(settings, res)
+    inputs = [settings.hexes_path(res)] + [settings.stage_path(s, res) for s in INTERIM_STAGES] + kids
+    if not all(p.exists() for p in inputs):
+        return
+    params["children"] = [p.name for p in kids]
+    stage_cache.record(out, inputs, params, {"rows": rows})
 
 
 def _feature(row: dict, keep: list[str]) -> dict:

@@ -373,9 +373,9 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
         metadata.update(metadata_extra)
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".pmtiles.part")
     use_pool = (workers is None or workers > 1) and len(tasks) >= 500 and workers != 0
-    with open(tmp, "wb") as fh:
+    # temp file + rename with the Windows retry (stage_cache.atomic_path); a crash leaves no .part
+    with stage_cache.atomic_path(out) as tmp, open(tmp, "wb") as fh:
         writer = Writer(fh)
         if use_pool:
             pool = ProcessPoolExecutor(max_workers=workers or default_workers(layers), initializer=_init_worker, initargs=(layers,))
@@ -399,7 +399,6 @@ def build_pmtiles(layers: list[LayerSpec], out: Path, *, workers: int | None = N
             if use_pool:
                 pool.shutdown()
         writer.finalize(header, metadata)
-    tmp.replace(out)
     report.bytes = out.stat().st_size
     report.sha256 = sha256_file(out)
     report.seconds = time.time() - t0

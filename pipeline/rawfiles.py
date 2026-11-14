@@ -40,33 +40,48 @@ def _pick_member(names: list[str], member: str | None, suffixes: tuple[str, ...]
     return candidates[0]
 
 
+def _stamp(archive: Path, extra: str = "") -> str:
+    """Which archive an extracted copy came from: its name, size and mtime (a re-download changes
+    them), plus ``extra`` (a member's CRC)."""
+    st = archive.stat()
+    return f"{archive.name} {st.st_size} {st.st_mtime_ns} {extra}".strip()
+
+
 def unzip_member(archive: Path, dest_dir: Path, member: str) -> Path:
-    """Extract one member (kept under its archive path) unless a same-size extracted copy exists."""
+    """Extract one member (kept under its archive path) unless the copy there came from this
+    archive's current version of that member (size + CRC, recorded in a ``.from`` sidecar)."""
     target = dest_dir / member
+    marker = target.with_name(target.name + ".from")
     with zipfile.ZipFile(archive) as z:
         info = z.getinfo(member)
-        if target.exists() and target.stat().st_size == info.file_size:
+        stamp = f"{info.file_size} {info.CRC:08x}"
+        if target.exists() and target.stat().st_size == info.file_size and marker.exists() and marker.read_text(encoding="utf-8") == stamp:
             return target
         target.parent.mkdir(parents=True, exist_ok=True)
         with stage_cache.atomic_path(target) as tmp, z.open(info) as src, open(tmp, "wb") as dst:
             shutil.copyfileobj(src, dst)
+    stage_cache.write_atomic(marker, stamp)
     return target
 
 
 def unzip_prefix(archive: Path, dest_dir: Path, prefix: str) -> Path:
-    """Extract every member under ``prefix`` (a directory such as a File Geodatabase) once."""
+    """Extract every member under ``prefix`` (a directory such as a File Geodatabase) once per
+    version of the archive: the ``.extracted`` marker records which one (§13.45)."""
     target = dest_dir / prefix
     marker = target / ".extracted"
-    if marker.exists():
+    stamp = _stamp(archive)
+    if marker.exists() and marker.read_text(encoding="utf-8") == stamp:
         return target
     with zipfile.ZipFile(archive) as z:
         members = [n for n in z.namelist() if n.startswith(prefix)]
         if not members:
             raise FileNotFoundError(f"{archive.name} has no members under {prefix!r}")
+        if target.exists():
+            shutil.rmtree(target)  # a file the new archive dropped must not linger
         dest_dir.mkdir(parents=True, exist_ok=True)
         z.extractall(dest_dir, members=members)
     target.mkdir(parents=True, exist_ok=True)
-    stage_cache.write_atomic(marker, "ok")
+    stage_cache.write_atomic(marker, stamp)
     return target
 
 

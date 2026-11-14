@@ -75,13 +75,12 @@ def pm25_geotiff(nc_path: Path, out: Path, variable: str = "PM25", slab_rows: in
         ascending = lat[1] > lat[0]
         fill = da.attrs.get("_FillValue", da.encoding.get("_FillValue"))
         out.parent.mkdir(parents=True, exist_ok=True)
-        tmp = out.with_suffix(".tif.part")
         profile = {
             "driver": "GTiff", "width": w, "height": h, "count": 1, "dtype": "float32", "crs": "EPSG:4326",
             "transform": transform, "nodata": np.nan, "tiled": True, "blockxsize": 512, "blockysize": 512,
             "compress": "deflate", "predictor": 3, "BIGTIFF": "IF_SAFER",
         }
-        with rasterio.open(tmp, "w", **profile) as dst:
+        with stage_cache.atomic_path(out) as tmp, rasterio.open(tmp, "w", **profile) as dst:
             for row0 in range(0, h, slab_rows):
                 row1 = min(h, row0 + slab_rows)
                 # output rows row0..row1 (north-up) come from input rows counted from the other end
@@ -96,7 +95,6 @@ def pm25_geotiff(nc_path: Path, out: Path, variable: str = "PM25", slab_rows: in
                 # of precisely zero never occurs over land, so <= 0 is "no estimate", not clean air
                 block[block <= 0] = np.nan
                 dst.write(block.astype("float32"), 1, window=Window(0, row0, w, row1 - row0))
-        tmp.replace(out)
     return out
 
 
@@ -178,8 +176,6 @@ def gfed5_burned_fraction(zip_path: Path, out: Path, years: tuple[int, int] = GF
     pct = _north_up(pct, lat)
     transform, _, _ = _grid_transform(lat, lon)
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".tif.part")
-    with rasterio.open(tmp, "w", driver="GTiff", width=pct.shape[1], height=pct.shape[0], count=1, dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0, compress="deflate") as dst:
+    with stage_cache.atomic_path(out) as tmp, rasterio.open(tmp, "w", driver="GTiff", width=pct.shape[1], height=pct.shape[0], count=1, dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0, compress="deflate") as dst:
         dst.write(pct.astype("float32"), 1)
-    tmp.replace(out)
     return out

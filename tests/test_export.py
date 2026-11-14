@@ -5,7 +5,7 @@ import json
 import pandas as pd
 from typer.testing import CliRunner
 
-from pipeline import attrs
+from pipeline import attrs, stage_cache
 from pipeline.registry import load_dimensions
 from pipeline.stages import admin, dims, export, fetch, grid, hazards, pop, score, urban
 
@@ -90,3 +90,10 @@ def test_ref_is_refreshed_when_a_finer_resolution_is_added_later(settings):
     r5 = pd.read_parquet(settings.out_dir / "hexes_r5.parquet")
     r6 = pd.read_parquet(settings.hexes_path(6))
     assert set(r5.loc[r5["ref"].fillna(False).astype(bool), "h3"]) == set(r6["parent"])
+    # §13.45: the rewrite is recorded, so the next res-5 export has nothing to do
+    settings.res = [5]
+    meta = stage_cache.read_meta(settings.out_dir / "hexes_r5.parquet")
+    assert meta["params"]["children"] == ["hexes_r6.parquet"]
+    mtime = (settings.out_dir / "hexes_r5.parquet").stat().st_mtime_ns
+    export.run(settings)
+    assert (settings.out_dir / "hexes_r5.parquet").stat().st_mtime_ns == mtime

@@ -4,7 +4,9 @@ Two uses, after Session 8 (SPEC §13.36):
 
 - ``agg="sum"``: e.g. conflict fatalities per year within 25 km (UCDP GED). A hex with no event
   in range gets a real 0, because the event set covers the whole world: "no recorded event
-  nearby" is a measurement, not missing data.
+  nearby" is a measurement, not missing data. That only holds while the point set is real: an
+  empty point set gives NaN everywhere, and points whose value column is all non-numeric raise
+  (a prep change must never turn into a world of zeros, §13.45).
 - ``agg="mean"`` (optionally weighted): e.g. Meta's Relative Wealth Index, whose ~2.4 km tiles are
   sparser than a res-7 hex; averaging the tiles within a few km of the centre gives every hex a
   value where tiles exist nearby. A hex with no point in range is missing (NaN), never 0.
@@ -43,8 +45,10 @@ def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str
     keep = pts["lat"].between(-90, 90) & pts["lng"].between(-180, 180) & np.isfinite(pts[field])
     if weight_field:
         keep &= pts[weight_field] > 0
+    if len(pts) and not keep.any():
+        raise ValueError(f"point_radius: none of the {len(pts)} points has a usable {field!r} value (check the prep loader)")
     pts = pts[keep]
-    out = np.full(len(hexes), 0.0 if agg == "sum" else np.nan)
+    out = np.full(len(hexes), 0.0 if agg == "sum" and not pts.empty else np.nan)
     if not pts.empty:
         radius = max(float(radius_km), h3.average_hexagon_edge_length(res, unit="km"))
         chord = 2.0 * np.sin(radius / (2.0 * EARTH_KM))

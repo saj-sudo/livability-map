@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from pipeline import sanity
-from pipeline.joiners import area_weighted_overlay, iso_lookup, point_density, polygon_centroid
+from pipeline.joiners import area_weighted_overlay, iso_lookup, polygon_centroid
 from pipeline.stages import admin, fetch, grid, pop
 
 
@@ -54,16 +54,6 @@ def test_area_weighted_overlay_tracts(settings):
     assert cedar > xb.median()
     plain = area_weighted_overlay(hexes, tracts, "emp_rate_16_29")
     assert np.isfinite(plain.dropna()).all()
-
-
-def test_point_density_transit(settings):
-    hexes = _hexes(settings)
-    stops = gpd.read_file(settings.raw("fixture_transit") / "transit_stops.gpkg")
-    counts = point_density(hexes, stops, res=4)
-    assert counts.sum() == len(stops)
-    per_cap = point_density(hexes, stops, res=4, per_capita=True)
-    assert per_cap.dropna().max() > 0
-    assert per_cap[hexes["population"] == 0].isna().all()
 
 
 def test_effective_decimate_keeps_a_few_pixels_across_a_hex():

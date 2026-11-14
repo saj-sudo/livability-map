@@ -44,6 +44,15 @@ from ..sanity import Spot
 
 VERSION = 13  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
+# the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
+# small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
+DOMAIN_COUNTRIES = {"us": ("XB",), "uk": ("XA",), "de": ("XA",), "nl": ("XA",), "fr": ("XA",), "ca": ("XA",), "au": ("XA",)}
+
+
+def apply(settings) -> None:
+    """Point ``settings`` at the fixture world's user-assigned country codes."""
+    settings.iso_overrides = dict(ISO_OVERRIDES)
+    settings.domain_countries = dict(DOMAIN_COUNTRIES)
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
 NODATA_POP = -200.0

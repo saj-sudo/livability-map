@@ -14,7 +14,7 @@ VERIFY = "VERIFY"
 ACCESS_MODES = ("direct", "manual", "dataverse", "fixture")
 GROUPS = ("hazard", "wellbeing", "life", "env", "reference")  # env: present-day environment (air, trees, fire, drought)
 KINDS = ("score", "signed", "composition")
-JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "point_density", "raster_mean", "point_mean", "point_radius")
+JOINERS = ("polygon_centroid", "iso_lookup", "area_weighted_overlay", "raster_mean", "point_mean", "point_radius")
 
 
 @dataclass
@@ -77,7 +77,6 @@ class JoinSpec:
     domain: str = "global"  # global | oecd | us ; scoring domain (§20.4)
     id_field: str | None = None
     weight_field: str | None = None
-    per_capita: bool = False
     # composition dims only: component key (w/b/h/a/o) -> source column carrying that share
     fields: dict[str, str] | None = None
     # short source label carried on the hex (e.g. wb_source = "shdi" | "whr"); defaults to the source id
@@ -103,6 +102,8 @@ class JoinSpec:
     # score each country as its own domain ("<domain>:<ISO2>"), for values that are relative within
     # a country (Meta's Relative Wealth Index); never ranked against another country
     domain_by_country: bool = False
+    # ISO2 codes this joiner may fill; None -> Settings.domain_countries[domain] (SPEC §13.45)
+    countries: tuple[str, ...] | None = None
 
     def to_manifest(self) -> dict[str, Any]:
         d = {"source": self.source, "joiner": self.joiner, "res": self.res, "field": self.field, "domain": self.domain, "label": self.label or self.source, "unit": self.unit, "multiply": self.multiply, "decimals": self.decimals}
@@ -268,7 +269,6 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     domain=j.get("domain", "global"),
                     id_field=j.get("id_field"),
                     weight_field=j.get("weight_field"),
-                    per_capita=bool(j.get("per_capita", False)),
                     fields=dict(fields) if fields else None,
                     label=j.get("label"),
                     band=int(j.get("band", 1)),
@@ -278,6 +278,7 @@ def load_dimensions(path: Path, sources: dict[str, Source] | None = None) -> dic
                     radius_km=None if j.get("radius_km") is None else float(j["radius_km"]),
                     agg=str(j.get("agg", "mean")),
                     domain_by_country=bool(j.get("domain_by_country", False)),
+                    countries=None if j.get("countries") is None else tuple(str(c) for c in j["countries"]),
                     **dict(zip(("unit", "multiply", "decimals"), _unit_fields(did, j, unit, multiply, decimals), strict=True)),
                 )
             )

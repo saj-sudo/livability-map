@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         from .fixtures import make_fixtures
 
         make_fixtures.ensure(settings.fixture_data_dir)
-        settings.iso_overrides = dict(make_fixtures.ISO_OVERRIDES)
+        make_fixtures.apply(settings)
     res = args.res or (4 if args.fixtures else 5)
     try:
         rows = run(settings, res)

@@ -134,6 +134,21 @@ def test_medsl_total_mode_preferred_over_summing_modes():
     assert out.loc["06037", "totalvotes"] == 160
 
 
+def test_medsl_a_missing_major_party_count_is_no_margin_not_a_landslide():
+    """§13.45: a blank Republican count, or no Republican row, drops the county (never D+100)."""
+    rows = [
+        ("A", 2024, "1001", "US PRESIDENT", "DEMOCRAT", 100, "TOTAL"),
+        ("A", 2024, "1001", "US PRESIDENT", "REPUBLICAN", None, "TOTAL"),
+        ("A", 2024, "1003", "US PRESIDENT", "DEMOCRAT", 100, "TOTAL"),
+        ("A", 2024, "1005", "US PRESIDENT", "DEMOCRAT", 100, "TOTAL"),
+        ("A", 2024, "1005", "US PRESIDENT", "REPUBLICAN", 100, "TOTAL"),
+        ("A", 2024, "1005", "US PRESIDENT", "OTHER", None, "TOTAL"),
+    ]
+    df = pd.DataFrame(rows, columns=["state", "year", "county_fips", "office", "party", "candidatevotes", "mode"])
+    out = medsl.prepare(df).set_index("GEOID")
+    assert list(out.index) == ["01005"] and out.loc["01005", "margin_2024"] == 0
+
+
 def test_epa_sld_sentinel_becomes_nan():
     df = pd.DataFrame({"GEOID20": ["a", "b"], "D4C": [-99999, 12.5], "NatWalkInd": [5, 9], "TotPop": [100, 200]})
     out = epa_sld.prepare(df)

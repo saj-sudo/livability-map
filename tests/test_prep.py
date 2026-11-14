@@ -59,3 +59,32 @@ def test_whr_loader_on_synthetic_xlsx(tmp_path, settings, monkeypatch):
     df = whr.load(settings, src, {})
     assert df.set_index("iso_a2").loc["FI", "ladder"] == 7.764
     assert set(df["iso_a2"]) == {"FI", "TR"} and (df["year"] == 2025).all()
+
+
+def test_editing_a_sources_yaml_key_reruns_the_loader(settings, monkeypatch):
+    """§13.45: the prep cache key carries the source's own entry, so changing `sheet:` re-runs the
+    loader instead of returning the layer prepared from the old sheet."""
+    import pandas as pd
+
+    import pipeline.prep.util as util
+
+    calls: list[str] = []
+
+    def toy(settings, source, sources):
+        calls.append(source.extra["sheet"])
+        return pd.DataFrame({"sheet": [source.extra["sheet"]]})
+
+    monkeypatch.setattr(util, "toy_loader", toy, raising=False)
+    monkeypatch.setitem(prep.LOADERS, "toy", "pipeline.prep.util:toy_loader")
+    raw = settings.raw("toy")
+    raw.mkdir(parents=True, exist_ok=True)
+    (raw / "toy.xlsx").write_bytes(b"x")
+
+    def src(sheet: str, verified: str = "search") -> dict[str, Source]:
+        return {"toy": Source(id="toy", name="t", group="life", access="manual", url=None, format="xlsx", license="CC BY 4.0", files=["toy.xlsx"], extra={"sheet": sheet, "verified": verified})}
+
+    assert prep.load_layer(settings, "toy", src("A"))["sheet"].iloc[0] == "A"
+    assert prep.load_layer(settings, "toy", src("A"))["sheet"].iloc[0] == "A"  # cached
+    assert prep.load_layer(settings, "toy", src("A", verified="confirmed"))["sheet"].iloc[0] == "A"  # display-only key
+    assert prep.load_layer(settings, "toy", src("B"))["sheet"].iloc[0] == "B"
+    assert calls == ["A", "B"]

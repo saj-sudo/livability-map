@@ -19,7 +19,8 @@ def fixture_dir() -> Path:
 @pytest.fixture()
 def settings(fixture_dir: Path, tmp_path: Path, monkeypatch) -> Settings:
     """Fixture-mode settings whose run directory is a fresh temp dir."""
-    s = Settings(root=ROOT, fixtures=True, res=[4], iso_overrides=dict(make_fixtures.ISO_OVERRIDES))
+    s = Settings(root=ROOT, fixtures=True, res=[4])
+    make_fixtures.apply(s)
     run_dir = tmp_path / "_run"
     monkeypatch.setattr(Settings, "data_dir", property(lambda self: run_dir))
     s.ensure_dirs()

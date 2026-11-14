@@ -88,6 +88,28 @@ def raw_inputs(settings: Settings, source: Source, sources: dict[str, Source]) -
     return paths
 
 
+# `extra` keys that never change what a loader writes (publish gate, dims guard)
+_DISPLAY_ONLY = {"verified", "min_nonnull"}
+
+
+def load_spec(source: Source, sources: dict[str, Source]) -> dict:
+    """What a loader reads from sources.yaml: files, format, CRS and the `extra` keys (sheet,
+    member, layer, ...) of the source and of its geometry / also_needs sources. Part of the prep
+    cache key, so editing `sheet:` re-runs the loader instead of reusing the old layer (§13.45)."""
+
+    def one(src: Source) -> dict:
+        return {"files": list(src.files), "format": src.format, "crs": src.crs, "extra": {k: v for k, v in sorted(src.extra.items()) if k not in _DISPLAY_ONLY}}
+
+    spec = {"self": one(source)}
+    geom = source.extra.get("geometry")
+    if geom and geom in sources:
+        spec["geometry"] = one(sources[geom])
+    for extra_id in source.extra.get("also_needs", []) or []:
+        if extra_id in sources:
+            spec[f"also:{extra_id}"] = one(sources[extra_id])
+    return spec
+
+
 def _fixture_layer(settings: Settings, source: Source) -> pd.DataFrame:
     path = settings.raw(source.id) / source.files[0]
     if not path.exists():
@@ -133,7 +155,7 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
         raise FileNotFoundError(_missing_message(source, missing))
     out = settings.cache_dir / "prep" / f"{source_id}.parquet"
     module_name, func_name = spec.split(":")
-    params = {"source": source_id, "prep_version": PREP_VERSION, "loader": module_name}
+    params = {"source": source_id, "prep_version": PREP_VERSION, "loader": module_name, "spec": load_spec(source, sources)}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return _read_cached(out)
     loader = getattr(importlib.import_module(module_name), func_name)
@@ -169,7 +191,7 @@ def load_raster(settings: Settings, source_id: str, sources: dict[str, Source] |
         return rawfiles.resolve_raster(settings, source)
     out = settings.cache_dir / "prep" / f"{source_id}.tif"
     module_name, func_name = spec.split(":")
-    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster", "loader": module_name}
+    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster", "loader": module_name, "spec": load_spec(source, sources)}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return out
     build = getattr(importlib.import_module(module_name), func_name)

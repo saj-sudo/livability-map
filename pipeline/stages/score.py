@@ -72,7 +72,10 @@ def score_dimension(dim, df: pd.DataFrame, ref: pd.DataFrame | None = None) -> d
     inhabited = df["inhabited"]
     if dim.scale == "minmax":
         raw = df[f"{dim.id}_raw"]
-        bounds = None if ref is None else pd.DataFrame({"v": ref[f"{dim.id}_raw"], "g": ref[f"{dim.id}_lbl"]})
+        # bounds come from inhabited hexes at every resolution (its own at res 5, the reference's
+        # at a derived one), so a neighbourhood and its parent share them (§13.45)
+        frame = df.loc[inhabited.fillna(False).astype(bool)] if ref is None else ref
+        bounds = pd.DataFrame({"v": frame[f"{dim.id}_raw"], "g": frame[f"{dim.id}_lbl"]})
         return {f"{dim.id}_score": minmax_score(raw, df[f"{dim.id}_lbl"], reference=bounds)}
     if dim.kind in ("signed", "composition"):
         return {}  # {id}_lean and the composition shares are final in the dims output (invariant 8)

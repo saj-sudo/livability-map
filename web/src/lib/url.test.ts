@@ -58,6 +58,10 @@ describe("url state", () => {
     const s: AppState = { ...DEFAULT_STATE, view: "heat", weights: { jobs: 3, pol: 2 }, pol: "right" };
     const back = parseState(serializeState(s));
     expect(back.view).toBe("heat");
+    expect(parseState("?view=humid").view).toBe("humid"); // the humid-heat layer is a view of its own (§13.47)
+    // humid takes the slot after industry, so a link written before it keeps every earlier weight
+    const humid = parseState(serializeState({ ...DEFAULT_STATE, view: "priorities", weights: { heat: 2, humid: 2 } }));
+    expect(humid.weights).toEqual({ heat: 2, humid: 2 });
     expect(back.weights).toEqual({ jobs: 3, pol: 2 });
     expect(back.pol).toBe("right");
     const preset = parseState(serializeState({ ...DEFAULT_STATE, view: "bivar", preset: "queer", weights: { lgbtq: 3 } }));

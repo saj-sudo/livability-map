@@ -5,7 +5,8 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - two countries (user-assigned ISO3 XKA, XKB) and five admin1 regions
 - a 0.01 degree population raster with four towns and an empty desert, and a GHS-SMOD-like
   class raster derived from it (urban centres over Alder, Birch, Cedar; clusters incl. Dune)
-- a 0.25 degree heat NetCDF (hd35), 0.01 degree riverine and coastal flood GeoTIFFs,
+- a 0.25 degree heat NetCDF (hd35) and a humid-heat one (hi35: highest along the south-east
+  coast, masked in the north-west corner), 0.01 degree riverine and coastal flood GeoTIFFs,
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
 - global life-dimension stand-ins: GSAP regions (all five admin1), OECD TL2 (XKA only), ILOSTAT
@@ -42,7 +43,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 18  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 19  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 # the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
 # small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
@@ -182,12 +183,16 @@ def river_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
     return depth
 
 
-def coast_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
-    # distance to the coast line of the wedge (from (12.6,40) to (14,41.6))
+def _coast_distance(LNG, LAT) -> np.ndarray:
+    """Degrees to the coast line of the wedge (from (12.6,40) to (14,41.6))."""
     x0, y0, x1, y1 = 12.6, 40.0, 14.0, 41.6
     dx, dy = x1 - x0, y1 - y0
     t = np.clip(((LNG - x0) * dx + (LAT - y0) * dy) / (dx * dx + dy * dy), 0, 1)
-    d = np.hypot(LNG - (x0 + t * dx), LAT - (y0 + t * dy))
+    return np.hypot(LNG - (x0 + t * dx), LAT - (y0 + t * dy))
+
+
+def coast_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
+    d = _coast_distance(LNG, LAT)
     depth = np.where(d < 0.15, 1.0 * (1 - d / 0.15), 0.0)
     depth[~land] = NODATA_FLOOD
     return depth
@@ -202,6 +207,26 @@ def heat_dataset() -> xr.Dataset:
         {"hd35": (("lat", "lon"), hd35.astype("float32"), {"units": "days", "long_name": "Number of hot days (Tmax > 35C)"})},
         coords={"lat": lat, "lon": lon},
         attrs={"title": "fixture hd35 climatology, synthetic"},
+    )
+
+
+# hi35 stand-in mask: pixels west of 10.75 and north of 43.25 carry no value, so the north-west
+# corner tests the missing path (NaN, never 0; coverage below the full count there)
+HUMID_MASK = (10.75, 43.25)
+
+
+def humid_dataset() -> xr.Dataset:
+    """Humid heat (SPEC §13.47): days with heat index above 35 C peak along the south-east coast
+    and fade inland, so the pattern differs from the north-to-south dry-heat gradient."""
+    lat = np.arange(44.125, 39.75, -0.25)
+    lon = np.arange(9.875, 14.25, 0.25)
+    LON, LAT = np.meshgrid(lon, lat)
+    hi35 = 2.0 + 60.0 * np.exp(-_coast_distance(LON, LAT) / 0.7) + 5.0 * (44.0 - LAT) / 4.0
+    hi35[(LON < HUMID_MASK[0]) & (LAT > HUMID_MASK[1])] = np.nan
+    return xr.Dataset(
+        {"hi35": (("lat", "lon"), hi35.astype("float32"), {"units": "days", "long_name": "Number of days with heat index > 35C"})},
+        coords={"lat": lat, "lon": lon},
+        attrs={"title": "fixture hi35 climatology, synthetic"},
     )
 
 
@@ -643,6 +668,7 @@ def build(out: Path) -> dict[str, str]:
     _write_tif(out / "inunriver.tif", river_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     _write_tif(out / "inuncoast.tif", coast_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     heat_dataset().to_netcdf(out / "heat.nc", engine="netcdf4")
+    humid_dataset().to_netcdf(out / "humid.nc", engine="netcdf4")
     water_stress().to_file(out / "wstress.gpkg", driver="GPKG")
 
     shdi, regions, whr = tabular(adm1)

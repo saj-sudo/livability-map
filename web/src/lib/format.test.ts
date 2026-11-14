@@ -7,6 +7,8 @@ const dim = (id: string, units: DimInfo["units"] = {}): DimInfo => ({ id, name: 
 describe("formatting values (never 0 for missing)", () => {
   it("formats hazards with their units, null for missing", () => {
     expect(formatHazardRaw("heat", 33.6)).toBe("34 days/yr");
+    expect(formatHazardRaw("humid", 12.4)).toBe("12 days/yr");
+    expect(formatHazardRaw("humid", null)).toBeNull();
     expect(formatHazardRaw("rflood", 0.0234)).toBe("2.3% of area");
     expect(formatHazardRaw("cflood", 0)).toBe("0.0% of area");
     expect(formatHazardRaw("wstress", 3)).toBe("high");

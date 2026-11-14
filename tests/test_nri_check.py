@@ -81,7 +81,7 @@ def test_run_on_the_fixture_world_pairs_tract_hexes(settings):
     _through_dims(settings)
     rows = nri_check.run(settings, 4)
     same = [r for r in rows if r.measure == "same hazard" and r.where == "all US"]
-    assert {r.hazard for r in same} == {"riverine flood", "coastal flood", "heat"}
+    assert {r.hazard for r in same} == {"riverine flood", "coastal flood", "heat", "humid heat"}
     assert all(r.n > 10 and not np.isnan(r.rho) for r in same)  # the fixture tracts cover Cedaria's hexes
 
 

@@ -8,7 +8,7 @@ import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from "./config";
 import { CONTEXT_ONLY_IDS, DIM_ORDER } from "./dims";
 import { presetById, type PolPick } from "../presets";
 
-export const VIEWS = ["bivar", "heat", "rflood", "cflood", "wstress", "wb", "priorities"] as const;
+export const VIEWS = ["bivar", "heat", "humid", "rflood", "cflood", "wstress", "wb", "priorities"] as const;
 export type ViewId = (typeof VIEWS)[number];
 
 export interface AppState {

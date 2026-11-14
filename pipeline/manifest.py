@@ -21,12 +21,13 @@ from .registry import Dimension, Source, load_dimensions, load_sources
 
 PROCESSING_NOTES = [
     "heat: World Bank CCKP CMIP6 ensemble median, SSP2-4.5, 2040-2059 climatology of days with Tmax > 35C, sampled at the hex centroid (the 0.25 degree pixel is coarser than the hex).",
+    "humid heat: World Bank CCKP CMIP6 ensemble median, SSP2-4.5, 2040-2059 climatology of days with a heat index above 35C (temperature and humidity together), sampled at the hex centroid like heat. It sits beside dry heat rather than replacing it, so heat counts twice in combined exposure.",
     "riverine flood: WRI Aqueduct Floods RCP4.5 2050 1-in-100 inundation depth; pixel-wise median across five climate models, then the share of the hex's valid ~1 km pixels with depth >= 0.15 m.",
     "coastal flood: WRI Aqueduct Floods RCP4.5 2050 1-in-100 with subsidence, median sea-level rise; share of pixels with depth >= 0.15 m.",
     "water stress: WRI Aqueduct 4.0 future (2050, business-as-usual) water stress category 0-4 of the basin/province polygon under the hex centroid; -1 (arid and low water use) is shown but not scored.",
     "scores: every score is the midrank percentile (0-100) of the raw value among inhabited hexes at the same H3 resolution; life dimensions are ranked within their scoring domain (global, OECD, US, EU or England) so a US-only value is never ranked against the world. A derived resolution (res 6, 7) is ranked against the inhabited hexes of the finest complete resolution (res 5) in the same domain, so a neighbourhood keeps its colour meaning at every zoom. Higher score = more of the raw quantity; whether that is good is stated per dimension, and a source whose raw value runs the other way (IoD deprivation feeding jobs) has its percentile reflected so the dimension's direction holds.",
     "wellbeing: min-max normalised within its source (Subnational HDI across regions, World Happiness Report life evaluation across countries), never mixed; a source with a single distinct value scores 50.",
-    "exposure: mean of the available hazard scores; coverage counts how many of the four hazards had data. Missing layers are excluded, never treated as 0.",
+    f"exposure: mean of the available hazard scores; coverage counts how many of the {len(HAZARD_IDS)} hazards had data. Dry heat and humid heat are separate hazards, so heat weighs twice in the mean. Missing layers are excluded, never treated as 0.",
     "bivariate class: terciles of exposure and wellbeing over inhabited hexes; class = 1 + exposure tercile + 3 x wellbeing tercile (1 = low exposure, low wellbeing; 3 = high exposure, low wellbeing; 7 = low exposure, high wellbeing; 9 = high, high); 0 when either side is missing.",
     "uninhabited hexes (population below 100) keep their raw values and are scored against the inhabited distribution; the map hides them by default.",
     "population is the one attribute where no data is recorded as 0 (a count); hexes with no GHSL pixels are uninhabited.",
@@ -136,8 +137,9 @@ def build(settings: Settings) -> dict:
         summary = {"hexes_total": int(len(df)), "hexes_inhabited": int(inhabited.sum())}
         if "coverage" in df.columns:
             cov = df.loc[inhabited, "coverage"]
-            summary["hexes_full_coverage"] = int((cov == 4).sum())
-            summary["share_inhabited_coverage4"] = round(float((cov == 4).mean()), 4) if len(cov) else None
+            full = len(HAZARD_IDS)  # every hazard layer present
+            summary["hexes_full_coverage"] = int((cov == full).sum())
+            summary["share_inhabited_coverage_full"] = round(float((cov == full).mean()), 4) if len(cov) else None
             summary["share_inhabited_coverage0"] = round(float((cov == 0).mean()), 4) if len(cov) else None
         if "wb_res" in df.columns:
             tags = df.loc[inhabited, "wb_res"].fillna("none").value_counts()

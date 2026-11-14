@@ -1,6 +1,6 @@
 import { domainLabel, resLabel } from "../../lib/dims";
 import { formatHazardRaw } from "../../lib/format";
-import { EXPOSURE_MEANING, HEAT_CAVEAT, hexAreaKm2, SCORE_MEANING } from "../../lib/inspect";
+import { EXPOSURE_MEANING, HEAT_CAVEAT, hexAreaKm2, HUMID_NOTE, SCORE_MEANING } from "../../lib/inspect";
 import { loadManifest } from "../../lib/manifest";
 import type { Manifest, ManifestDimension } from "../../lib/manifest";
 import { kindWords, verifiedWords } from "../../lib/methodology";
@@ -92,6 +92,7 @@ function SpotChecks({ m, res }: { m: Manifest; res: string }) {
             <th className="py-1 pr-2">Place</th>
             <th className="py-1 pr-2">Expected</th>
             <th className="py-1 pr-2">Hot days</th>
+            <th className="py-1 pr-2">Humid-heat days</th>
             <th className="py-1 pr-2">Riverine flood</th>
             <th className="py-1 pr-2">Coastal flood</th>
             <th className="py-1 pr-2">Water stress</th>
@@ -110,6 +111,7 @@ function SpotChecks({ m, res }: { m: Manifest; res: string }) {
               {r.found ? (
                 <>
                   <td className="py-1 pr-2">{typeof r.heat_days === "number" ? Math.round(r.heat_days) : "no data"}</td>
+                  <td className="py-1 pr-2">{typeof r.humid_days === "number" ? Math.round(r.humid_days) : "no data"}</td>
                   <td className="py-1 pr-2">{typeof r.rflood_frac === "number" ? `${(100 * r.rflood_frac).toFixed(1)}%` : "no data"}</td>
                   <td className="py-1 pr-2">{typeof r.cflood_frac === "number" ? `${(100 * r.cflood_frac).toFixed(1)}%` : "no data"}</td>
                   <td className="py-1 pr-2">{typeof r.wstress_cat === "number" ? formatHazardRaw("wstress", r.wstress_cat) : "no data"}</td>
@@ -117,7 +119,7 @@ function SpotChecks({ m, res }: { m: Manifest; res: string }) {
                   <td className="py-1">{typeof r.bivar === "number" ? (BIVAR_WORDS[r.bivar] ?? String(r.bivar)) : "no data"}</td>
                 </>
               ) : (
-                <td className="py-1" colSpan={6}>
+                <td className="py-1" colSpan={7}>
                   not on land in this build
                 </td>
               )}
@@ -151,7 +153,7 @@ export default async function Methodology() {
             <strong>Scores are ranks, not risk.</strong> A score of 80 means the place ranks above 80% of inhabited places on that layer. It does not mean an 80% chance of anything, and it is not twice as bad as 40.
           </li>
           <li>
-            <strong>Grey or hatched means missing data.</strong> Grey is no data at all, never zero risk. Hatching marks places where some of the four hazard layers are missing, so the picture is less complete.
+            <strong>Grey or hatched means missing data.</strong> Grey is no data at all, never zero risk. Hatching marks places where some of the five hazard layers are missing, so the picture is less complete.
           </li>
           <li>
             <strong>Your priorities are yours.</strong> In My priorities the colour is a match from 0 to 100 with the weights you chose, worked out in your browser.
@@ -175,7 +177,7 @@ export default async function Methodology() {
           <li>
             <strong>{SCORE_MEANING}</strong> A score of 80 does not mean 80% likely, or twice as bad as 40.
           </li>
-          <li>Combined exposure is {EXPOSURE_MEANING}.</li>
+          <li>Combined exposure is {EXPOSURE_MEANING}. Dry heat and humid heat are two of the five hazards, so heat counts twice in that average.</li>
           {m.processing_notes.map((n, i) => (
             <li key={i}>{n}</li>
           ))}
@@ -191,7 +193,7 @@ export default async function Methodology() {
             <div key={res} className="mt-2">
               <h3 className="font-medium">{scaleName(res)}</h3>
               <p>
-                {String(s.hexes_total ?? "n/a")} hexagons on land, {String(s.hexes_inhabited ?? "n/a")} of them inhabited. Inhabited places with all four hazard layers: {pct(s.share_inhabited_coverage4)}; with none: {pct(s.share_inhabited_coverage0)}. Wellbeing among inhabited places comes from a regional figure for {String(s.wb_admin1 ?? "n/a")}, a national figure for {String(s.wb_national ?? "n/a")}, and is missing for {String(s.wb_none ?? "n/a")}.
+                {String(s.hexes_total ?? "n/a")} hexagons on land, {String(s.hexes_inhabited ?? "n/a")} of them inhabited. Inhabited places with all five hazard layers: {pct(s.share_inhabited_coverage_full)}; with none: {pct(s.share_inhabited_coverage0)}. Wellbeing among inhabited places comes from a regional figure for {String(s.wb_admin1 ?? "n/a")}, a national figure for {String(s.wb_national ?? "n/a")}, and is missing for {String(s.wb_none ?? "n/a")}.
               </p>
               <CoverageTable dims={[...m.hazards, ...m.dimensions]} res={res} />
             </div>
@@ -274,7 +276,8 @@ export default async function Methodology() {
             </div>
           );
         })}
-        <p className="mt-2">Extreme heat: {HEAT_CAVEAT} A humid-heat layer (heat index or wet-bulb temperature) is planned once its source is checked.</p>
+        <p className="mt-2">Extreme heat: {HEAT_CAVEAT}</p>
+        <p className="mt-2">Humid heat: {HUMID_NOTE}</p>
         <p className="mt-2">Small islands and thin coasts whose hexagon centre falls at sea are not on the map (Reykjavik&rsquo;s own hexagon, for example); the spot check falls back to the nearest land hexagon and says so.</p>
       </section>
 

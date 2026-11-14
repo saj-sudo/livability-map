@@ -1,11 +1,13 @@
-"""``hazards`` stage (SPEC §5, §8.1, §8.2): four hazard inputs -> per-hex raw value, 0-100
+"""``hazards`` stage (SPEC §5, §8.1, §8.2): five hazard inputs -> per-hex raw value, 0-100
 percentile score and ``_ok`` flag.
 
-Output ``data/interim/hazards_r{res}.parquet`` with, per hazard id ``heat | rflood | cflood |
-wstress``: the raw column (``heat_days``, ``rflood_frac``, ``cflood_frac``, ``wstress_cat``),
-``{id}_score`` (nullable Int16) and ``{id}_ok`` (bool). Rules, all from SPEC §8.1:
+Output ``data/interim/hazards_r{res}.parquet`` with, per hazard id ``heat | humid | rflood |
+cflood | wstress``: the raw column (``heat_days``, ``humid_days``, ``rflood_frac``,
+``cflood_frac``, ``wstress_cat``), ``{id}_score`` (nullable Int16) and ``{id}_ok`` (bool). Rules,
+all from SPEC §8.1:
 
 - heat: hd35 sampled at the hex centroid (the 0.25 degree pixel is coarser than the hex).
+- humid heat: hi35 (days with heat index above 35 C) sampled the same way (SPEC §13.47).
 - riverine flood: pixel-wise median depth across the five climate models, then the fraction of
   the hex's valid pixels with depth >= DEPTH_MIN (0.15 m).
 - coastal flood: same fraction on the single coastal raster.
@@ -33,31 +35,43 @@ from ..scoring import percentile_score
 # hazard id -> (source id, raw column name) per SPEC §6.1
 HAZARDS: dict[str, tuple[str, str]] = {
     "heat": ("cckp_hd35", "heat_days"),
+    "humid": ("cckp_hi35", "humid_days"),
     "rflood": ("aqueduct_floods_river", "rflood_frac"),
     "cflood": ("aqueduct_floods_coast", "cflood_frac"),
     "wstress": ("aqueduct_water_stress", "wstress_cat"),
 }
 WSTRESS_FIELD = "bau50_ws_x_c"
+# hazards read from a CCKP 0.25 degree climatology: id -> the short variable code CCKP uses
+CLIMATOLOGY = {"heat": "hd35", "humid": "hi35"}
 
 
 # ---- per-hazard extractors --------------------------------------------------------------------
 
 
-def heat_days(nc_path, lat: np.ndarray, lng: np.ndarray, var: str | None = None) -> np.ndarray:
-    """Nearest-pixel sample of the hot-days climatology at each centroid (NaN where the grid is
-    masked). Handles 0..360 longitudes and extra non-spatial dims (time, bounds)."""
+def _pick_variable(ds: xr.Dataset, nc_path, var: str | None, code: str) -> str:
+    """The data variable to sample: ``var`` when present, else ``code`` (``hd35`` / ``hi35``),
+    else the only variable with a latitude dimension. A named ``var`` that is absent falls back
+    only when there is exactly one gridded variable, so a renamed file cannot pick the wrong one."""
+    if var is not None and var in ds.data_vars:
+        return var
+    if code in ds.data_vars:
+        return code
+    spatial = [v for v in ds.data_vars if any(d.lower() in ("lat", "latitude") for d in ds[v].dims)]
+    if var is None and spatial:
+        return spatial[0]
+    if var is not None and len(spatial) == 1:
+        print(f"hazards: {nc_path}: no variable {var!r}; using the only gridded variable {spatial[0]!r}")
+        return spatial[0]
+    raise ValueError(f"{nc_path}: no data variable {var or code!r} with a latitude dimension; variables: {list(ds.data_vars)}")
+
+
+def heat_days(nc_path, lat: np.ndarray, lng: np.ndarray, var: str | None = None, code: str = "hd35") -> np.ndarray:
+    """Nearest-pixel sample of a CCKP days-per-year climatology (hd35 hot days, hi35 humid-heat
+    days) at each centroid (NaN where the grid is masked, never 0). Handles 0..360 longitudes and
+    extra non-spatial dims (time, bounds)."""
     ds = xr.open_dataset(nc_path)
     try:
-        if var is None:
-            if "hd35" in ds.data_vars:
-                var = "hd35"
-            else:
-                spatial = [v for v in ds.data_vars if any(d.lower() in ("lat", "latitude") for d in ds[v].dims)]
-                if not spatial:
-                    raise ValueError(
-                        f"{nc_path}: no data variable with a latitude dimension; variables: {list(ds.data_vars)}"
-                    )
-                var = spatial[0]
+        var = _pick_variable(ds, nc_path, var, code)
         da = ds[var]
         lat_name = next(d for d in da.dims if d.lower() in ("lat", "latitude"))
         lon_name = next(d for d in da.dims if d.lower() in ("lon", "longitude"))
@@ -140,12 +154,14 @@ def run(settings: Settings) -> dict[int, dict[str, int]]:
         hexes["inhabited"] = hexes["inhabited"].fillna(False).astype(bool)
         df = pd.DataFrame({"h3": hexes["h3"]})
 
-        # heat (§8.1 bullet 1): centroid sample of the coarse climatology
-        heat_src = sources[HAZARDS["heat"][0]]
-        nc = rawfiles.resolve_raster(settings, heat_src)
-        sampled = heat_days(nc, hexes["lat"].to_numpy(), hexes["lng"].to_numpy(), heat_src.extra.get("variable"))
-        df["heat_days"] = sampled.astype("float32")
-        df["heat_ok"] = df["heat_days"].notna()
+        # heat and humid heat (§8.1 bullet 1, §13.47): centroid sample of the coarse climatology
+        for hz, code in CLIMATOLOGY.items():
+            src = sources[HAZARDS[hz][0]]
+            nc = rawfiles.resolve_raster(settings, src)
+            sampled = heat_days(nc, hexes["lat"].to_numpy(), hexes["lng"].to_numpy(), src.extra.get("variable"), code)
+            col = HAZARDS[hz][1]
+            df[col] = sampled.astype("float32")
+            df[f"{hz}_ok"] = df[col].notna()
 
         # floods (§8.1 bullet 2): fraction of pixels at or above DEPTH_MIN
         for hz in ("rflood", "cflood"):

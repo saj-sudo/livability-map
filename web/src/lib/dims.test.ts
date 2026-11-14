@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipFor, DIM_ORDER, dimensionsFrom, envDims, isAvailable, lifeDims, resLabel, unitsFrom } from "./dims";
+import { chipFor, DIM_ORDER, DISPLAY_ORDER, dimensionsFrom, HAZARD_IDS, envDims, isAvailable, lifeDims, resLabel, unitsFrom } from "./dims";
 import { EMPTY_MANIFEST, type Manifest, type ManifestDimension } from "./manifest";
 
 // shaped like the real manifest.json: `coverage` holds per-res tag counts (the registry's
@@ -36,8 +36,17 @@ describe("dimension registry from the manifest", () => {
 
   it("falls back to the built-in registry when the manifest is empty", () => {
     const dims = dimensionsFrom(EMPTY_MANIFEST);
-    expect(dims.map((d) => d.id)).toEqual([...DIM_ORDER]);
+    expect(dims.map((d) => d.id)).toEqual([...DISPLAY_ORDER]);
+    expect([...dims.map((d) => d.id)].sort()).toEqual([...DIM_ORDER].sort());
     expect(dims.find((d) => d.id === "transit")!.chip).toBe("US only");
+  });
+
+  it("lists humid heat beside heat as the fifth hazard, while the URL order only appends it (SPEC §13.47)", () => {
+    expect([...HAZARD_IDS]).toEqual(["heat", "humid", "rflood", "cflood", "wstress"]);
+    expect(DISPLAY_ORDER.slice(0, 6)).toEqual(["heat", "humid", "rflood", "cflood", "wstress", "wb"]);
+    expect(DIM_ORDER.indexOf("humid")).toBe(DIM_ORDER.indexOf("industry") + 1);
+    const m: Manifest = { ...EMPTY_MANIFEST, hazards: [dim("heat", { group: "hazard" }), dim("rflood", { group: "hazard" }), dim("humid", { group: "hazard" })], dimensions: [dim("industry", { group: "env" })] };
+    expect(dimensionsFrom(m).map((d) => d.id)).toEqual(["heat", "humid", "rflood", "industry"]);
   });
 
   it("appends new dimensions to DIM_ORDER so old `w=` links keep their meaning", () => {
@@ -46,7 +55,7 @@ describe("dimension registry from the manifest", () => {
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
     expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
     expect(DIM_ORDER.slice(22, 27)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
-    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry", "no2", "amen"]);
+    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry", "humid", "no2", "amen"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 

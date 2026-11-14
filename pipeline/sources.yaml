@@ -123,6 +123,26 @@
   processing: "hd35 sampled at hex centroid (pixel is coarser than the hex); days per year"
   files: [climatology-hd35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc]
 
+# Humid heat, a fifth hazard beside dry heat (SPEC §13.47). URL and variable name follow the
+# confirmed hd35 file in the same bucket; not yet fetched first-hand (verified: search, §15).
+- id: cckp_hi35
+  name: World Bank CCKP CMIP6, days with heat index > 35C (hi35), SSP2-4.5, 2040-2059 ensemble median
+  group: hazard
+  access: direct
+  url: https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hi35/ensemble-all-ssp245/climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc
+  format: netcdf
+  variable: climatology-hi35-annual-mean   # by analogy with hd35; heat_days() falls back to the only gridded variable
+  crs: EPSG:4326
+  native_res_deg: 0.25
+  scenario: ssp245
+  horizon: "2040-2059"
+  license: CC BY 4.0
+  verified: search
+  vintage: "CMIP6 x0.25 collection (2024)"
+  attribution: "World Bank Climate Change Knowledge Portal, CMIP6 ensemble"
+  processing: "hi35 (days with heat index above 35 C) sampled at hex centroid (pixel is coarser than the hex); days per year"
+  files: [climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc]
+
 - id: aqueduct_floods_river
   name: WRI Aqueduct Floods, riverine inundation depth, RCP4.5, 2050, 1-in-100
   group: hazard

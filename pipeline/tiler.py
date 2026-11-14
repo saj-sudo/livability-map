@@ -160,7 +160,7 @@ def assign_tiles(bbox: np.ndarray, z: int, buffer_units: int = BUFFER) -> dict[t
 
 # ---- properties -----------------------------------------------------------------------------------
 
-_DECIMALS = {"heat_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}
+_DECIMALS = {"heat_days": 1, "humid_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}
 
 
 def column_store(df: pd.DataFrame, names: list[str]) -> dict[str, tuple[str, np.ndarray, np.ndarray | None, list | None]]:

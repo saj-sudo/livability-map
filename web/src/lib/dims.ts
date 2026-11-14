@@ -37,11 +37,17 @@ export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multi
   return out;
 }
 
-export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry", "no2", "amen"] as const;
+/** The hazards, in panel order; coverage runs from 0 to HAZARD_IDS.length. Humid heat is the
+ *  fifth, beside dry heat (SPEC §13.47), so heat weighs twice in combined exposure. */
+export const HAZARD_IDS = ["heat", "humid", "rflood", "cflood", "wstress"] as const;
+/** The `w=` URL order: append only, so old links keep their meaning (humid came after industry). */
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry", "humid", "no2", "amen"] as const;
+/** Display order: the hazards as HAZARD_IDS lists them (humid heat beside heat), then DIM_ORDER. */
+export const DISPLAY_ORDER: readonly string[] = [...HAZARD_IDS, ...DIM_ORDER.filter((id) => !(HAZARD_IDS as readonly string[]).includes(id))];
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
+  humid: { attr: "humid_days", unit: "days/yr", label: "days with heat index above 35 °C" },
   rflood: { attr: "rflood_frac", unit: "% of area", label: "riverine 1-in-100 flood" },
   cflood: { attr: "cflood_frac", unit: "% of area", label: "coastal 1-in-100 flood" },
   wstress: { attr: "wstress_cat", unit: "category 0-4", label: "water stress 2050" },
@@ -52,6 +58,7 @@ export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: str
 const F = (id: string, name: string, group: DimGroup, kind: DimKind, higher_is: "better" | "worse", chip: string, scale: "percentile" | "minmax" = "percentile"): DimInfo => ({ id, name, group, kind, higher_is, chip, note: "", scale, available: true, units: {} });
 const FALLBACK: DimInfo[] = [
   F("heat", "Extreme heat", "hazard", "score", "worse", "Global"),
+  F("humid", "Humid heat (heat index > 35 °C)", "hazard", "score", "worse", "Global"),
   F("rflood", "Riverine flood", "hazard", "score", "worse", "Global"),
   F("cflood", "Coastal flood", "hazard", "score", "worse", "Global"),
   F("wstress", "Water stress", "hazard", "score", "worse", "Global"),
@@ -142,13 +149,13 @@ function fromManifest(d: ManifestDimension): DimInfo {
   };
 }
 
-/** Dimensions in DIM_ORDER, taken from the manifest when it has any, else the fallback. */
+/** Dimensions in DISPLAY_ORDER, taken from the manifest when it has any, else the fallback. */
 export function dimensionsFrom(manifest: Manifest): DimInfo[] {
   const entries = [...(manifest.hazards ?? []), ...(manifest.dimensions ?? [])];
   if (entries.length === 0) return FALLBACK;
   const byId = new Map(entries.map((d) => [d.id, fromManifest(d)]));
-  const ordered = DIM_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id)!);
-  const extra = entries.map((d) => d.id).filter((id) => !(DIM_ORDER as readonly string[]).includes(id));
+  const ordered = DISPLAY_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id)!);
+  const extra = entries.map((d) => d.id).filter((id) => !DISPLAY_ORDER.includes(id));
   return [...ordered, ...extra.map((id) => byId.get(id)!)];
 }
 

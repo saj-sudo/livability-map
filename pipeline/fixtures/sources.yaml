@@ -68,6 +68,17 @@
   verified: confirmed
   vintage: "fixture"
   files: [heat.nc]
+- id: cckp_hi35
+  name: fixture humid-heat NetCDF
+  group: hazard
+  access: fixture
+  url: file://pipeline/fixtures/data/humid.nc
+  format: netcdf
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [humid.nc]
 - id: aqueduct_floods_river
   name: fixture riverine flood depth
   group: hazard

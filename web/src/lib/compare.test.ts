@@ -44,6 +44,8 @@ describe("compare two places (SPEC §10)", () => {
 
   it("does not judge data coverage, and explains combined exposure and heat", () => {
     expect(row("coverage").leans).toBeNull();
+    expect(row("coverage").a).toBe("1 of 5"); // five hazard layers since §13.47
+    expect(row("humid").note).toMatch(/counts twice/);
     expect(row("exposure").note).toMatch(/average of the hazard ranks/);
     expect(row("heat").note).toMatch(/humidity/);
   });

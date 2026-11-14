@@ -2,8 +2,9 @@
 
 Reads ``hexes ⨝ pop ⨝ admin ⨝ hazards ⨝ dims`` and writes ``data/interim/score_r{res}.parquet``:
 
-- ``coverage``  count of hazard ``_ok`` flags (0-4); ``exposure`` mean of the available hazard
-  scores (null when coverage is 0), §8.4
+- ``coverage``  count of hazard ``_ok`` flags (0 to the number of hazards, 5 since §13.47);
+  ``exposure`` mean of the available hazard scores (null when coverage is 0), §8.4. Dry heat and
+  humid heat are separate hazards, so heat weighs twice in that mean (§13.47)
 - ``wb_value``, ``wb_score`` (min-max within source, §8.3), ``wb_source`` (``shdi`` | ``whr`` |
   ``none``); ``wb_res`` stays in the dims output
 - ``bivar``  3x3 class 1-9 from terciles of exposure and wellbeing over inhabited hexes, 0 when
@@ -141,14 +142,14 @@ def run(settings: Settings) -> dict[int, dict]:
         rep = {
             "domains": domains,
             "inhabited": int(inh.sum()),
-            "coverage4_share": float((cov[inh] == 4).mean()) if inh.any() else None,
+            "coverage_full_share": float((cov[inh] == len(HAZARDS)).mean()) if inh.any() else None,
             "coverage0_share": float((cov[inh] == 0).mean()) if inh.any() else None,
             "bivar_counts": {int(k): int(v) for k, v in result.loc[inh, "bivar"].value_counts().sort_index().items()},
         }
         stage_cache.record(out, inputs, params, {"rows": len(result), "report": rep})
         report[res] = rep
         print(
-            f"score  res {res}: coverage=4 {100 * (rep['coverage4_share'] or 0):.1f}% of inhabited, "
+            f"score  res {res}: coverage={len(HAZARDS)} {100 * (rep['coverage_full_share'] or 0):.1f}% of inhabited, "
             f"bivar classes {rep['bivar_counts']} in {time.time() - t0:.1f}s -> {out.name}"
         )
     return report

@@ -25,6 +25,7 @@ Last updated: 2026-11-14.
 | 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
 | 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
 | 15 | [Climate TRACE sector downloads](#15-climate-trace-sector-downloads) | the `industry` layer (heavy industry nearby); lets publish include it | 15 min |
+| 16 | [Check the CCKP humid-heat file](#16-check-the-cckp-humid-heat-file) | the `humid` hazard; lets publish include it | 5 min |
 | 18 | [Sentinel-5P NO2 export](#18-sentinel-5p-no2-export-earth-engine) | the `no2` layer (traffic and combustion pollution) | 20 min |
 | 19 | [Overture everyday-amenities extract](#19-overture-everyday-amenities-extract) | the `amen` layer (everyday amenities nearby) | 20 min, one command |
 | 20 | [Global Energy Monitor trackers (optional)](#20-global-energy-monitor-trackers-optional) | adds smaller plants to `industry` | 15 min, four forms |
@@ -257,6 +258,25 @@ memory, because the cloud container cannot reach climatetrace.org.
 
 Then: `uv run python -m pipeline fetch` (records checksums), then
 `uv run python -m pipeline --res 5 dims --only industry` and the usual score / export / tiles.
+
+
+### 16. Check the CCKP humid-heat file
+
+Humid heat is the fifth hazard (SPEC §13.47), from the World Bank CCKP `hi35` climatology (days
+with a heat index above 35 °C). It downloads itself, but the URL and the variable name were
+written by analogy with the confirmed `hd35` file, because the cloud container cannot reach the
+bucket, so `publish` refuses it until it is checked.
+
+1. Run `uv run python -m pipeline fetch --only cckp_hi35`. If it fails with a 404, find the hi35
+   file in the CCKP CMIP6 x0.25 collection (the `hd35` folder's sibling `hi35`) and fix `url` and
+   `files` on `cckp_hi35` in `pipeline/sources.yaml`.
+2. Ask Claude to open the NetCDF: the variable name (expected `climatology-hi35-annual-mean`),
+   units (days per year), the lon range, and that the values look like a heat-index count
+   (higher in Dhaka, Houston and Lagos than in Phoenix relative to `hd35`).
+3. Set `verified: confirmed` (and the real `vintage`) on `cckp_hi35` and add the result to SPEC §15.
+
+Then: `uv run python -m pipeline --res 5 hazards` and the later stages (score, export, tiles).
+Every stage after `hazards` rebuilds once, because the hazard list changed.
 
 ### 18. Sentinel-5P NO2 export (Earth Engine)
 

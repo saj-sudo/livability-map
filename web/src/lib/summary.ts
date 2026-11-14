@@ -7,7 +7,7 @@
 // touching anything else; summary.test.ts pins the facts each sentence must carry.
 
 import { compositeValue, missingCount, type Bar } from "./chart";
-import type { DimInfo } from "./dims";
+import { HAZARD_IDS, type DimInfo } from "./dims";
 import type { Picks, Weights } from "./expressions";
 import { formatScore } from "./format";
 import type { HexModel } from "./inspect";
@@ -22,23 +22,29 @@ export function bivarPhrase(bivarClass: number): string | null {
   return `${exposure} climate exposure and ${wellbeing} wellbeing`;
 }
 
+/** "This area in Colorado": the summary is about the hex, not the whole region it sits in. */
+export function areaPhrase(m: Pick<HexModel, "title">): string {
+  return m.title && m.title !== "no country" ? `This area in ${m.title}` : "This area";
+}
+
 export function summarize(m: HexModel, bars: Bar[], dims: DimInfo[], weights: Weights, picks: Picks, props: Record<string, unknown>): string {
   const parts: string[] = [];
   const phrase = bivarPhrase(m.bivarClass);
+  const where = areaPhrase(m);
   if (!m.inhabited) parts.push("Fewer than 100 people live here, so wellbeing and life dimensions are not scored; the hazards are still projected.");
-  else if (phrase) parts.push(`${m.title} shows ${phrase}.`);
-  else if (m.coverageN === 0) parts.push(`${m.title} has no hazard data, so it is not classified.`);
-  else parts.push(`${m.title} has hazard data but no wellbeing figure, so it is not classified.`);
+  else if (phrase) parts.push(`${where} shows ${phrase}.`);
+  else if (m.coverageN === 0) parts.push(`${where} has no hazard data, so it is not classified.`);
+  else parts.push(`${where} has hazard data but no wellbeing figure, so it is not classified.`);
 
-  if (m.coverageN === 4) parts.push("All four hazard layers are present.");
-  else if (m.coverageN > 0) parts.push(`Only ${m.coverageN} of 4 hazard layers are present, so the exposure side is less certain.`);
+  if (m.coverageN === HAZARD_IDS.length) parts.push("All five hazard layers are present.");
+  else if (m.coverageN > 0) parts.push(`Only ${m.coverageN} of ${HAZARD_IDS.length} hazard layers are present, so the exposure side is less certain.`);
 
   if (m.wellbeing.res === "national" && m.inhabited) parts.push("Wellbeing is the national figure, not this region's.");
 
   if (bars.length) {
     const c = compositeValue(dims, weights, picks, props);
     const { missing, total } = missingCount(bars);
-    if (c === null) parts.push("None of your weighted dimensions has data here.");
+    if (c === null) parts.push("None of your weighted layers has data here.");
     else parts.push(`It matches your priorities ${formatScore(c)}${missing ? `, with ${missing} of ${total} missing here` : ""}.`);
   }
   return parts.join(" ");

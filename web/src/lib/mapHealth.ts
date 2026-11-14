@@ -4,7 +4,8 @@
 // - No WebGL 2: MapLibre cannot draw at all, so the page says so instead of a blank canvas.
 // - Basemap down (OpenFreeMap style, tiles, glyphs or sprites): the hexes still draw, on a plain
 //   background style, and a notice says the background is missing. The data never waits on it.
-// - Tile archive unreachable: a notice that stays until the page is reloaded, naming the archive.
+// - Tile archive unreachable: a notice that stays until the page is reloaded. The archive ids go
+//   to the browser console only; the notice is plain words.
 
 import type { StyleSpecification } from "maplibre-gl";
 import { BASEMAP_STYLES } from "./config";
@@ -72,8 +73,12 @@ export function noteProblem(p: MapProblems, k: ErrorKind): MapProblems {
 /** The persistent notice for the current problems, most serious first; null when all is well. */
 export function problemMessage(p: MapProblems): string | null {
   if (p.tiles.length) {
-    return `The map data could not be loaded (${p.tiles.join(", ")}), so some or all hexagons are missing. Reloading may help; if it keeps happening, the data host is down.`;
+    return "The map data could not be loaded, so some or all hexagons are missing. Reloading may help; if it keeps happening, the data host is down.";
   }
   if (p.basemap) return "The background map is unavailable right now. The data is shown on a plain background.";
   return null;
 }
+
+/** Plain words for a map error that is neither the basemap nor a tile archive; the raw MapLibre
+ *  message goes to the console, never to the person. */
+export const OTHER_ERROR_HINT = "Part of the map did not draw. Moving the map or reloading the page usually fixes it.";

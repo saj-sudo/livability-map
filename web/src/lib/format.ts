@@ -9,7 +9,7 @@ const WSTRESS_LABELS: Record<number, string> = { [-1]: "arid and low water use (
 
 export function formatHazardRaw(id: string, v: number | null): string | null {
   if (v === null) return null;
-  if (id === "heat") return `${Math.round(v)} days/yr`;
+  if (id === "heat" || id === "humid") return `${Math.round(v)} days/yr`;
   if (id === "rflood" || id === "cflood") return `${(100 * v).toFixed(1)}% of area`;
   if (id === "wstress") return WSTRESS_LABELS[v] ?? String(v);
   return formatNumber(v);
@@ -76,4 +76,27 @@ export const formatScore = (s: number): string => `${Math.round(s)}/100`;
 
 export function formatPopulation(pop: number | null): string {
   return pop === null ? "population unknown" : `${pop.toLocaleString("en-US")} people`;
+}
+
+/** A population rounded the way a person would say it: "about 784,000", "13.9 million". Exact
+ *  counts below 1,000 are rounded to the nearest 10; under 100 reads "fewer than 100". */
+export function roughPopulation(pop: number): string {
+  if (pop < 100) return "fewer than 100";
+  if (pop < 1000) return (Math.round(pop / 10) * 10).toLocaleString("en-US");
+  if (pop < 1_000_000) {
+    const digits = Math.floor(Math.log10(pop)) + 1;
+    const step = 10 ** Math.max(0, digits - 3);
+    return (Math.round(pop / step) * step).toLocaleString("en-US");
+  }
+  const m = pop / 1_000_000;
+  return `${m >= 100 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "")} million`;
+}
+
+/** "About 784,000 people in this ~1,770 km² area" (population null = not known, never 0). */
+export function areaLine(pop: number | null, areaKm2: string | null): string {
+  const where = areaKm2 ? `this ~${areaKm2} km² area` : "this area";
+  if (pop === null) return `Population unknown in ${where}`;
+  if (pop === 0) return `No one lives in ${where}`;
+  if (pop < 100) return `Fewer than 100 people in ${where}`;
+  return `About ${roughPopulation(pop)} people in ${where}`;
 }

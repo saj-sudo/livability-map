@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dismissIntro, INTRO_KEY, INTRO_STEPS, nextStep, shouldShowIntro } from "./intro";
+import { dismissIntro, INTRO_KEY, INTRO_STEPS, introSteps, nextStep, shouldShowIntro } from "./intro";
 
 function fakeStorage(initial: Record<string, string> = {}, throws = false): Storage {
   const data = { ...initial };
@@ -33,5 +33,14 @@ describe("first-visit intro (localStorage only)", () => {
   it("steps forward and closes after the last", () => {
     expect(nextStep(0)).toBe(1);
     expect(nextStep(2)).toBeNull();
+  });
+
+  it("says where the key is on a phone and on a wide screen", () => {
+    expect(introSteps(false)[0].body).toContain("panel on the left");
+    expect(introSteps(true)[0].body).toContain("Layers tab");
+    expect(introSteps(true)[0].body).not.toContain("left");
+    expect(introSteps(true)[2].body).toMatch(/^Tap/);
+    for (const s of introSteps(true)) expect(s.body.length).toBeLessThan(320);
+    for (const s of introSteps(true)) expect(s.body).not.toContain("\u2014"); // no em dashes
   });
 });

@@ -14,12 +14,14 @@ from .registry import COMPOSITION_KEYS, Dimension
 # `ref` (SPEC §6.1, §9.1): true when a finer layer covers this cell (absent otherwise), so the
 # web app can hide a refined parent once its children's layer is on screen
 BASE_ATTRS = ["h3", "res", "iso_a2", "admin1_id", "admin1_name", "population", "inhabited", "ref"]
-HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"]
-HAZARD_RAW = {"heat": "heat_days", "rflood": "rflood_frac", "cflood": "cflood_frac", "wstress": "wstress_cat"}
+# the order of stages/hazards.HAZARDS (a test keeps the two in step); humid heat is the fifth
+# hazard beside dry heat (SPEC §13.47), so coverage runs 0..len(HAZARD_IDS)
+HAZARD_IDS = ["heat", "humid", "rflood", "cflood", "wstress"]
+HAZARD_RAW = {"heat": "heat_days", "humid": "humid_days", "rflood": "rflood_frac", "cflood": "cflood_frac", "wstress": "wstress_cat"}
 COMPOSITE_ATTRS = ["coverage", "exposure", "wb_value", "wb_score", "wb_source", "wb_res", "bivar", "scenario", "horizon"]
 
 # decimals kept for floats that ship in tiles; anything else float is rounded to 3 significant digits
-ATTR_ROUNDING = {"heat_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}
+ATTR_ROUNDING = {"heat_days": 1, "humid_days": 1, "rflood_frac": 3, "cflood_frac": 3, "wb_value": 3}
 
 
 def hazard_attrs() -> list[str]:

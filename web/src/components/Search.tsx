@@ -87,6 +87,9 @@ export default function Search({ onPick, placeholder = "Search a city or region"
         pick(results[active]);
       }
     } else if (e.key === "Escape") {
+      // the key is used here (closing the list or clearing the text), so the page's own Escape
+      // (cancel picking, close the place panel) leaves it alone
+      if (showList || query) e.preventDefault();
       setOpen(false);
       if (!showList) setQuery("");
     }
@@ -103,7 +106,7 @@ export default function Search({ onPick, placeholder = "Search a city or region"
           type="search"
           role="combobox"
           aria-expanded={showList}
-          aria-controls={listId}
+          aria-controls={showList && results.length > 0 ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={showList && results[active] ? `${listId}-${active}` : undefined}
           aria-label="Search a city or region"

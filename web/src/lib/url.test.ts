@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from "./config";
 import { DEFAULT_STATE, parseState, serializeState, type AppState } from "./url";
 
 describe("url state", () => {
@@ -51,5 +52,28 @@ describe("url state", () => {
     expect(old.weights).toEqual({ jobs: 2 });
     expect("race" in old).toBe(false);
     expect(serializeState({ ...DEFAULT_STATE, view: "priorities", weights: { jobs: 2, race: 4 } })).not.toMatch(/race|,4/);
+  });
+
+  it("keeps weights, preset and the political pick in every view, not only My priorities", () => {
+    const s: AppState = { ...DEFAULT_STATE, view: "heat", weights: { jobs: 3, pol: 2 }, pol: "right" };
+    const back = parseState(serializeState(s));
+    expect(back.view).toBe("heat");
+    expect(parseState("?view=humid").view).toBe("humid"); // the humid-heat layer is a view of its own (§13.47)
+    // humid takes the slot after industry, so a link written before it keeps every earlier weight
+    const humid = parseState(serializeState({ ...DEFAULT_STATE, view: "priorities", weights: { heat: 2, humid: 2 } }));
+    expect(humid.weights).toEqual({ heat: 2, humid: 2 });
+    expect(back.weights).toEqual({ jobs: 3, pol: 2 });
+    expect(back.pol).toBe("right");
+    const preset = parseState(serializeState({ ...DEFAULT_STATE, view: "bivar", preset: "queer", weights: { lgbtq: 3 } }));
+    expect(preset.view).toBe("bivar");
+    expect(preset.preset).toBe("queer");
+    expect(preset.weights.lgbtq).toBe(3);
+  });
+
+  it("clamps the zoom to the map's own limits", () => {
+    expect(parseState("?z=0").z).toBe(MAP_MIN_ZOOM);
+    expect(parseState("?z=1.5").z).toBe(MAP_MIN_ZOOM);
+    expect(parseState("?z=40").z).toBe(MAP_MAX_ZOOM);
+    expect(parseState("?z=5.5").z).toBe(5.5);
   });
 });

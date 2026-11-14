@@ -54,7 +54,16 @@ def test_unzip_member_extracts_once_and_repairs_a_truncated_copy(tmp_path):
     mtime = target.stat().st_mtime_ns
     rawfiles.unzip_member(arch, dest, "deep/a.tif")
     assert target.stat().st_mtime_ns == mtime  # same size: left alone
-    assert [p.name for p in target.parent.iterdir()] == ["a.tif"]  # no temp file left behind
+    assert sorted(p.name for p in target.parent.iterdir()) == ["a.tif", "a.tif.from"]  # no temp file left behind
+
+
+def test_unzip_member_re_extracts_when_the_archive_changes_at_the_same_size(tmp_path):
+    """§13.45: a re-download whose member has the same size but new bytes replaces the old copy."""
+    dest = tmp_path / "out"
+    arch = _zip(tmp_path / "a.zip", {"a.tif": b"AAAA"})
+    assert rawfiles.unzip_member(arch, dest, "a.tif").read_bytes() == b"AAAA"
+    arch = _zip(tmp_path / "a.zip", {"a.tif": b"BBBB"})
+    assert rawfiles.unzip_member(arch, dest, "a.tif").read_bytes() == b"BBBB"
 
 
 def test_unzip_prefix_extracts_a_directory_once(tmp_path):
@@ -66,6 +75,20 @@ def test_unzip_prefix_extracts_a_directory_once(tmp_path):
     (gdb / "a").write_bytes(b"changed")
     rawfiles.unzip_prefix(arch, dest, "d.gdb")
     assert (gdb / "a").read_bytes() == b"changed"  # the marker stops a second extraction
+
+
+def test_unzip_prefix_re_extracts_a_replaced_archive(tmp_path):
+    """§13.45: a new download of the archive is extracted again, and files it dropped go away."""
+    import os
+
+    dest = tmp_path / "out"
+    arch = _zip(tmp_path / "a.zip", {"d.gdb/a": b"1", "d.gdb/old": b"x"})
+    gdb = rawfiles.unzip_prefix(arch, dest, "d.gdb")
+    arch = _zip(tmp_path / "a.zip", {"d.gdb/a": b"2"})
+    st = arch.stat()
+    os.utime(arch, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))  # a later download
+    rawfiles.unzip_prefix(arch, dest, "d.gdb")
+    assert (gdb / "a").read_bytes() == b"2" and not (gdb / "old").exists()
 
 
 def test_unzip_prefix_refuses_a_prefix_nothing_matches(tmp_path):

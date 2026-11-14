@@ -9,7 +9,7 @@
 
 import type { DimGroup } from "../lib/manifest";
 import { shortName, weightable, type DimInfo } from "../lib/dims";
-import { MAX_WEIGHT, type AppState } from "../lib/url";
+import { DEFAULT_STATE, MAX_WEIGHT, type AppState } from "../lib/url";
 import { PRESETS, presetById, type PolPick } from "../presets";
 
 interface Props {
@@ -49,6 +49,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
     onChange({ preset: p.id, weights: { ...p.weights }, pol: p.pol ?? state.pol });
   };
   const active = presetById(state.preset);
+  const weighted = Object.values(state.weights).some((w) => w > 0);
   const contextOnly = dims.filter((d) => !weightable(d));
   return (
     <div className="space-y-3 border-t border-rule pt-2">
@@ -70,7 +71,14 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
             );
           })}
         </div>
-        <p className="mt-1 min-h-[1.2em] text-[12px] text-muted">{active ? active.blurb : Object.keys(state.weights).length ? "custom weights" : "no weights yet: move a slider or pick a preset"}</p>
+        <div className="mt-1 flex min-h-[1.2em] items-start justify-between gap-2">
+          <p className="text-[12px] text-muted">{active ? active.blurb : weighted ? "Your own weights." : "No weights yet: move a slider or pick a preset."}</p>
+          {(weighted || state.preset) && (
+            <button type="button" onClick={() => onChange({ weights: {}, preset: null, pol: DEFAULT_STATE.pol })} className="shrink-0 rounded-panel border border-rule px-2 py-[2px] text-[12px] hover:border-muted">
+              Reset weights
+            </button>
+          )}
+        </div>
       </div>
 
       {groupsOf(dims.filter(weightable)).map((g) => (
@@ -139,7 +147,7 @@ export default function PrioritiesPanel({ dims, state, onChange }: Props) {
           {contextOnly.map((d) => shortName(d.name)).join(", ")} {contextOnly.length > 1 ? "are" : "is"} shown for each place as context, not offered as a priority: ranking places by who lives there is steering, and this map does not do it.
         </p>
       )}
-      <p className="text-[11px] text-muted">A dimension missing on a hex drops out of that hex&rsquo;s average; hexes with none of your weighted dimensions stay grey.</p>
+      <p className="text-[11px] text-muted">A layer with no data for a place drops out of that place&rsquo;s average; places with none of your weighted layers stay grey.</p>
     </div>
   );
 }

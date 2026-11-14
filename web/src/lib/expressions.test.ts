@@ -1,6 +1,6 @@
 import { createExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
-import type { DimInfo } from "./dims";
+import { HAZARD_IDS, type DimInfo } from "./dims";
 import { bivarColor, compositeExpression, hatchFilter, inhabitedFilter, matchExpr, priorityColor, scoreColor } from "./expressions";
 import { GREY, PALETTES, RAMP_HAZARD } from "./palette";
 
@@ -73,7 +73,10 @@ describe("layer expressions (SPEC §9.3)", () => {
     expect(evaluate(inhabitedFilter(false), { inhabited: true })).toBe(true);
     expect(evaluate(inhabitedFilter(false), { inhabited: false })).toBe(false);
     expect(evaluate(inhabitedFilter(true), { inhabited: false })).toBe(true);
+    // five hazard layers since §13.47: four of five is hatched, five of five is not
+    expect(HAZARD_IDS.length).toBe(5);
     expect(evaluate(hatchFilter(), { coverage: 3 })).toBe(true);
-    expect(evaluate(hatchFilter(), { coverage: 4 })).toBe(false);
+    expect(evaluate(hatchFilter(), { coverage: 4 })).toBe(true);
+    expect(evaluate(hatchFilter(), { coverage: 5 })).toBe(false);
   });
 });

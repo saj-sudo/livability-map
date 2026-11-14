@@ -123,6 +123,26 @@
   processing: "hd35 sampled at hex centroid (pixel is coarser than the hex); days per year"
   files: [climatology-hd35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc]
 
+# Humid heat, a fifth hazard beside dry heat (SPEC §13.47). URL and variable name follow the
+# confirmed hd35 file in the same bucket; not yet fetched first-hand (verified: search, §15).
+- id: cckp_hi35
+  name: World Bank CCKP CMIP6, days with heat index > 35C (hi35), SSP2-4.5, 2040-2059 ensemble median
+  group: hazard
+  access: direct
+  url: https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hi35/ensemble-all-ssp245/climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc
+  format: netcdf
+  variable: climatology-hi35-annual-mean   # by analogy with hd35; heat_days() falls back to the only gridded variable
+  crs: EPSG:4326
+  native_res_deg: 0.25
+  scenario: ssp245
+  horizon: "2040-2059"
+  license: CC BY 4.0
+  verified: search
+  vintage: "CMIP6 x0.25 collection (2024)"
+  attribution: "World Bank Climate Change Knowledge Portal, CMIP6 ensemble"
+  processing: "hi35 (days with heat index above 35 C) sampled at hex centroid (pixel is coarser than the hex); days per year"
+  files: [climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc]
+
 - id: aqueduct_floods_river
   name: WRI Aqueduct Floods, riverine inundation depth, RCP4.5, 2050, 1-in-100
   group: hazard
@@ -454,9 +474,7 @@
   processing: "total active non-federal MDs (md_nf_activ_23) per 10k residents at county (polygon_centroid)"
   files: [AHRF_2024-2025_CSV.zip]
 
-# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
-# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
-# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
+# ---------------------------------------------------------------- US tract layers (§13.38: env nri, life phealth)
 - id: fema_nri
   name: FEMA National Risk Index, census tracts (table CSV)
   group: env
@@ -491,6 +509,144 @@
   processing: "GHLTH_CrudePrev (% of adults 18+ reporting fair or poor health), population-weighted from tracts (area_weighted_overlay); blank tracts stay missing"
   files: [places_tract_gis.csv]
 
+# ---------------------------------------------------------------- heavy industry nearby (§13.46, env industry)
+- id: climate_trace_assets
+  name: Climate TRACE emitting assets, sector download packages (power, fossil fuel operations, manufacturing, waste)
+  group: env
+  access: manual
+  recipe: |
+    Climate TRACE publishes one zip per sector on its data page (https://climatetrace.org/data).
+    Download the latest release (all countries) of these four sectors and save them under
+    data/raw/climate_trace_assets/ with these names:
+      power.zip, fossil_fuel_operations.zip, manufacturing.zip, waste.zip
+    Then check, first-hand: the licence on the download page (expected CC BY 4.0), that each zip
+    holds *emissions_sources*.csv files with source_id, subsector, lat and lon columns, and that
+    the subsector names below match. Log it in SPEC §15, set verified: confirmed and vintage, then
+    run: uv run python -m pipeline fetch (records checksums), then
+    uv run python -m pipeline --res 5 dims --only industry, then score, export, tiles.
+  url: https://climatetrace.org/data
+  format: csv-zip
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "From memory of climatetrace.org/data ('Climate TRACE data is licensed under CC BY 4.0'); not yet read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (the release named on the download page)
+  attribution: "Climate TRACE - Tracking Real-time Atmospheric Carbon Emissions (climatetrace.org), CC BY 4.0"
+  processing: "assets in the subsectors below with coordinates, one point per asset (rows per gas and year deduplicated by source_id), counted within 10 km of the hex centre (point_radius sum); 0 = none recorded nearby (prep/climate_trace.py)"
+  # point-like heavy industry; area-like assets (oil and gas fields, pipelines, farms, roads) are left out.
+  # Names from memory of the v4 packages: check them against the files (§15). Editing this list
+  # re-runs the loader (the prep cache key carries it, §13.45).
+  subsectors:
+    - electricity-generation
+    - oil-and-gas-refining
+    - coal-mining
+    - iron-and-steel
+    - cement
+    - chemicals
+    - aluminum
+    - petrochemical-steam-cracking
+    - pulp-and-paper
+    - solid-waste-disposal
+  # Global Energy Monitor plants are merged in when their workbooks are present (§13.49)
+  also_uses: [gem_trackers]
+  files: [power.zip, fossil_fuel_operations.zip, manufacturing.zip, waste.zip]
+
+- id: gem_trackers
+  name: Global Energy Monitor plant trackers (coal, gas, steel, cement), operating plants
+  group: env
+  access: manual
+  recipe: |
+    Optional: fills plants Climate TRACE misses (smaller coal and gas plants). On
+    https://globalenergymonitor.org/projects/ open each tracker below, fill in the short download
+    form and save the spreadsheet in data/raw/gem_trackers/ with these names:
+      gem_coal_plants.xlsx   (Global Coal Plant Tracker)
+      gem_gas_plants.xlsx    (Global Oil and Gas Plant Tracker)
+      gem_steel_plants.xlsx  (Global Iron and Steel Tracker / Steel Plant Tracker)
+      gem_cement_plants.xlsx (Global Cement and Concrete Tracker)
+    Any subset works. Check the licence on each page (expected CC BY 4.0) and that a sheet has
+    Latitude, Longitude and Status columns, log it in SPEC §15, set verified: confirmed, then run
+    uv run python -m pipeline --res 5 dims --only industry and score / export / tiles.
+  url: https://globalenergymonitor.org/projects/
+  format: xlsx
+  crs: EPSG:4326
+  license: CC BY 4.0
+  license_note: "From memory of GEM's tracker pages (CC BY 4.0, download behind a short form); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (each tracker's release date)
+  attribution: "Global Energy Monitor, Global Coal Plant Tracker, Global Oil and Gas Plant Tracker, Global Iron and Steel Tracker, Global Cement and Concrete Tracker, CC BY 4.0"
+  processing: "operating plants with coordinates, units of one plant collapsed; merged into the Climate TRACE facility points, dropping any GEM plant within 2 km of a Climate TRACE asset (prep/gem.py)"
+  files: [gem_coal_plants.xlsx, gem_gas_plants.xlsx, gem_steel_plants.xlsx, gem_cement_plants.xlsx]
+
+# ---------------------------------------------------------------- traffic air pollution (§13.49, env no2)
+- id: s5p_no2
+  name: Copernicus Sentinel-5P TROPOMI tropospheric NO2 column, annual mean 2023, 0.05 degree (Earth Engine export)
+  group: env
+  access: manual
+  recipe: |
+    Export once from Google Earth Engine with the NO2 script in docs/gee-export.md (collection
+    COPERNICUS/S5P/OFFL/L3_NO2, band tropospheric_NO2_column_number_density, 2023 mean, 0.05
+    degree, EPSG:4326, nodata -9999) and save the GeoTIFF as data/raw/s5p_no2/s5p_no2_2023.tif.
+    Check the Copernicus Sentinel data terms (free and open, attribution required) and log them
+    in SPEC §15, set verified: confirmed, then run
+    uv run python -m pipeline --res 5 dims --only no2 and score / export / tiles.
+  url: https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_OFFL_L3_NO2
+  format: geotiff
+  crs: EPSG:4326
+  nodata: -9999
+  license: Copernicus Sentinel data terms (free, full and open; attribution)
+  license_note: "From memory of the Copernicus Sentinel data legal notice: free use and redistribution with the attribution 'Contains modified Copernicus Sentinel data [year]'; not read first-hand from this container (§15)"
+  verified: search
+  vintage: "2023 annual mean (OFFL L3)"
+  attribution: "Contains modified Copernicus Sentinel data 2023, processed by ESA / Google Earth Engine"
+  processing: "annual mean tropospheric NO2 column (mol/m², shown as µmol/m²) per hex: the mean of the 0.05 degree pixels where the hex covers at least two pixels of area (res 4-5), the pixel under the centroid where it is smaller (res 6-7) (raster_mean sample: auto)"
+  files: [s5p_no2_2023.tif]
+
+# ---------------------------------------------------------------- everyday amenities (§13.49, life amen)
+- id: overture_places
+  name: Overture Maps places, everyday amenities extract (groceries, pharmacies, clinics, schools, parks)
+  group: life
+  access: manual
+  recipe: |
+    Make the slim extract once on the laptop (DuckDB reads the public bucket, about 10-20 min):
+      uv run --extra overture python -m pipeline.prep.overture_places --release <RELEASE>
+    with the latest release from https://docs.overturemaps.org/release/latest/ (add
+    --category-field basic_category if the release renamed categories.primary). It writes
+    data/raw/overture_places/places.parquet. Check the places licence (expected CDLA-Permissive
+    2.0) and that the category names below exist in that release's taxonomy, log it in SPEC §15,
+    set verified: confirmed, then run uv run python -m pipeline --res 5 dims --only amen and
+    score / export / tiles.
+  url: https://docs.overturemaps.org/guides/places/
+  format: parquet
+  crs: EPSG:4326
+  license: CDLA-Permissive 2.0
+  license_note: "From memory of Overture's attribution page (places theme CDLA-Permissive 2.0, derived from Meta and Microsoft data); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (the Overture release used)
+  attribution: "© OpenStreetMap contributors, Overture Maps Foundation (places, CDLA-Permissive 2.0)"
+  processing: "places whose primary category is on the list below with confidence >= min_confidence, counted within 1 km of the hex centre (never below the hex edge) and divided by the area searched: everyday amenities per km² (point_radius sum, per_km2; prep/overture_places.py)"
+  min_confidence: 0.6
+  # names from memory of the Overture places taxonomy; check them against the release (§15).
+  # Editing this list re-runs the loader (§13.45)
+  categories:
+    - supermarket
+    - grocery_store
+    - convenience_store
+    - pharmacy
+    - hospital
+    - medical_center
+    - doctor
+    - school
+    - elementary_school
+    - middle_school
+    - high_school
+    - park
+    - playground
+    - library
+  files: [places.parquet]
+
+# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
+# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
+# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
 - id: bea_rpp_metro
   name: BEA Regional Price Parities by metropolitan statistical area (MARPP), all items
   group: life
@@ -989,3 +1145,103 @@
   attribution: "Water Point Data Exchange (WPdx), Global Water Challenge; data contributed by national governments and partners"
   processing: "is_duplicate rows and status Unknown dropped; has_water = status_id Yes (1) / No (0), averaged within 5 km of the hex centre (point_radius mean); missing where no point is recorded (prep/wpdx.py)"
   files: [wpdx_plus_eqje-vguj.csv]
+
+# ---------------------------------------------------------------- EU cities survey (§13.48: lgbtq EU-city joiner, immig, safe)
+- id: eu_qol_cities
+  name: Perception of quality of life in European cities, survey results by city (2023 wave)
+  group: life
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container (the container blocks ec.europa.eu):
+    1. Open the Eurostat data browser for dataset urb_percep ("Perception survey results"):
+       https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table
+       and download the full dataset as SDMX-CSV with "Codes and labels" (the loader recognises
+       the three items by their wording). Save it as data/raw/eu_qol_cities/urb_percep.csv.
+    2. Check that the 2023 wave is in it (the loader keeps only the latest year) and that the
+       three items are there: "good place to live for gay or lesbian people", "good place to live
+       for immigrants from other countries", "I feel safe walking alone at night in my city",
+       each with strongly / somewhat agree answers. If urb_percep stops before 2023, take the
+       2023 results file from the DG REGIO "Quality of life in European cities" page instead and
+       save it as a long CSV with columns city (URAU code or name), question, answer, value under
+       the same file name. If the table carries codes only, list each item's codes under
+       `items:` on this source (gay_good_pct, immig_good_pct, safe_night_pct).
+    3. Check the reuse terms (expected: Eurostat copyright notice, CC BY 4.0), set verified and
+       vintage here, add a SPEC §15 row, then: uv run python -m pipeline fetch, then
+       uv run python -m pipeline --res 5 dims --only lgbtq --only immig --only safe
+  url: https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table
+  format: csv
+  geometry: gisco_urau_cities
+  license: CC BY 4.0 (Eurostat reuse policy)
+  license_note: "From memory of the Eurostat copyright notice (Commission Decision 2011/833/EU, CC BY 4.0); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (2023 survey wave, published 2024; record the release)
+  attribution: "European Commission, Eurostat and DG REGIO, Perception of quality of life in European cities (2023 survey)"
+  processing: "share of respondents who strongly or somewhat agree (as published, the base includes don't know) for three items: good place for gay or lesbian people, good place for immigrants from other countries, feel safe walking alone at night; latest year in the table only; joined to GISCO Urban Audit city polygons on the URAU code (prep/eu_qol.py); hexes whose centroid is in a surveyed city (polygon_centroid, tag city)"
+  files: [urb_percep.csv]
+
+- id: gisco_urau_cities
+  name: GISCO Urban Audit 2021 city boundaries (URAU, cities layer)
+  group: reference
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container: on the GISCO page
+    https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit download the
+    2021 Urban Audit units, "cities" level (URAU category C), 1:1 million or finer, in EPSG:4326
+    as GeoJSON, and save it as data/raw/gisco_urau_cities/urau_cities_2021.geojson. Check that it
+    has URAU_CODE (like DE001C) and URAU_NAME columns and whether it covers the survey's UK,
+    Western Balkan and Turkish cities (cities without a polygon stay missing). Check the GISCO
+    terms (expected: free for non-commercial use with the EuroGeographics attribution).
+  url: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit
+  format: geojson
+  crs: EPSG:4326
+  license: "GISCO / EuroGeographics terms: non-commercial reuse with attribution (the project is non-commercial, §13.13)"
+  license_note: "From memory of the GISCO copyright page ('© EuroGeographics for the administrative boundaries'); not read first-hand (§15)"
+  verified: search
+  vintage: VERIFY (Urban Audit 2021)
+  attribution: "© EuroGeographics for the administrative boundaries; Eurostat GISCO Urban Audit 2021"
+  processing: "city polygons for eu_qol_cities, matched on the URAU code stem (prep/eu_qol.py)"
+  files: [urau_cities_2021.geojson]
+
+# ---------------------------------------------------------------- Opportunity Atlas (§13.48: life opp)
+- id: opp_atlas
+  name: Opportunity Atlas, children's outcomes by census tract (Opportunity Insights)
+  group: life
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container: on https://opportunityinsights.org/data/
+    open "The Opportunity Atlas: Mapping the Childhood Roots of Social Mobility", download the
+    tract outcomes CSV (tract_outcomes_simple.csv) and save it as
+    data/raw/opp_atlas/tract_outcomes_simple.csv. It must have state, county and tract columns,
+    kfr_pooled_pooled_mean (all parents, all races and genders) and kfr_pooled_pooled_p25
+    (parents at the 25th percentile); if the simple file lacks either, use the full tract
+    outcomes file and save its CSV under the same name (the loader reads only the columns it
+    needs). Check
+    the terms on the data page (expected: free to use with citation of Chetty, Friedman,
+    Hendren, Jones and Porter 2018), set verified and vintage here, add a SPEC §15 row, then:
+    uv run python -m pipeline fetch --only opp_atlas --only census_tract_rel_2020_2010, then
+    uv run python -m pipeline --res 5 dims --only opp --only opp25
+  url: https://opportunityinsights.org/data/
+  format: csv
+  geometry: cb_tracts
+  also_needs: [census_tract_rel_2020_2010]
+  license: "Opportunity Insights data terms: free to use with citation (check the terms)"
+  license_note: "From memory; check the terms on opportunityinsights.org/data before publish (§15)"
+  verified: search
+  vintage: "Opportunity Atlas (2018 release): children born 1978-1983, adult household incomes about 2014-2015, 2010 census tracts"
+  attribution: "Chetty, R., Friedman, J., Hendren, N., Jones, M. and Porter, S. (2018) The Opportunity Atlas: Mapping the Childhood Roots of Social Mobility. Opportunity Insights"
+  processing: "kfr_pooled_pooled_mean (mean household income rank in adulthood, 0-1, children of all parent incomes, races and genders; `opp`) and kfr_pooled_pooled_p25 (the same for children whose parents were at the 25th percentile; `opp25`) on 2010 tracts, each carried to 2020 tracts by the Census 2020-2010 tract relationship file, land-area-weighted, kept where valued 2010 tracts cover half the 2020 tract's land (prep/opp_atlas.py); then into hexes by area_weighted_overlay weighted by the apportioned child count"
+  files: [tract_outcomes_simple.csv]
+
+- id: census_tract_rel_2020_2010
+  name: US Census 2020 to 2010 census tract relationship file (national)
+  group: reference
+  access: direct
+  # URL as remembered from the Census relationship-files page; confirm on first fetch (§15)
+  url: https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_natl.txt
+  format: txt-pipe
+  license: Public domain (US federal)
+  verified: search
+  vintage: "2020 census tracts to 2010 census tracts"
+  attribution: "US Census Bureau, 2020 Census Tract Relationship Files"
+  processing: "pipe-delimited overlaps (GEOID_TRACT_20, GEOID_TRACT_10, AREALAND_PART, AREAWATER_PART) used as land-area weights to carry Opportunity Atlas 2010-tract values onto 2020 tracts (prep/opp_atlas.py)"
+  files: [tab20_tract20_tract10_natl.txt]

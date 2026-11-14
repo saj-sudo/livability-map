@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import h3
 import pandas as pd
 
+from .attrs import HAZARD_IDS
 from .config import Settings
 
 
@@ -50,9 +51,9 @@ def print_counts(df: pd.DataFrame, res: int) -> None:
     else:
         inh = df
     if "coverage" in df.columns:
-        for k in (4, 0):
+        for k in (len(HAZARD_IDS), 0):
             print(f"  inhabited with coverage = {k}: {_pct(int((inh['coverage'] == k).sum()), len(inh))}")
-    for hz in ("heat", "rflood", "cflood", "wstress"):
+    for hz in HAZARD_IDS:
         if f"{hz}_ok" in df.columns:
             print(f"  inhabited with {hz}_ok: {_pct(int(inh[f'{hz}_ok'].sum()), len(inh))}")
     if "wb_res" in df.columns:

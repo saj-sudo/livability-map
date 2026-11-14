@@ -13,17 +13,23 @@ import { useEffect, useRef } from "react";
 import { INSPECT_MIN_ZOOM, MAP_MAX_ZOOM, MAP_MIN_ZOOM, tilesUrl } from "../lib/config";
 import type { DimInfo } from "../lib/dims";
 import { hatchImage } from "../lib/hatch";
-import { classifyError, fallbackStyle, NO_PROBLEMS, noteProblem, STYLE_TIMEOUT_MS, type ErrorKind, type MapProblems } from "../lib/mapHealth";
+import { classifyError, fallbackStyle, NO_PROBLEMS, noteProblem, OTHER_ERROR_HINT, STYLE_TIMEOUT_MS, type ErrorKind, type MapProblems } from "../lib/mapHealth";
 import { paletteFor } from "../lib/palette";
+import type { PlaceRef } from "../lib/place";
+import { diffOutlines, type OutlineKey } from "../lib/selection";
 import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, pickVisible, type TileLayer, type ViewOptions } from "../lib/style";
 import { basemapStyleFor, THEME_EVENT, type Theme } from "../lib/theme";
 import type { AppState } from "../lib/url";
 import { getDomTheme } from "./useTheme";
 
 export interface SelectedHex {
+  /** the vector source (tile archive) the hex was picked from; needed to outline it */
+  source?: string;
   sourceLayer: string;
   h3: string;
   props: Record<string, unknown>;
+  /** the search result that led here, so the panel can keep its name */
+  place?: PlaceRef;
 }
 
 /** The hex under the pointer with the pointer's position inside the map container. */
@@ -38,6 +44,7 @@ export interface FlyTo {
   lng: number;
   zoom: number;
   nonce: number;
+  place?: PlaceRef;
 }
 
 let protocolRegistered = false;
@@ -58,6 +65,8 @@ interface Props {
   dims: DimInfo[];
   state: AppState;
   flyTo?: FlyTo | null;
+  /** the selected places (A, then B while comparing); MapView outlines exactly these */
+  selection?: SelectedHex[];
   onMove: (lat: number, lng: number, z: number) => void;
   onSelect: (hex: SelectedHex | null) => void;
   onHover?: (hex: HoveredHex | null) => void;
@@ -66,12 +75,17 @@ interface Props {
   onProblems?: (problems: MapProblems) => void;
 }
 
-export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, onMove, onSelect, onHover, onHint, onProblems }: Props) {
+/** Where each selected hex is outlined; a hex without a known source cannot be outlined. */
+const outlineKeys = (sel: SelectedHex[]): OutlineKey[] => sel.filter((h) => h.source && h.h3).map((h) => ({ source: h.source!, sourceLayer: h.sourceLayer, id: h.h3 }));
+
+export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, dims, state, flyTo, selection = [], onMove, onSelect, onHover, onHint, onProblems }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
-  const selectedRef = useRef<{ source: string; layer: string; id: string } | null>(null);
-  const selectAtRef = useRef<((point: maplibregl.PointLike) => boolean) | null>(null);
+  // outlines currently drawn (feature-state `selected`), so they can be cleared exactly
+  const outlinedRef = useRef<OutlineKey[]>([]);
+  const selectionRef = useRef<OutlineKey[]>([]);
+  const selectAtRef = useRef<((point: maplibregl.PointLike, place?: PlaceRef) => boolean) | null>(null);
   const stateRef = useRef(state);
   const cbRef = useRef({ onMove, onSelect, onHover, onHint, onProblems });
   const themeRef = useRef<Theme>("light");
@@ -81,6 +95,23 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     stateRef.current = state;
     cbRef.current = { onMove, onSelect, onHover, onHint, onProblems };
   });
+
+  // draw the selection outlines from the selection prop: clear what is no longer selected, set
+  // what is new (the panel and the map always agree)
+  const syncOutlines = (map: maplibregl.Map, force = false) => {
+    if (!loadedRef.current) return;
+    const next = selectionRef.current;
+    const { clear, set } = diffOutlines(outlinedRef.current, next);
+    const state = (k: OutlineKey, selected: boolean) => {
+      if (map.getSource(k.source)) map.setFeatureState({ source: k.source, sourceLayer: k.sourceLayer, id: k.id }, { selected });
+    };
+    for (const k of clear) state(k, false);
+    // force: after a style (re)load every outline is drawn again, not only the new ones
+    for (const k of force ? next : set) state(k, true);
+    outlinedRef.current = [...next];
+    // what is outlined, readable from the DOM (the e2e test checks panel and map agree)
+    if (container.current) container.current.dataset.outlined = next.map((k) => k.id).join(",");
+  };
 
   const options = (s: AppState): ViewOptions => ({ view: s.view, dims, weights: s.weights, picks: { pol: s.pol }, theme: themeRef.current });
 
@@ -145,6 +176,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       const st = stateRef.current;
       for (const layer of buildLayers(options(st), st.inh, st.conf, tileLayers)) map.addLayer(layer, before);
       loadedRef.current = true;
+      syncOutlines(map, true);
       for (const id of fillLayerIds(tileLayers)) {
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
@@ -192,7 +224,10 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       if (theme === themeRef.current || !loadedRef.current) return;
       themeRef.current = theme;
       if (map.hasImage(HATCH_IMAGE)) map.removeImage(HATCH_IMAGE);
-      map.once("style.load", () => applyView(map, options(stateRef.current), stateRef.current.inh, stateRef.current.conf, tileLayers));
+      map.once("style.load", () => {
+        applyView(map, options(stateRef.current), stateRef.current.inh, stateRef.current.conf, tileLayers);
+        syncOutlines(map, true);
+      });
       const style = basemapDownRef.current ? fallbackStyle(theme) : basemapStyleFor(theme);
       map.setStyle(style, { transformStyle: (prev, next) => mergeStyleOnThemeChange(prev, next) });
     };
@@ -208,8 +243,12 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
         if (!loadedRef.current) switchToPlainBackground();
         return;
       }
+      // the raw MapLibre message is for developers: console only, plain words on screen
       const msg = (e as { error?: { message?: string } }).error?.message ?? "";
-      if (msg) cbRef.current.onHint(`Map error: ${msg}`);
+      if (msg) {
+        console.warn("map error:", msg);
+        cbRef.current.onHint(OTHER_ERROR_HINT);
+      }
     });
 
     map.on("moveend", () => {
@@ -218,24 +257,17 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     });
 
     // select the hex under a screen point (a click, or the target of a search fly-to)
-    const selectAt = (point: maplibregl.PointLike): boolean => {
+    // (the outline itself follows the selection prop, see syncOutlines)
+    const selectAt = (point: maplibregl.PointLike, place?: PlaceRef): boolean => {
       const f = pickVisible(map.queryRenderedFeatures(point, { layers: fillLayerIds(tileLayers).filter((id) => map.getLayer(id)) }), map.getZoom(), tileLayers);
-      if (selectedRef.current) {
-        map.setFeatureState({ source: selectedRef.current.source, sourceLayer: selectedRef.current.layer, id: selectedRef.current.id }, { selected: false });
-        selectedRef.current = null;
-      }
       if (!f) {
         cbRef.current.onSelect(null);
         return false;
       }
       const h3 = String(f.properties.h3 ?? "");
       const sourceLayer = String(f.sourceLayer ?? "");
-      if (h3) {
-        map.setFeatureState({ source: String(f.source), sourceLayer, id: h3 }, { selected: true });
-        selectedRef.current = { source: String(f.source), layer: sourceLayer, id: h3 };
-      }
       cbRef.current.onHint(null);
-      cbRef.current.onSelect({ sourceLayer, h3, props: f.properties as Record<string, unknown> });
+      cbRef.current.onSelect({ source: String(f.source), sourceLayer, h3, props: f.properties as Record<string, unknown>, ...(place ? { place } : {}) });
       return true;
     };
     selectAtRef.current = selectAt;
@@ -243,7 +275,7 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     map.on("click", (e) => {
       if (!loadedRef.current) return;
       if (map.getZoom() < INSPECT_MIN_ZOOM) {
-        cbRef.current.onHint("Zoom in to inspect a hex (hexes are a few pixels wide here).");
+        cbRef.current.onHint("Zoom in to see a place's details; the hexagons are too small to pick at this zoom.");
         return;
       }
       selectAt(e.point);
@@ -267,8 +299,8 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     // not `essential`: MapLibre then honours prefers-reduced-motion and jumps instead of flying
     map.flyTo({ center: target, zoom: flyTo.zoom, duration: 1400 });
     const onIdle = () => {
-      const hit = selectAtRef.current?.(map.project(target));
-      if (hit === false) cbRef.current.onHint("No inhabited hex here; the nearest coloured hexes are the data.");
+      const hit = selectAtRef.current?.(map.project(target), flyTo.place);
+      if (hit === false) cbRef.current.onHint("There is no data right at this spot. Try a coloured hexagon nearby.");
     };
     map.once("idle", onIdle);
     return () => {
@@ -276,6 +308,17 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyTo?.nonce]);
+
+  // keep the outlines in step with the selection (closing the panel, swapping, re-picking)
+  const selectionKey = outlineKeys(selection)
+    .map((k) => `${k.source}/${k.sourceLayer}/${k.id}`)
+    .join(",");
+  useEffect(() => {
+    selectionRef.current = outlineKeys(selection);
+    const map = mapRef.current;
+    if (map) syncOutlines(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
 
   // restyle in place on view / weights / picks / toggles (SPEC §20.5: no rebuild, no request)
   useEffect(() => {

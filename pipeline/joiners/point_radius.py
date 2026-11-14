@@ -4,10 +4,16 @@ Two uses, after Session 8 (SPEC §13.36):
 
 - ``agg="sum"``: e.g. conflict fatalities per year within 25 km (UCDP GED). A hex with no event
   in range gets a real 0, because the event set covers the whole world: "no recorded event
-  nearby" is a measurement, not missing data.
+  nearby" is a measurement, not missing data. That only holds while the point set is real: an
+  empty point set gives NaN everywhere, and points whose value column is all non-numeric raise
+  (a prep change must never turn into a world of zeros, §13.45).
 - ``agg="mean"`` (optionally weighted): e.g. Meta's Relative Wealth Index, whose ~2.4 km tiles are
   sparser than a res-7 hex; averaging the tiles within a few km of the centre gives every hex a
   value where tiles exist nearby. A hex with no point in range is missing (NaN), never 0.
+
+``per_km2=True`` (with ``agg="sum"``) divides each sum by the area searched, pi * r^2 with the
+effective radius below, so a density compares fairly across resolutions whose radius differs
+(everyday amenities, §13.49).
 
 The search radius is never smaller than the hex's average edge length (about its circumradius),
 so a coarse hex averages what lies inside it rather than a small disc at its centre. Distances are
@@ -32,9 +38,16 @@ def _unit(lat: np.ndarray, lng: np.ndarray) -> np.ndarray:
     return np.column_stack([np.cos(la) * np.cos(lo), np.cos(la) * np.sin(lo), np.sin(la)])
 
 
-def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str, *, radius_km: float, agg: str = "mean", weight_field: str | None = None) -> pd.Series:
+def effective_radius_km(radius_km: float, res: int) -> float:
+    """The radius actually searched: never below the hex's average edge length."""
+    return max(float(radius_km), h3.average_hexagon_edge_length(res, unit="km"))
+
+
+def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str, *, radius_km: float, agg: str = "mean", weight_field: str | None = None, per_km2: bool = False) -> pd.Series:
     if agg not in AGGS:
         raise ValueError(f"point_radius: agg must be one of {AGGS}")
+    if per_km2 and agg != "sum":
+        raise ValueError("point_radius: per_km2 needs agg=sum")
     for col in ("lat", "lng", field):
         if col not in points.columns:
             raise KeyError(f"point_radius: points need a {col!r} column; got {list(points.columns)}")
@@ -43,10 +56,12 @@ def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str
     keep = pts["lat"].between(-90, 90) & pts["lng"].between(-180, 180) & np.isfinite(pts[field])
     if weight_field:
         keep &= pts[weight_field] > 0
+    if len(pts) and not keep.any():
+        raise ValueError(f"point_radius: none of the {len(pts)} points has a usable {field!r} value (check the prep loader)")
     pts = pts[keep]
-    out = np.full(len(hexes), 0.0 if agg == "sum" else np.nan)
+    out = np.full(len(hexes), 0.0 if agg == "sum" and not pts.empty else np.nan)
     if not pts.empty:
-        radius = max(float(radius_km), h3.average_hexagon_edge_length(res, unit="km"))
+        radius = effective_radius_km(radius_km, res)
         chord = 2.0 * np.sin(radius / (2.0 * EARTH_KM))
         tree = cKDTree(_unit(pts["lat"].to_numpy(), pts["lng"].to_numpy()))
         centres = _unit(hexes["lat"].to_numpy(dtype="float64"), hexes["lng"].to_numpy(dtype="float64"))
@@ -61,4 +76,6 @@ def point_radius(hexes: pd.DataFrame, points: pd.DataFrame, res: int, field: str
                 else:
                     w = weights[idx]
                     out[i] = float((values[idx] * w).sum() / w.sum())
+    if per_km2:
+        out = out / (np.pi * effective_radius_km(radius_km, res) ** 2)
     return pd.Series(out, index=hexes.index, name="point_radius", dtype="float64")

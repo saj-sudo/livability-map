@@ -4,15 +4,18 @@
 // visible while it is read; Escape or Skip closes it; Done marks it seen in localStorage.
 
 import { useEffect, useRef, useState } from "react";
-import { dismissIntro, INTRO_STEPS, nextStep } from "../lib/intro";
+import { dismissIntro, introSteps, nextStep } from "../lib/intro";
 
 interface Props {
   onClose: () => void;
+  /** phone layout: the key lives in the sheet's Layers tab, not on the left */
+  phone?: boolean;
 }
 
-export default function Intro({ onClose }: Props) {
+export default function Intro({ onClose, phone = false }: Props) {
   const [step, setStep] = useState(0);
   const nextRef = useRef<HTMLButtonElement>(null);
+  const INTRO_STEPS = introSteps(phone);
   const s = INTRO_STEPS[step];
   const last = nextStep(step) === null;
 
@@ -24,6 +27,9 @@ export default function Intro({ onClose }: Props) {
   useEffect(() => {
     nextRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      // Escape while typing (the search box) belongs to that field, not to the intro
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (e.key === "Escape") finish();
     };
     window.addEventListener("keydown", onKey);

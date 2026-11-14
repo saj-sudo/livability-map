@@ -5,7 +5,8 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
 - two countries (user-assigned ISO3 XKA, XKB) and five admin1 regions
 - a 0.01 degree population raster with four towns and an empty desert, and a GHS-SMOD-like
   class raster derived from it (urban centres over Alder, Birch, Cedar; clusters incl. Dune)
-- a 0.25 degree heat NetCDF (hd35), 0.01 degree riverine and coastal flood GeoTIFFs,
+- a 0.25 degree heat NetCDF (hd35) and a humid-heat one (hi35: highest along the south-east
+  coast, masked in the north-west corner), 0.01 degree riverine and coastal flood GeoTIFFs,
   water-stress polygons (bau50_ws_x_c incl. -1)
 - tabular wellbeing (SHDI with two missing regions, WHR for both countries)
 - global life-dimension stand-ins: GSAP regions (all five admin1), OECD TL2 (XKA only), ILOSTAT
@@ -17,6 +18,10 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
   national price levels
 - neighbourhood statistics (Session 8): a Eurostat-like 1 km grid of points over north-east XKA
   and LSOA-like deprivation polygons over south-east XKA (west XKA keeps the OECD stand-in)
+- EU cities survey stand-in (SPEC §13.48): three URAU-like city polygons in XKA with agreement
+  shares (Birch lacks the immigrants item), and Opportunity Atlas stand-ins: 2010-like tracts,
+  each split across two of the XKB tracts, plus a Census-like 2020-2010 relationship file; the
+  tracts carry the crosswalked values (`kfr_pooled`, `kfr_p25`, `children`) computed by prep/opp_atlas.py
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -42,8 +47,17 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 13  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 20  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
+# the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
+# small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
+DOMAIN_COUNTRIES = {"us": ("XB",), "uk": ("XA",), "de": ("XA",), "nl": ("XA",), "fr": ("XA",), "ca": ("XA",), "au": ("XA",)}
+
+
+def apply(settings) -> None:
+    """Point ``settings`` at the fixture world's user-assigned country codes."""
+    settings.iso_overrides = dict(ISO_OVERRIDES)
+    settings.domain_countries = dict(DOMAIN_COUNTRIES)
 BBOX = (10.0, 40.0, 14.0, 44.0)
 PX = 0.01  # degrees per pixel for the 1 km-ish rasters
 NODATA_POP = -200.0
@@ -173,12 +187,16 @@ def river_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
     return depth
 
 
-def coast_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
-    # distance to the coast line of the wedge (from (12.6,40) to (14,41.6))
+def _coast_distance(LNG, LAT) -> np.ndarray:
+    """Degrees to the coast line of the wedge (from (12.6,40) to (14,41.6))."""
     x0, y0, x1, y1 = 12.6, 40.0, 14.0, 41.6
     dx, dy = x1 - x0, y1 - y0
     t = np.clip(((LNG - x0) * dx + (LAT - y0) * dy) / (dx * dx + dy * dy), 0, 1)
-    d = np.hypot(LNG - (x0 + t * dx), LAT - (y0 + t * dy))
+    return np.hypot(LNG - (x0 + t * dx), LAT - (y0 + t * dy))
+
+
+def coast_raster(LNG, LAT, land: np.ndarray) -> np.ndarray:
+    d = _coast_distance(LNG, LAT)
     depth = np.where(d < 0.15, 1.0 * (1 - d / 0.15), 0.0)
     depth[~land] = NODATA_FLOOD
     return depth
@@ -193,6 +211,26 @@ def heat_dataset() -> xr.Dataset:
         {"hd35": (("lat", "lon"), hd35.astype("float32"), {"units": "days", "long_name": "Number of hot days (Tmax > 35C)"})},
         coords={"lat": lat, "lon": lon},
         attrs={"title": "fixture hd35 climatology, synthetic"},
+    )
+
+
+# hi35 stand-in mask: pixels west of 10.75 and north of 43.25 carry no value, so the north-west
+# corner tests the missing path (NaN, never 0; coverage below the full count there)
+HUMID_MASK = (10.75, 43.25)
+
+
+def humid_dataset() -> xr.Dataset:
+    """Humid heat (SPEC §13.47): days with heat index above 35 C peak along the south-east coast
+    and fade inland, so the pattern differs from the north-to-south dry-heat gradient."""
+    lat = np.arange(44.125, 39.75, -0.25)
+    lon = np.arange(9.875, 14.25, 0.25)
+    LON, LAT = np.meshgrid(lon, lat)
+    hi35 = 2.0 + 60.0 * np.exp(-_coast_distance(LON, LAT) / 0.7) + 5.0 * (44.0 - LAT) / 4.0
+    hi35[(LON < HUMID_MASK[0]) & (LAT > HUMID_MASK[1])] = np.nan
+    return xr.Dataset(
+        {"hi35": (("lat", "lon"), hi35.astype("float32"), {"units": "days", "long_name": "Number of days with heat index > 35C"})},
+        coords={"lat": lat, "lon": lon},
+        attrs={"title": "fixture hi35 climatology, synthetic"},
     )
 
 
@@ -264,7 +302,7 @@ def us_like_layers(land, rng: np.random.Generator):
                     "pct_other": float(pct_other),
                     "income_entropy": float(round(0.6 + 0.35 * near_cedar, 3)),
                     "gini": float(round(0.4 + 0.1 * near_cedar, 3)),
-                    "rent_share_income": float(round(0.22 + 0.2 * near_cedar, 3)),
+                    "rent_share_income": float(round(22.0 + 20.0 * near_cedar, 1)),  # B25071 is a percentage already
                     "renter_households": float(round(30 + 5000 * near_cedar)),
                     # FEMA NRI-like building loss (USD per 1,000 per year), highest on the east side,
                     # and a CDC PLACES-like fair-or-poor health share, blank on the northern edge
@@ -440,6 +478,33 @@ def extras_rasters(LNG, LAT, land: np.ndarray):
     return care, pm25, fire, coarse_transform
 
 
+def no2_raster():
+    """Tropospheric NO2 column stand-in (mol/m², 0.05 degree like the real export, §13.49):
+    highest over Cedar, background elsewhere, a -9999 hole in the north-east corner so a hex
+    with no valid pixel stays missing."""
+    minlng, minlat, maxlng, maxlat = BBOX
+    step = 0.05
+    lng = np.arange(minlng + step / 2, maxlng, step)
+    lat = np.arange(maxlat - step / 2, minlat, -step)
+    LNG, LAT = np.meshgrid(lng, lat)
+    near_cedar = np.exp(-((LNG - 13.0) ** 2 + (LAT - 42.5) ** 2) / (2 * 0.4**2))
+    no2 = 2.0e-5 + 8.0e-5 * near_cedar
+    no2[(LNG > 13.5) & (LAT > 43.5)] = -9999.0
+    return no2, from_origin(minlng, maxlat, step, step)
+
+
+def amenity_points() -> pd.DataFrame:
+    """Everyday-amenity stand-ins (Overture-like, §13.49): a dense grid in Cedar and Alder, a few
+    in Birch, none in the desert."""
+    rows = []
+    for (clat, clng), n in (((42.5, 13.0), 9), ((43.0, 11.0), 6), ((41.0, 11.5), 3)):
+        off = np.linspace(-0.03, 0.03, n)
+        for dy in off:
+            for dx in off:
+                rows.append((round(clat + dy, 4), round(clng + dx, 4)))
+    return pd.DataFrame(rows, columns=["lat", "lng"]).assign(one=1.0)
+
+
 def tree_raster(land_geom):
     """Tree-cover fraction at 0.002 degree (five times finer than the other fixture rasters) so
     `decimate: 10` is exercised: 85 percent in the north-west quadrant, 12 elsewhere, 0 in the
@@ -573,6 +638,9 @@ def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
     rwi = np.where(west, (glng - 11.0), (glng - 13.0))  # -1..1 within each country
     pd.DataFrame({"lat": np.round(glat[on], 4), "lng": np.round(glng[on], 4), "rwi": np.round(rwi[on], 3)}).to_csv(out / "rwi.csv", index=False)
     pd.DataFrame({"lat": [42.52, 42.45, 42.6], "lng": [13.02, 12.95, 13.1], "fatal_per_year": [3.0, 1.5, 0.5]}).to_csv(out / "ged.csv", index=False)
+    # industrial facilities (Climate TRACE stand-in, §13.46): four beside Cedar, one near Alder,
+    # one on the coast; none in the desert, so far hexes count a real 0
+    pd.DataFrame({"lat": [42.50, 42.52, 42.47, 42.55, 43.02, 41.3], "lng": [13.0, 13.04, 12.97, 13.06, 11.02, 13.5], "one": 1.0}).to_csv(out / "ct_assets.csv", index=False)
     # walking time to care: three times the motorised stand-in; water points around Birch only (so
     # other places are missing, as outside WPdx coverage), with water at most of them
     walk = np.where(land, 30.0 + 1800.0 * dist, -9999.0)
@@ -581,6 +649,66 @@ def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
     wlng, wlat = np.meshgrid(wl, np.linspace(40.8, 41.2, 9))
     has = (np.arange(wlng.size) % 4 != 0).astype(float)
     pd.DataFrame({"lat": wlat.ravel().round(4), "lng": wlng.ravel().round(4), "has_water": has}).to_csv(out / "wpdx.csv", index=False)
+
+
+# URAU-like city polygons in XKA (the EU / UK stand-ins' country) with survey agreement shares in
+# percent; Birch has no immigrants item, so `immig` is missing there while `lgbtq` and `safe` are not
+EU_CITIES = [  # code, name, box, gay_good_pct, immig_good_pct, safe_night_pct
+    ("XA001C", "Alder", (10.65, 42.65, 11.35, 43.35), 72.0, 61.0, 68.0),
+    ("XA002C", "Birch", (11.2, 40.7, 11.8, 41.3), 55.0, np.nan, 74.0),
+    ("XA003C", "Ash", (10.1, 41.55, 10.7, 42.15), 40.0, 35.0, 81.0),
+]
+
+
+def eu_cities_layer() -> gpd.GeoDataFrame:
+    """Stand-in for the prepared EU QoL layer (prep/eu_qol.py output): city polygons with the
+    three item columns."""
+    return gpd.GeoDataFrame(
+        {
+            "city_code": [c[0] for c in EU_CITIES],
+            "city_name": [c[1] for c in EU_CITIES],
+            "gay_good_pct": [c[3] for c in EU_CITIES],
+            "immig_good_pct": [c[4] for c in EU_CITIES],
+            "safe_night_pct": [c[5] for c in EU_CITIES],
+        },
+        geometry=[box(*c[2]) for c in EU_CITIES],
+        crs=4326,
+    )
+
+
+def opportunity_standins(tracts: gpd.GeoDataFrame, out: Path) -> gpd.GeoDataFrame:
+    """Opportunity Atlas stand-ins (SPEC §13.48). Each 2010-like tract ``X10{k}{j}`` covers the
+    XKB tracts of columns 2k and 2k+1 in row j, so every 2010 tract is split across two 2020
+    tracts. Values rise towards Cedar (the 25th-percentile measure below the all-parents one, as in
+    the real Atlas); 2010 tracts centred in the desert are suppressed (blank),
+    so their 2020 tracts stay missing. Writes the Atlas-like CSV and the pipe-delimited
+    relationship file, then returns ``tracts`` with ``kfr_pooled``, ``kfr_p25`` and ``children`` computed from
+    them by the real crosswalk, which the fixture `opp_atlas` source reads as-is."""
+    import shapely
+
+    from ..prep import opp_atlas
+
+    rows, rel = [], []
+    for _, t in tracts.iterrows():
+        i, j = int(t["GEOID"][3:5]), int(t["GEOID"][5:7])
+        geoid10 = f"X10{i // 2:02d}{j:02d}"
+        part = int(round(t.geometry.area * 1e10))
+        rel.append({"OID_TRACT_20": len(rel) + 1, "GEOID_TRACT_20": t["GEOID"], "NAMELSAD_TRACT_20": f"Census Tract {t['GEOID']}", "AREALAND_TRACT_20": part, "AREAWATER_TRACT_20": 0, "GEOID_TRACT_10": geoid10, "AREALAND_PART": part, "AREAWATER_PART": 0})
+        if geoid10 not in {r["geoid"] for r in rows}:
+            cx, cy = 12.0 + 0.4 * (i // 2) + 0.2, 40.0 + 0.2 * j + 0.1
+            near = float(np.exp(-((cx - 13.0) ** 2 + (cy - 42.5) ** 2) / (2 * 0.4**2)))
+            suppressed = bool(shapely.contains_xy(DESERT, cx, cy))
+            rows.append({"geoid": geoid10, "kfr_pooled_pooled_mean": "" if suppressed else f"{0.35 + 0.3 * near:.4f}", "kfr_pooled_pooled_p25": "" if suppressed else f"{0.30 + 0.2 * near:.4f}", "kfr_pooled_pooled_n": f"{round(30 + 3000 * near)}"})
+    relf = pd.DataFrame(rel)
+    land10 = relf.groupby("GEOID_TRACT_10")["AREALAND_PART"].transform("sum")
+    relf.insert(relf.columns.get_loc("GEOID_TRACT_10") + 1, "AREALAND_TRACT_10", land10)
+    pd.DataFrame(rows).to_csv(out / "opp_tracts10.csv", index=False)
+    relf.to_csv(out / "tract_rel_2020_2010.txt", sep="|", index=False)
+    atlas = opp_atlas.prepare(pd.read_csv(out / "opp_tracts10.csv", dtype=str))
+    table = opp_atlas.crosswalk(atlas, opp_atlas.read_relationship(opp_atlas.read_rel_file(out / "tract_rel_2020_2010.txt")))
+    merged = tracts.merge(table, on="GEOID", how="left")
+    merged[["kfr_pooled", "kfr_p25"]] = merged[["kfr_pooled", "kfr_p25"]].round(4)
+    return gpd.GeoDataFrame(merged, geometry="geometry", crs=4326)
 
 
 def build(out: Path) -> dict[str, str]:
@@ -604,6 +732,7 @@ def build(out: Path) -> dict[str, str]:
     _write_tif(out / "inunriver.tif", river_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     _write_tif(out / "inuncoast.tif", coast_raster(LNG, LAT, land), transform, NODATA_FLOOD)
     heat_dataset().to_netcdf(out / "heat.nc", engine="netcdf4")
+    humid_dataset().to_netcdf(out / "humid.nc", engine="netcdf4")
     water_stress().to_file(out / "wstress.gpkg", driver="GPKG")
 
     shdi, regions, whr = tabular(adm1)
@@ -612,7 +741,9 @@ def build(out: Path) -> dict[str, str]:
     whr.to_csv(out / "whr.csv", index=False)
 
     tracts, counties, transit = us_like_layers(land_gdf.geometry.iloc[0], rng)
+    tracts = opportunity_standins(tracts, out)  # §13.48: Atlas-like 2010 values crosswalked onto the tracts
     tracts.to_file(out / "tracts.gpkg", driver="GPKG")
+    eu_cities_layer().to_file(out / "eucities.gpkg", driver="GPKG")
     counties.to_file(out / "counties.gpkg", driver="GPKG")
     transit.to_file(out / "transit_stops.gpkg", driver="GPKG")
     sld, districts = us_like_detail_layers(land_gdf.geometry.iloc[0])
@@ -635,6 +766,12 @@ def build(out: Path) -> dict[str, str]:
     fixed, mobile = ookla_points()
     fixed.to_csv(out / "ookla_fixed.csv", index=False)
     mobile.to_csv(out / "ookla_mobile.csv", index=False)
+    no2, no2_transform = no2_raster()
+    _write_tif(out / "no2.tif", no2, no2_transform, -9999.0)
+    amenity_points().to_csv(out / "amenities.csv", index=False)
+    # GEM stand-in: listed by `industry` so the registry and attribution see it; the merge itself
+    # is unit-tested on the real loader (tests/test_prep_ngo.py)
+    pd.DataFrame({"lat": [42.51], "lng": [13.01]}).to_csv(out / "gem_plants.csv", index=False)
 
     digests = {p.name: _content_digest(p) for p in sorted(out.iterdir()) if p.suffix != ".json"}
     (out / "fixtures.json").write_text(json.dumps({"version": VERSION, "files": digests}, indent=2), encoding="utf-8")

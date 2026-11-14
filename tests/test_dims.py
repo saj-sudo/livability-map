@@ -76,9 +76,10 @@ def test_us_life_dims_on_fixtures(settings):
     shares = [cedar[f"race_{k}"] for k in ("w", "b", "h", "a", "o")]
     assert sum(shares) == 100 and cedar["race_maj"] in {"w", "b", "h", "a", "o"} and cedar["race_res"] == "tract"
     assert cedar["health_res"] == "county" and cedar["health_raw"] == 35.0
-    alder = df.loc[_cell(43.0, 11.0)]  # XKA: no US-only dimension
-    for dim in ("transit", "school", "lgbtq", "pol", "race"):
+    alder = df.loc[_cell(43.0, 11.0)]  # XKA: no US-only dimension; lgbtq comes from the EU city survey there (§13.48)
+    for dim in ("transit", "school", "pol", "race"):
         assert alder[f"{dim}_res"] == "none", dim
+    assert alder["lgbtq_res"] == "city" and alder["lgbtq_dom"] == "eucities"
     assert pd.isna(alder["pol_lean"]) and alder["race_maj"] == "none" and pd.isna(alder["race_w"])
     # SLD stand-in stops at lng 12.6: XKB hexes west of it have no transit value, never 0
     west = df[(df["iso_a2"] == "XB") & (df["lng"] < 12.3)]
@@ -302,7 +303,7 @@ def _store(settings, monkeypatch):
     todo = [d for d in load_dimensions(settings.dimensions_path, sources).values() if d.joiners and d.group != "hazard"]
     by_source: dict[str, list] = {}
     for d in todo:
-        for src in {s.source for s in d.joiners if s.joiner not in ("raster_mean", "point_density")}:
+        for src in {s.source for s in d.joiners if s.joiner != "raster_mean"}:
             by_source.setdefault(src, []).append(d)
     shared = next(s for s, ds in by_source.items() if len(ds) >= 2)
     loads: list[str] = []
@@ -413,7 +414,7 @@ def test_a_checkpoint_whose_dimension_changed_is_recomputed(settings, monkeypatc
         dims.run(settings)
     first = order[0]
     real_spec = dims._dim_spec
-    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources: "edited" if dim.id == first else real_spec(dim, sources))
+    monkeypatch.setattr(dims, "_dim_spec", lambda dim, sources, countries=None: "edited" if dim.id == first else real_spec(dim, sources, countries))
     calls = _spy_join(monkeypatch)
     dims.run(settings)
     assert calls == [first, *order[3:]]  # the edited dimension is redone, the other two checkpoints are kept
@@ -455,3 +456,66 @@ def test_leftover_checkpoints_are_dropped_when_the_final_file_is_already_fresh(s
     calls = _spy_join(monkeypatch)
     dims.run(settings)
     assert calls == [] and not parts.exists()
+
+
+def test_us_layers_never_spill_into_the_neighbouring_country(settings):
+    """§13.45: the fixture's US-like tracts reach a few XKA border hexes; those hexes stay missing
+    (and unranked against XKB) instead of taking a US value."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4)
+    xa = df[df["iso_a2"] == "XA"]
+    for dim in ("lgbtq", "incmix", "nri", "phealth", "school"):
+        assert not (xa[f"{dim}_dom"] == "us").any(), dim
+    assert not (xa["race_dom"] == "us").any() and xa.loc[xa["race_res"] == "tract"].empty
+
+
+def test_a_single_country_joiner_leaves_other_countries_to_the_next_joiner():
+    """A polygon covering two countries fills only its own country's hexes; the hex across the
+    border falls through to the next joiner (here a global one)."""
+    import geopandas as gpd
+    import shapely
+
+    from pipeline.registry import Dimension, JoinSpec
+
+    cells = [_cell(42.0, 12.0), _cell(42.0, 13.0)]
+    lat, lng = zip(*(h3.cell_to_latlng(c) for c in cells), strict=True)
+    hexes = pd.DataFrame({"h3": cells, "lat": lat, "lng": lng, "iso_a2": ["XA", "XB"], "inhabited": [True, True]})
+    tracts = gpd.GeoDataFrame({"v": [7.0]}, geometry=[shapely.box(10, 40, 14, 44)], crs=4326)
+    world = gpd.GeoDataFrame({"v": [1.0]}, geometry=[shapely.box(10, 40, 14, 44)], crs=4326)
+    dim = Dimension(
+        id="t", name="t", group="life", kind="score", higher_is="better", coverage=[],
+        joiners=[
+            JoinSpec(source="tracts", joiner="area_weighted_overlay", res="tract", field="v", domain="us"),
+            JoinSpec(source="world", joiner="polygon_centroid", res="admin1", field="v", domain="global"),
+        ],
+    )
+    got = dims.join_dimension(dim, hexes, 4, {"tracts": tracts, "world": world}, domain_countries={"us": ("XB",)})
+    assert list(got["t_raw"]) == [1.0, 7.0]
+    assert list(got["t_dom"]) == ["global", "us"] and list(got["t_res"]) == ["admin1", "tract"]
+    # without the map the old first-hit-wins behaviour returns: both hexes take the US value
+    loose = dims.join_dimension(dim, hexes, 4, {"tracts": tracts, "world": world})
+    assert list(loose["t_raw"]) == [7.0, 7.0]
+
+
+def test_industry_counts_facilities_nearby_and_zero_far_away(settings):
+    """§13.46: a hex beside the fixture's Cedar cluster counts several facilities; the desert,
+    far from every facility, counts a real 0 (the asset list is global), never NaN."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4).set_index("h3")
+    assert df.loc[_cell(42.5, 13.0), "industry_raw"] >= 2
+    assert df.loc[_cell(40.7, 12.5), "industry_raw"] == 0
+    assert (df["industry_res"] == "hex").all() and df["industry_raw"].notna().all()
+
+
+def test_no2_and_amenities_on_fixtures(settings):
+    """§13.49: NO2 peaks over Cedar and is missing (never 0) under the export's nodata hole;
+    amenities per km² are highest in the towns and a real 0 in the desert."""
+    _run_all(settings)
+    df = sanity.load_merged(settings, 4).set_index("h3")
+    cedar, desert = df.loc[_cell(42.5, 13.0)], df.loc[_cell(40.7, 12.5)]
+    assert cedar["no2_raw"] > desert["no2_raw"] > 0 and cedar["no2_res"] == "hex"
+    hole = df.loc[_cell(43.85, 13.85)] if _cell(43.85, 13.85) in df.index else None
+    if hole is not None:
+        assert pd.isna(hole["no2_raw"]) and hole["no2_res"] == "none"
+    assert cedar["amen_raw"] > 0 and desert["amen_raw"] == 0 and cedar["amen_res"] == "hex"
+    assert df["amen_raw"].notna().all()

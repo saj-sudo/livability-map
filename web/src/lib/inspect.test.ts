@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
-import { describeHex, HEAT_CAVEAT, SCORE_MEANING } from "./inspect";
+import { describeHex, HEAT_CAVEAT, HUMID_NOTE, SCORE_MEANING, scoreNoteFor } from "./inspect";
 
 // units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
 const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
@@ -63,7 +63,7 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(rflood.raw).toBeNull();
     expect(rflood.score).toBeNull();
     expect(m.hazards.find((h) => h.id === "wstress")!.raw).toContain("arid");
-    expect(m.coverage).toBe("1 of 4 hazard layers");
+    expect(m.coverage).toBe("1 of 5 hazard layers");
     expect(m.wellbeing).toEqual({ value: "life evaluation 4.10 / 10", score: 35, source: "whr", res: "national" });
     expect(m.bivar).toBe("high exposure, medium wellbeing");
     for (const row of m.life) {
@@ -80,6 +80,14 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(describeHex({ ...props, res: 7 }, "hex7", DIMS, MANIFEST).resolution).toBe("H3 res 7 hex (~5.2 km²)");
     expect(describeHex(props, "hex6", DIMS, MANIFEST).resolution).toBe("H3 res 6 hex (~36 km²)");
     expect(describeHex(props, "hex4", DIMS, MANIFEST).resolution).toBe("H3 res 4 hex (~1,770 km²)");
+    expect(describeHex(props, "hex4", DIMS, MANIFEST)).toMatchObject({ res: 4, areaKm2: "1,770", populationN: null });
+  });
+
+  it("carries each row's direction so a bar can be coloured by it", () => {
+    const worse: DimInfo = { ...DIMS.find((d) => d.id === "rent")!, higher_is: "worse" };
+    const m = describeHex({ h3: "85z", iso_a2: "US", inhabited: true, rent_res: "county", rent_raw: 1450, rent_score: 91 }, "hex5", [...DIMS.filter((d) => d.id !== "rent"), worse], MANIFEST);
+    expect(m.life.find((r) => r.id === "rent")!.higherIs).toBe("worse");
+    expect(m.life.find((r) => r.id === "jobs")!.higherIs).toBe("better");
   });
 
   it("formats signed and composition dimensions", () => {
@@ -145,14 +153,23 @@ describe("hex-level layers in the inspector", () => {
 });
 
 describe("honesty notes in the place panel (SPEC §16 Next steps)", () => {
-  it("says scores are ranks and flags that heat ignores humidity, on the heat row only", () => {
+  it("says scores are ranks, flags that heat ignores humidity and that humid heat double-counts heat, on those rows only", () => {
     const m = describeHex({ h3: "84z", iso_a2: "BD", inhabited: true, heat_ok: true, heat_days: 12, heat_score: 40 }, "hex5", DIMS, MANIFEST);
     expect(m.scoreNote).toBe(SCORE_MEANING);
     expect(SCORE_MEANING).toMatch(/percentile/);
     expect(SCORE_MEANING).toMatch(/not an absolute risk/);
     expect(m.hazards.find((h) => h.id === "heat")!.note).toBe(HEAT_CAVEAT);
     expect(HEAT_CAVEAT).toMatch(/humidity/);
-    expect(m.hazards.filter((h) => h.id !== "heat").every((h) => h.note === undefined)).toBe(true);
+    expect(HEAT_CAVEAT).toMatch(/humid-heat row/);
+    expect(m.hazards.find((h) => h.id === "humid")!.note).toBe(HUMID_NOTE);
+    expect(HUMID_NOTE).toMatch(/counts twice/);
+    expect(m.hazards.filter((h) => h.id !== "heat" && h.id !== "humid").every((h) => h.note === undefined)).toBe(true);
+  });
+
+  it("tells a priorities match apart from a rank", () => {
+    expect(scoreNoteFor(false)).toBe(SCORE_MEANING);
+    expect(scoreNoteFor(true)).toMatch(/^Your priorities show a match/);
+    expect(scoreNoteFor(true)).toMatch(/other scores are ranks/);
   });
 
   it("keeps the heat caveat when the heat layer has no data", () => {

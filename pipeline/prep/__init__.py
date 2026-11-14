@@ -64,6 +64,11 @@ LOADERS: dict[str, str] = {
     "meta_rwi": "pipeline.prep.meta_rwi:load",
     "ucdp_ged": "pipeline.prep.ucdp_ged:load",
     "wpdx_water_points": "pipeline.prep.wpdx:load",
+    # heavy industry nearby (SPEC §13.46)
+    "climate_trace_assets": "pipeline.prep.climate_trace:load",
+    # EU cities perception survey and the Opportunity Atlas (SPEC §13.48)
+    "eu_qol_cities": "pipeline.prep.eu_qol:load",
+    "opp_atlas": "pipeline.prep.opp_atlas:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read
@@ -85,7 +90,34 @@ def raw_inputs(settings: Settings, source: Source, sources: dict[str, Source]) -
         paths += [settings.raw(geom) / f for f in sources[geom].files]
     for extra_id in source.extra.get("also_needs", []) or []:
         paths += [settings.raw(extra_id) / f for f in sources[extra_id].files]
+    # optional companions (§13.49): their files count only when present, so a missing one never
+    # blocks the source, and adding one later re-runs the loader
+    for extra_id in source.extra.get("also_uses", []) or []:
+        if extra_id in sources:
+            paths += [p for p in (settings.raw(extra_id) / f for f in sources[extra_id].files) if p.exists()]
     return paths
+
+
+# `extra` keys that never change what a loader writes (publish gate, dims guard)
+_DISPLAY_ONLY = {"verified", "min_nonnull"}
+
+
+def load_spec(source: Source, sources: dict[str, Source]) -> dict:
+    """What a loader reads from sources.yaml: files, format, CRS and the `extra` keys (sheet,
+    member, layer, ...) of the source and of its geometry / also_needs sources. Part of the prep
+    cache key, so editing `sheet:` re-runs the loader instead of reusing the old layer (§13.45)."""
+
+    def one(src: Source) -> dict:
+        return {"files": list(src.files), "format": src.format, "crs": src.crs, "extra": {k: v for k, v in sorted(src.extra.items()) if k not in _DISPLAY_ONLY}}
+
+    spec = {"self": one(source)}
+    geom = source.extra.get("geometry")
+    if geom and geom in sources:
+        spec["geometry"] = one(sources[geom])
+    for extra_id in [*(source.extra.get("also_needs", []) or []), *(source.extra.get("also_uses", []) or [])]:
+        if extra_id in sources:
+            spec[f"also:{extra_id}"] = one(sources[extra_id])
+    return spec
 
 
 def _fixture_layer(settings: Settings, source: Source) -> pd.DataFrame:
@@ -133,7 +165,7 @@ def load_layer(settings: Settings, source_id: str, sources: dict[str, Source] | 
         raise FileNotFoundError(_missing_message(source, missing))
     out = settings.cache_dir / "prep" / f"{source_id}.parquet"
     module_name, func_name = spec.split(":")
-    params = {"source": source_id, "prep_version": PREP_VERSION, "loader": module_name}
+    params = {"source": source_id, "prep_version": PREP_VERSION, "loader": module_name, "spec": load_spec(source, sources)}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return _read_cached(out)
     loader = getattr(importlib.import_module(module_name), func_name)
@@ -169,7 +201,7 @@ def load_raster(settings: Settings, source_id: str, sources: dict[str, Source] |
         return rawfiles.resolve_raster(settings, source)
     out = settings.cache_dir / "prep" / f"{source_id}.tif"
     module_name, func_name = spec.split(":")
-    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster", "loader": module_name}
+    params = {"source": source_id, "prep_version": PREP_VERSION, "kind": "raster", "loader": module_name, "spec": load_spec(source, sources)}
     if stage_cache.is_fresh(out, inputs, params, settings.force):
         return out
     build = getattr(importlib.import_module(module_name), func_name)

@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-11-04.
+Last updated: 2026-11-14.
 
 ## Open
 
@@ -22,10 +22,17 @@ Last updated: 2026-11-04.
 | 9 | [UNICEF Giga API key](#9-unicef-giga-api-key) | school locations and school connectivity | 10 min |
 | 10 | [DHS modeled surfaces](#10-dhs-modeled-surfaces) | 5 km education, vaccination, wealth surfaces | 10 min + read terms |
 | 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
-| 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
 | 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
+| 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
+| 15 | [Climate TRACE sector downloads](#15-climate-trace-sector-downloads) | the `industry` layer (heavy industry nearby); lets publish include it | 15 min |
+| 16 | [Check the CCKP humid-heat file](#16-check-the-cckp-humid-heat-file) | the `humid` hazard; lets publish include it | 5 min |
+| 18 | [Sentinel-5P NO2 export](#18-sentinel-5p-no2-export-earth-engine) | the `no2` layer (traffic and combustion pollution) | 20 min |
+| 19 | [Overture everyday-amenities extract](#19-overture-everyday-amenities-extract) | the `amen` layer (everyday amenities nearby) | 20 min, one command |
+| 20 | [Global Energy Monitor trackers (optional)](#20-global-energy-monitor-trackers-optional) | adds smaller plants to `industry` | 15 min, four forms |
+| 21 | [EU cities survey and GISCO city boundaries](#21-eu-cities-survey-and-gisco-city-boundaries) | `immig`, `safe` and LGBTQ+ presence in about 83 European cities; lets publish include them | 20 min |
+| 22 | [Opportunity Atlas tract outcomes](#22-opportunity-atlas-tract-outcomes) | US `opp` and `opp25` (kids' adult income, all families and low-income families); lets publish include them | 10 min + read terms |
 
-Items 2-4 and 6 only need a file saved in the right place. After any of them, run
+Items 2-4, 6 and 15-17 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
 (the commands are listed per item).
 
@@ -183,23 +190,6 @@ map records CC BY-SA 4.0 and labels the derived values share-alike (SPEC §13.37
 export. If they say CC BY 4.0, update `license` on `wpdx_water_points` in `pipeline/sources.yaml`
 and drop the share-alike label; nothing needs rebuilding.
 
-### 14. CDC PLACES download and NRI check
-
-Two US tract layers are wired but not yet confirmed first-hand (SPEC §13.38), and `publish`
-refuses them until they are:
-
-1. **CDC PLACES** (manual, because the dataset id changes every release): on data.cdc.gov search
-   "PLACES: Census Tract Data (GIS Friendly Format)", open the newest release, Export -> CSV, and
-   save it as `data/raw/cdc_places/places_tract_gis.csv`.
-2. **FEMA NRI** downloads itself: run
-   `uv run python -m pipeline fetch --only fema_nri --only cdc_places`. If the NRI URL fails, get
-   the census-tract table zip from https://hazards.fema.gov/nri/data-resources and save it as
-   `data/raw/fema_nri/NRI_Table_CensusTracts.zip`.
-3. Ask Claude to confirm both: check the column names, set `verified: confirmed` and the real
-   `vintage` in `pipeline/sources.yaml`, add §15 rows, then
-   `uv run python -m pipeline --res 5 dims --only nri --only phealth` and the usual score / export /
-   tiles.
-
 ### 13. Optional: rewrite the author email on two early commits
 
 Two commits from 2026-09-20/21, `c1156a0` (Session 1) and `e25784a` (CI install fix), carry a
@@ -209,8 +199,9 @@ Replacing it means rewriting history:
 - It changes the SHA of those two commits **and every commit after them**, so it needs a
   force-push to `main`. Any SHA quoted elsewhere (PR descriptions, notes, this item) stops
   resolving.
-- It is safe only because the history is days old, the repo is private and nobody has forked it.
-  Merge or delete every other branch first, and re-clone (or `git fetch` then
+- The repo is public now (SPEC §13.43), so anyone who cloned or forked it keeps the old commits;
+  the rewrite only limits future exposure. Check the fork list on GitHub first, then merge or
+  delete every other branch, and re-clone (or `git fetch` then
   `git reset --hard origin/main`) on the laptop afterwards.
 - It does not clean everything: GitHub keeps pull-request refs (`refs/pull/*`) that you cannot
   delete, so the old commits stay reachable through the merged PRs' pages. Removing those needs a
@@ -233,6 +224,148 @@ git push --force origin main
 GitHub's branch protection, if on, has to allow the force-push for that one push. Then delete
 `../mailmap.txt` and the `livability-map-rewrite` folder.
 
+### 14. CDC PLACES download and NRI check
+
+Two US tract layers are wired but not yet confirmed first-hand (SPEC §13.38), and `publish`
+refuses them until they are:
+
+1. **CDC PLACES** (manual, because the dataset id changes every release): on data.cdc.gov search
+   "PLACES: Census Tract Data (GIS Friendly Format)", open the newest release, Export -> CSV, and
+   save it as `data/raw/cdc_places/places_tract_gis.csv`.
+2. **FEMA NRI** downloads itself: run
+   `uv run python -m pipeline fetch --only fema_nri --only cdc_places`. If the NRI URL fails, get
+   the census-tract table zip from https://hazards.fema.gov/nri/data-resources and save it as
+   `data/raw/fema_nri/NRI_Table_CensusTracts.zip`.
+3. Ask Claude to confirm both: check the column names, set `verified: confirmed` and the real
+   `vintage` in `pipeline/sources.yaml`, add §15 rows, then
+   `uv run python -m pipeline --res 5 dims --only nri --only phealth` and the usual score / export /
+   tiles.
+
+
+### 15. Climate TRACE sector downloads
+
+The `industry` layer counts large industrial facilities within 10 km (SPEC §13.46). The source is
+wired and tested on the fixture world, but the file layout and column names were written from
+memory, because the cloud container cannot reach climatetrace.org.
+
+1. On https://climatetrace.org/data download the latest release (all countries) of four sectors
+   and save them in `data/raw/climate_trace_assets/` as `power.zip`, `fossil_fuel_operations.zip`,
+   `manufacturing.zip` and `waste.zip`.
+2. Check: the licence on the page (expected CC BY 4.0); that each zip holds
+   `*emissions_sources*.csv` files with `source_id`, `subsector`, `lat` and `lon` columns; and that
+   the `subsectors:` names in `pipeline/sources.yaml` match the ones in the files (ask Claude to
+   adjust the list or the loader if not).
+3. Set `verified: confirmed` and `vintage` on `climate_trace_assets` in `pipeline/sources.yaml`
+   and add the result to SPEC §15.
+
+Then: `uv run python -m pipeline fetch` (records checksums), then
+`uv run python -m pipeline --res 5 dims --only industry` and the usual score / export / tiles.
+
+
+### 16. Check the CCKP humid-heat file
+
+Humid heat is the fifth hazard (SPEC §13.47), from the World Bank CCKP `hi35` climatology (days
+with a heat index above 35 °C). It downloads itself, but the URL and the variable name were
+written by analogy with the confirmed `hd35` file, because the cloud container cannot reach the
+bucket, so `publish` refuses it until it is checked.
+
+1. Run `uv run python -m pipeline fetch --only cckp_hi35`. If it fails with a 404, find the hi35
+   file in the CCKP CMIP6 x0.25 collection (the `hd35` folder's sibling `hi35`) and fix `url` and
+   `files` on `cckp_hi35` in `pipeline/sources.yaml`.
+2. Ask Claude to open the NetCDF: the variable name (expected `climatology-hi35-annual-mean`),
+   units (days per year), the lon range, and that the values look like a heat-index count
+   (higher in Dhaka, Houston and Lagos than in Phoenix relative to `hd35`).
+3. Set `verified: confirmed` (and the real `vintage`) on `cckp_hi35` and add the result to SPEC §15.
+
+Then: `uv run python -m pipeline --res 5 hazards` and the later stages (score, export, tiles).
+Every stage after `hazards` rebuilds once, because the hazard list changed.
+
+### 18. Sentinel-5P NO2 export (Earth Engine)
+
+Run the NO2 script in [`docs/gee-export.md`](gee-export.md) once (Earth Engine account, free for
+non-commercial use) and save the GeoTIFF as `data/raw/s5p_no2/s5p_no2_2023.tif`. Check the
+collection and band names on the catalog page and the Copernicus Sentinel data terms, then set
+`verified: confirmed` on `s5p_no2` and add a SPEC §15 row. Then `uv run python -m pipeline fetch
+--only s5p_no2` and `uv run python -m pipeline --res 5 dims --only no2`, then score / export / tiles.
+
+### 19. Overture everyday-amenities extract
+
+One command (DuckDB reads Overture's public bucket and keeps only the everyday categories):
+
+```bash
+uv run --extra overture python -m pipeline.prep.overture_places --release <RELEASE>
+```
+
+with the latest release from https://docs.overturemaps.org/release/latest/ (add
+`--category-field basic_category` if the release renamed `categories.primary`). It writes
+`data/raw/overture_places/places.parquet`. Check the places licence (expected CDLA-Permissive
+2.0) and that the `categories:` names in `pipeline/sources.yaml` exist in that release, then set
+`verified: confirmed`, add a §15 row and run `uv run python -m pipeline --res 5 dims --only amen`.
+
+### 20. Global Energy Monitor trackers (optional)
+
+Adds operating coal, gas, steel and cement plants that Climate TRACE misses to `industry`. On
+https://globalenergymonitor.org/projects/ fill in each tracker's download form and save the
+spreadsheets in `data/raw/gem_trackers/` as `gem_coal_plants.xlsx`, `gem_gas_plants.xlsx`,
+`gem_steel_plants.xlsx` and `gem_cement_plants.xlsx` (any subset works). Check the licence (CC BY
+4.0) and the Latitude / Longitude / Status columns, set `verified: confirmed` on `gem_trackers`
+and run `uv run python -m pipeline --res 5 dims --only industry`. To ship without GEM instead,
+remove `gem_trackers` from the `industry` `sources:` list in `pipeline/dimensions.yaml` (publish
+refuses any listed source that is not verified).
+
+### 21. EU cities survey and GISCO city boundaries
+
+Three layers come from the "Perception of quality of life in European cities" survey (2023 wave,
+SPEC §13.48): the EU part of `lgbtq` (good place for gay or lesbian people), `immig` (good place
+for immigrants) and `safe` (safe walking alone at night). The dataset id, file layout, item wording
+and licence were written from memory; the cloud container cannot reach ec.europa.eu.
+
+1. **Survey table.** Open the Eurostat data browser for `urb_percep`
+   (https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table), download the full
+   dataset as SDMX-CSV with "Codes and labels", and save it as
+   `data/raw/eu_qol_cities/urb_percep.csv`. Check that the 2023 wave is in it and that the three
+   items appear with strongly / somewhat agree answers. If `urb_percep` stops before 2023, take
+   the 2023 results file from the DG REGIO "Quality of life in European cities" page, save it as
+   a long CSV (columns: city code or name, question, answer, value) under the same name, and ask
+   Claude to check the loader reads it. If the table has item codes but no wording, ask Claude to
+   list the codes under `items:` on `eu_qol_cities` in `pipeline/sources.yaml`.
+2. **City polygons.** On https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit
+   download the 2021 Urban Audit "cities" layer in EPSG:4326 as GeoJSON and save it as
+   `data/raw/gisco_urau_cities/urau_cities_2021.geojson`. Check it has `URAU_CODE` (like `DE001C`)
+   and `URAU_NAME`, and whether the survey's UK, Western Balkan and Turkish cities are in it.
+3. Check both licences (expected: Eurostat CC BY 4.0; GISCO / EuroGeographics non-commercial with
+   attribution), set `verified: confirmed` and `vintage` on `eu_qol_cities` and
+   `gisco_urau_cities`, and add the results to SPEC §15.
+
+Then: `uv run python -m pipeline fetch` (records checksums), then
+`uv run python -m pipeline --res 5 dims --only lgbtq --only immig --only safe` and the usual
+score / export / tiles. The prep step prints any surveyed city without a polygon.
+
+### 22. Opportunity Atlas tract outcomes
+
+`opp` (kids' adult income, all families) and `opp25` (kids from low-income families) come from
+the Opportunity Atlas (SPEC §13.48). The file name, column names and terms were written from
+memory.
+
+1. On https://opportunityinsights.org/data/ open the Opportunity Atlas tract outcomes and save
+   the CSV as `data/raw/opp_atlas/tract_outcomes_simple.csv`. It must have `state`, `county`,
+   `tract`, `kfr_pooled_pooled_mean` and `kfr_pooled_pooled_p25`; if the simple file lacks either
+   measure, save the full tract outcomes CSV under the same name instead (the loader reads only
+   the columns it needs, and stops with the kfr columns it found if one is missing).
+2. Read the data terms on that page (expected: free to use with citation of Chetty, Friedman,
+   Hendren, Jones and Porter 2018). If they forbid redistribution of derived values, tell Claude
+   so the layers can be dropped before publish.
+3. The Census tract relationship file downloads itself:
+   `uv run python -m pipeline fetch --only opp_atlas --only census_tract_rel_2020_2010`. If its URL
+   fails, get the national 2020-to-2010 census tract relationship file from the Census Bureau's
+   relationship files page and save it as
+   `data/raw/census_tract_rel_2020_2010/tab20_tract20_tract10_natl.txt`.
+4. Set `verified: confirmed` and `vintage` on `opp_atlas` and `census_tract_rel_2020_2010`, and
+   add the results to SPEC §15.
+
+Then: `uv run python -m pipeline --res 5 dims --only opp --only opp25` and the usual score /
+export / tiles. Check the printed count of 2020 tracts without a polygon (Connecticut is the
+likely gap).
 ---
 
 ## Done

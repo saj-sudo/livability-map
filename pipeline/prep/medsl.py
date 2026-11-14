@@ -26,14 +26,20 @@ def prepare(df: pd.DataFrame, year: int = YEAR) -> pd.DataFrame:
     df = df.dropna(subset=["county_fips"])
     df["GEOID"] = df["county_fips"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(5)
     df["mode"] = df["mode"].astype(str).str.upper()
-    df["candidatevotes"] = pd.to_numeric(df["candidatevotes"], errors="coerce").fillna(0)
+    df["candidatevotes"] = pd.to_numeric(df["candidatevotes"], errors="coerce")
     has_total = df.groupby("GEOID")["mode"].transform(lambda m: (m == "TOTAL").any())
     df = df[(~has_total) | (df["mode"] == "TOTAL")]
     party = df["party"].astype(str).str.upper()
+    major = party.isin(["DEMOCRAT", "REPUBLICAN"])
+    # a county whose Democratic or Republican count is missing has no margin (never D+100 from a
+    # blank cell read as 0; SPEC invariant 3, §13.45)
+    unknown = set(df.loc[major & df["candidatevotes"].isna(), "GEOID"])
+    df = df[~df["GEOID"].isin(unknown)]
+    party = party.loc[df.index]
     dem = df[party == "DEMOCRAT"].groupby("GEOID")["candidatevotes"].sum()
     rep = df[party == "REPUBLICAN"].groupby("GEOID")["candidatevotes"].sum()
     total = df.groupby("GEOID")["candidatevotes"].sum()
-    out = pd.DataFrame({"dem": dem, "rep": rep, "totalvotes": total}).fillna({"dem": 0, "rep": 0})
+    out = pd.DataFrame({"dem": dem, "rep": rep, "totalvotes": total}).dropna(subset=["dem", "rep"])
     two = out["dem"] + out["rep"]
     with np.errstate(divide="ignore", invalid="ignore"):
         out["margin_2024"] = (100.0 * (out["dem"] - out["rep"]) / two).where(two > 0)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipFor, DIM_ORDER, dimensionsFrom, envDims, isAvailable, lifeDims, resLabel, unitsFrom } from "./dims";
+import { chipFor, DIM_ORDER, DISPLAY_ORDER, dimensionsFrom, HAZARD_IDS, envDims, isAvailable, lifeDims, resLabel, unitsFrom } from "./dims";
 import { EMPTY_MANIFEST, type Manifest, type ManifestDimension } from "./manifest";
 
 // shaped like the real manifest.json: `coverage` holds per-res tag counts (the registry's
@@ -36,8 +36,17 @@ describe("dimension registry from the manifest", () => {
 
   it("falls back to the built-in registry when the manifest is empty", () => {
     const dims = dimensionsFrom(EMPTY_MANIFEST);
-    expect(dims.map((d) => d.id)).toEqual([...DIM_ORDER]);
+    expect(dims.map((d) => d.id)).toEqual([...DISPLAY_ORDER]);
+    expect([...dims.map((d) => d.id)].sort()).toEqual([...DIM_ORDER].sort());
     expect(dims.find((d) => d.id === "transit")!.chip).toBe("US only");
+  });
+
+  it("lists humid heat beside heat as the fifth hazard, while the URL order only appends it (SPEC §13.47)", () => {
+    expect([...HAZARD_IDS]).toEqual(["heat", "humid", "rflood", "cflood", "wstress"]);
+    expect(DISPLAY_ORDER.slice(0, 6)).toEqual(["heat", "humid", "rflood", "cflood", "wstress", "wb"]);
+    expect(DIM_ORDER.indexOf("humid")).toBe(DIM_ORDER.indexOf("industry") + 1);
+    const m: Manifest = { ...EMPTY_MANIFEST, hazards: [dim("heat", { group: "hazard" }), dim("rflood", { group: "hazard" }), dim("humid", { group: "hazard" })], dimensions: [dim("industry", { group: "env" })] };
+    expect(dimensionsFrom(m).map((d) => d.id)).toEqual(["heat", "humid", "rflood", "industry"]);
   });
 
   it("appends new dimensions to DIM_ORDER so old `w=` links keep their meaning", () => {
@@ -46,7 +55,7 @@ describe("dimension registry from the manifest", () => {
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
     expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
     expect(DIM_ORDER.slice(22, 27)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
-    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth"]);
+    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry", "humid", "no2", "amen", "immig", "safe", "opp", "opp25"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 
@@ -66,13 +75,13 @@ describe("dimension registry from the manifest", () => {
 
   it("keeps the environment group apart from the life dimensions and labels the new tags", () => {
     const dims = dimensionsFrom(EMPTY_MANIFEST);
-    expect(envDims(dims).map((d) => d.id)).toEqual(["air", "trees", "fire", "drought", "nri"]);
+    expect(envDims(dims).map((d) => d.id)).toEqual(["air", "trees", "fire", "drought", "nri", "industry", "no2"]);
     expect(lifeDims(dims).map((d) => d.id)).toContain("care");
     expect(lifeDims(dims).map((d) => d.id)).not.toContain("air");
     expect(dims.find((d) => d.id === "cost")!.higher_is).toBe("worse"); // a higher price level is worse for the person
     expect(dims.find((d) => d.id === "rent")!.chip).toBe("US only");
-    expect(resLabel("hex")).toBe("this hex");
-    expect(resLabel("basin")).toBe("sub-basin");
+    expect(resLabel("hex")).toBe("this area");
+    expect(resLabel("basin")).toBe("river basin");
     expect(resLabel("weird")).toBe("weird");
   });
 
@@ -90,13 +99,31 @@ describe("dimension registry from the manifest", () => {
     expect(u.tract.unit).toContain("16-29");
     expect(u.grid.unit).toContain("15-64");
     expect(u.area.unit).toContain("deprived");
-    expect(resLabel("grid")).toBe("1 km grid");
-    expect(resLabel("area")).toBe("small area");
+    expect(resLabel("grid")).toBe("1 km grid cells");
+    expect(resLabel("area")).toBe("small-area figure");
   });
 
   it("labels the country domains added after Session 8", () => {
     const d = dim("rent", { domains: { "7": { us: 3, de: 4, nl: 2, fr: 1, ca: 1, au: 1 } } });
     expect(chipFor(d)).toBe("US / Germany / Netherlands / France / Canada / Australia");
+  });
+
+  it("labels the EU cities survey domain and its `city` tag (§13.48)", () => {
+    const lgbtq = dim("lgbtq", {
+      domains: { "5": { us: 900, eucities: 40 } },
+      joiners: [
+        { source: "acs_summary", joiner: "area_weighted_overlay", res: "tract", field: "ss_couples_per_1k", domain: "us", label: "acs", unit: "same-sex couples per 1,000 households", multiply: 1, decimals: 1 },
+        { source: "eu_qol_cities", joiner: "polygon_centroid", res: "city", field: "gay_good_pct", domain: "eucities", label: "euqol", unit: "% of residents who say the city is a good place for gay or lesbian people", multiply: 1, decimals: 0 },
+      ] as never,
+    });
+    expect(chipFor(lgbtq)).toBe("US / EU cities");
+    expect(unitsFrom(lgbtq).city.unit).toContain("gay or lesbian");
+    expect(chipFor(dim("safe", { domains: { "5": { eucities: 40 } } }))).toBe("EU cities");
+    expect(resLabel("city")).toBe("city survey");
+    const fallback = dimensionsFrom(EMPTY_MANIFEST);
+    expect(fallback.find((d) => d.id === "lgbtq")!.chip).toBe("US / EU cities");
+    expect(fallback.find((d) => d.id === "immig")!.chip).toBe("EU cities");
+    expect(fallback.filter((d) => d.id.startsWith("opp")).map((d) => [d.chip, d.higher_is])).toEqual([["US only", "better"], ["US only", "better"]]);
   });
 
   it("reads per-country domains (country:TZ) as one 'within country' chip", () => {

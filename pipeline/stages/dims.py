@@ -120,7 +120,7 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
         v = JOINERS["point_mean"](hexes, layer, res, field, weight_field=spec.weight_field)
         return v.to_numpy(dtype="float64")
     if spec.joiner == "point_radius":
-        v = JOINERS["point_radius"](hexes, layer, res, field, radius_km=spec.radius_km, agg=spec.agg, weight_field=spec.weight_field)
+        v = JOINERS["point_radius"](hexes, layer, res, field, radius_km=spec.radius_km, agg=spec.agg, weight_field=spec.weight_field, per_km2=spec.per_km2)
         return v.to_numpy(dtype="float64")
     mask = _layer_mask(hexes, layer, res)
     if not mask.any():
@@ -137,8 +137,8 @@ def run_joiner(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, fiel
             near = _layer_near(layer, chunk, res)  # only the polygons this chunk can touch
             parts.append(pd.Series(np.nan, index=chunk.index) if near is None else JOINERS["area_weighted_overlay"](chunk, near, field, weight_field=spec.weight_field))
         v = pd.concat(parts) if len(parts) > 1 else parts[0]
-    else:  # point_density
-        v = JOINERS["point_density"](sub, layer, res, per_capita=spec.per_capita)
+    else:
+        raise ValueError(f"{spec.source}: unknown joiner {spec.joiner!r}")
     out[mask] = pd.to_numeric(v, errors="coerce").to_numpy(dtype="float64")
     return out
 
@@ -152,9 +152,37 @@ def _largest_remainder(shares: np.ndarray) -> np.ndarray:
     return (floors + (rank < remainder[:, None])).astype("int64")
 
 
-def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: LayerStore | dict[str, Layer | None], bbox: BBox | None = None, cellset: h3util.CellSet | None = None) -> dict[str, pd.Series]:
-    """All output columns for one dimension, first-hit-wins across its joiners."""
+# joiners that work on any subset of hexes; the hex-level ones read every hex against one cell set
+_SUBSETTABLE = ("iso_lookup", "polygon_centroid", "area_weighted_overlay")
+
+
+def allowed_countries(spec: JoinSpec, domain_countries: dict[str, tuple[str, ...]] | None) -> tuple[str, ...] | None:
+    """ISO2 codes ``spec`` may fill, or None when it is not restricted (SPEC §20.4, §13.45)."""
+    if spec.countries is not None:
+        return spec.countries
+    return None if domain_countries is None else domain_countries.get(spec.domain)
+
+
+def _run_restricted(spec: JoinSpec, hexes: pd.DataFrame, layer: Layer, res: int, field: str, allow: np.ndarray | None, bbox: BBox | None, cellset: h3util.CellSet | None) -> np.ndarray:
+    """``run_joiner`` limited to the hexes in ``allow`` (NaN elsewhere); None means every hex."""
+    if allow is None:
+        return run_joiner(spec, hexes, layer, res, field, bbox, cellset)
+    out = np.full(len(hexes), np.nan, dtype="float64")
+    if not allow.any():
+        return out
+    if spec.joiner in _SUBSETTABLE:
+        out[allow] = run_joiner(spec, hexes[allow], layer, res, field, bbox, None)
+    else:
+        v = run_joiner(spec, hexes, layer, res, field, bbox, cellset)
+        out[allow] = v[allow]
+    return out
+
+
+def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: LayerStore | dict[str, Layer | None], bbox: BBox | None = None, cellset: h3util.CellSet | None = None, domain_countries: dict[str, tuple[str, ...]] | None = None) -> dict[str, pd.Series]:
+    """All output columns for one dimension, first-hit-wins across its joiners. A joiner whose
+    domain belongs to one country (``domain_countries``) fills only that country's hexes."""
     n = len(hexes)
+    iso = hexes["iso_a2"].fillna("").astype(str).to_numpy() if "iso_a2" in hexes.columns else None
     res_tag = np.full(n, "none", dtype=object)
     src = np.full(n, None, dtype=object)
     dom = np.full(n, None, dtype=object)
@@ -165,26 +193,27 @@ def join_dimension(dim: Dimension, hexes: pd.DataFrame, res: int, layers: LayerS
         layer = layers.get(spec.source)
         if layer is None:
             continue  # source not available; reported by run()
+        countries = allowed_countries(spec, domain_countries)
+        allow = None if countries is None or iso is None else np.isin(iso, countries)
         if comps is not None:
-            first = run_joiner(spec, hexes, layer, res, spec.fields["w"], bbox, cellset)
+            first = _run_restricted(spec, hexes, layer, res, spec.fields["w"], allow, bbox, cellset)
             fill = np.isnan(comps["w"]) & ~np.isnan(first)
             if not fill.any():
                 continue
             comps["w"][fill] = first[fill]
             for k in COMPOSITION_KEYS[1:]:
-                v = run_joiner(spec, hexes, layer, res, spec.fields[k], bbox, cellset)
+                v = _run_restricted(spec, hexes, layer, res, spec.fields[k], allow, bbox, cellset)
                 comps[k][fill] = v[fill]
         else:
-            v = run_joiner(spec, hexes, layer, res, spec.field, bbox, cellset)
+            v = _run_restricted(spec, hexes, layer, res, spec.field, allow, bbox, cellset)
             fill = np.isnan(raw) & ~np.isnan(v)
             if not fill.any():
                 continue
             raw[fill] = v[fill]
         res_tag[fill] = spec.res
         src[fill] = spec.source
-        if spec.domain_by_country and "iso_a2" in hexes.columns:
+        if spec.domain_by_country and iso is not None:
             # values relative within a country are ranked only against that country (§20.4)
-            iso = hexes["iso_a2"].fillna("").astype(str).to_numpy()
             dom[fill] = np.where(iso[fill] != "", np.char.add(f"{spec.domain}:", iso[fill].astype(str)), spec.domain)
         else:
             dom[fill] = spec.domain
@@ -255,7 +284,7 @@ class LayerStore:
         for d in dims:
             for spec in d.joiners:
                 self.first.setdefault(spec.source, spec)
-                if spec.joiner in ("raster_mean", "point_density"):
+                if spec.joiner == "raster_mean":
                     continue
                 self.fields.setdefault(spec.source, set()).update(spec.fields.values() if spec.fields else [spec.field])
         self.layers: dict[str, Layer | None] = {}
@@ -322,11 +351,12 @@ def _dim_inputs(settings: Settings, dim: Dimension, sources: dict[str, Source], 
     return _inputs(settings, [dim], sources, res)
 
 
-def _dim_spec(dim: Dimension, sources: dict[str, Source]) -> str:
+def _dim_spec(dim: Dimension, sources: dict[str, Source], domain_countries: dict[str, tuple[str, ...]] | None = None) -> str:
     """Digest of what the registry says about one dimension and its sources (name and note are
-    display-only and do not change the parquet)."""
+    display-only and do not change the parquet), plus the countries each joiner may fill."""
     used = sorted({spec.source for spec in dim.joiners})
-    blob = repr(replace(dim, name="", note="")) + "".join(repr(sources[s]) for s in used)
+    allowed = [allowed_countries(spec, domain_countries) for spec in dim.joiners]
+    blob = repr(replace(dim, name="", note="")) + "".join(repr(sources[s]) for s in used) + repr(allowed)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
@@ -335,7 +365,7 @@ def dim_fingerprints(settings: Settings, dims: list[Dimension], sources: dict[st
     its registry entry and the stage code. A plain ``dims`` run recomputes exactly the
     dimensions whose fingerprint moved (SPEC §13.39)."""
     params = {"res": res, "bbox": settings.bbox, "prep_version": prep.PREP_VERSION, "stage": "dims"}
-    return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources)}) for d in dims}
+    return {d.id: stage_cache.fingerprint(_dim_inputs(settings, d, sources, res), {**params, "dim": d.id, "spec": _dim_spec(d, sources, settings.domain_countries)}) for d in dims}
 
 
 def _parts_dir(settings: Settings, res: int) -> Path:
@@ -345,7 +375,7 @@ def _parts_dir(settings: Settings, res: int) -> Path:
 def _shard_key(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict) -> tuple[list, dict]:
     """The (inputs, params) a dimension's checkpoint shard is fingerprinted with: exactly what
     ``dim_fingerprints`` uses, so a shard is valid when and only when the dimension is fresh."""
-    return _dim_inputs(settings, dim, sources, res), {**base, "dim": dim.id, "spec": _dim_spec(dim, sources)}
+    return _dim_inputs(settings, dim, sources, res), {**base, "dim": dim.id, "spec": _dim_spec(dim, sources, settings.domain_countries)}
 
 
 def _adoptable(settings: Settings, dim: Dimension, sources: dict[str, Source], res: int, base: dict, rows: int) -> dict | None:
@@ -428,7 +458,7 @@ def run(settings: Settings, only: list[str] | None = None) -> dict[int, dict[str
                 skipped.update(resumed[dim.id].get("skipped_sources", {}))
                 print(f"dims   res {res}: {dim.id:8s} resumed from checkpoint")
                 continue
-            got = join_dimension(dim, hexes, res, store, settings.bbox, cellset)
+            got = join_dimension(dim, hexes, res, store, settings.bbox, cellset, settings.domain_countries)
             store.done(dim)
             cols.update(got)
             if not only:  # a --only run is a small, deliberate edit; it neither writes nor deletes checkpoints

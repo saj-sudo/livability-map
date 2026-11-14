@@ -1,11 +1,14 @@
 // Shareable URL state (SPEC §10): ?lat&lng&z&view&preset&w=<csv>&pol&conf&inh.
-// Parsing is tolerant (garbage -> defaults); serialising writes only non-default keys. Links from
+// Parsing is tolerant (garbage -> defaults); serialising writes only non-default keys. Weights,
+// preset and the political pick are written in every view: they drive the place panel's bars in
+// any view, so a shared link keeps them. Links from
 // before §13.40 may weight `race` or carry `race=`: both are ignored (context only, never weighted).
 
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from "./config";
 import { CONTEXT_ONLY_IDS, DIM_ORDER } from "./dims";
 import { presetById, type PolPick } from "../presets";
 
-export const VIEWS = ["bivar", "heat", "rflood", "cflood", "wstress", "wb", "priorities"] as const;
+export const VIEWS = ["bivar", "heat", "humid", "rflood", "cflood", "wstress", "wb", "priorities"] as const;
 export type ViewId = (typeof VIEWS)[number];
 
 export interface AppState {
@@ -54,7 +57,7 @@ export function parseState(search: string, order: readonly string[] = DIM_ORDER)
   return {
     lat: num(p, "lat", -85, 85, DEFAULT_STATE.lat),
     lng: num(p, "lng", -180, 180, DEFAULT_STATE.lng),
-    z: num(p, "z", 1, 14, DEFAULT_STATE.z),
+    z: num(p, "z", MAP_MIN_ZOOM, MAP_MAX_ZOOM, DEFAULT_STATE.z),
     view: oneOf(p, "view", VIEWS, DEFAULT_STATE.view),
     preset: p.has("w") ? null : preset,
     weights,
@@ -70,17 +73,15 @@ export function serializeState(s: AppState, order: readonly string[] = DIM_ORDER
   p.set("lng", s.lng.toFixed(3));
   p.set("z", s.z.toFixed(2));
   if (s.view !== DEFAULT_STATE.view) p.set("view", s.view);
-  if (s.view === "priorities") {
-    if (s.preset) {
-      p.set("preset", s.preset);
-    } else {
-      const csv = order.map((id) => (CONTEXT_ONLY_IDS.has(id) ? 0 : (s.weights[id] ?? 0)));
-      while (csv.length && csv[csv.length - 1] === 0) csv.pop();
-      if (csv.length) p.set("w", csv.join(","));
-    }
-    const pre = presetById(s.preset);
-    if (s.pol !== (pre?.pol ?? DEFAULT_STATE.pol)) p.set("pol", s.pol);
+  if (s.preset) {
+    p.set("preset", s.preset);
+  } else {
+    const csv = order.map((id) => (CONTEXT_ONLY_IDS.has(id) ? 0 : (s.weights[id] ?? 0)));
+    while (csv.length && csv[csv.length - 1] === 0) csv.pop();
+    if (csv.length) p.set("w", csv.join(","));
   }
+  const pre = presetById(s.preset);
+  if (s.pol !== (pre?.pol ?? DEFAULT_STATE.pol)) p.set("pol", s.pol);
   if (!s.conf) p.set("conf", "0");
   if (s.inh) p.set("inh", "1");
   return p.toString();

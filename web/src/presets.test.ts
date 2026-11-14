@@ -15,9 +15,15 @@ describe("presets (SPEC §20.5)", () => {
     }
   });
 
-  it("climate first uses the four hazards only", () => {
+  it("climate first uses the five hazards only, humid heat included", () => {
     const climate = PRESETS.find((p) => p.id === "climate")!;
     expect(Object.keys(climate.weights).sort()).toEqual([...HAZARD_IDS].sort());
+  });
+
+  it("weights humid heat like dry heat wherever a preset weights heat (SPEC §13.47)", () => {
+    const withHeat = PRESETS.filter((p) => p.weights.heat);
+    expect(withHeat.length).toBeGreaterThan(0);
+    for (const p of withHeat) expect(p.weights.humid).toBe(p.weights.heat);
   });
 
   it("early career weights cost of living and rent; retiring weights cost of living", () => {

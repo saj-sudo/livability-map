@@ -1,11 +1,13 @@
 # SPEC.md - livability-map (working title: Global Climate Livability Map)
 
-Version 0.3 | 2026-09-22 | Owner: Saj | Status: Sessions 1-7 built; Cloudflare publish/deploy waits on credentials (§13.24)
+Version 0.4 | 2026-11-14 | Owner: Saj | Status: Sessions 1-9 built, release safety and hardening done (§13.39-45); Cloudflare publish/deploy waits on credentials (§13.24)
 
 Sections are numbered so build prompts can cite them. v0.1 (2026-09-08) was the pre-build
 draft; v0.2 records the Session 0 decisions (§13), the verification log (§15), and the new
 life-dimensions design (§20). v0.3 (2026-09-22) records the first-hand verification of every
 source, the decisions taken while building Sessions 2-7 (§13.18-26) and the res-4 global run (§11).
+v0.4 (2026-11-14) adds Sessions 8-9, the country small-area sources, release safety, hardening and
+the 2026-11-14 review pass (§13.27-45).
 
 ## 0. How to use this spec with Claude Code
 
@@ -75,7 +77,7 @@ dimension, and the map renders low-confidence areas visibly differently.
    other dimension carries a resolution tag: `hex` (computed per hex from a raster or point set),
    `grid` (a statistical grid such as the Eurostat 1 km census grid, aggregated per hex),
    `basin` (a hydrological sub-basin polygon at the centroid), `admin1`, `county`, `tract`,
-   `area` (a small statistical area outside the US: England LSOA; later IRIS, DAs, SA2),
+   `area` (a small statistical area outside the US: England LSOA, French IRIS, Canadian DAs, Australian SA2),
    `national`, or `none`.
 3. **No data is not zero risk.** Hexes with missing layers render as visibly uncertain, and
    composites exclude missing layers rather than treating them as 0.
@@ -104,19 +106,24 @@ CORS). No database in the web app.
 
   HAZARD (raster / vector)                 WELLBEING + LIFE DIMENSIONS (tabular + polygons)   REFERENCE
   - WB CCKP CMIP6 hd35: hot days > 35C     - Global Data Lab Subnational HDI (admin1)         - geoBoundaries CGAZ admin0 + admin1
-  - WRI Aqueduct Floods riverine 1-in-100  - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
-  - WRI Aqueduct Floods coastal 1-in-100   - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
-  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
-                                           - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
+  - WB CCKP CMIP6 hi35: heat index > 35C   - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
+  - WRI Aqueduct Floods riverine 1-in-100  - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
+  - WRI Aqueduct Floods coastal 1-in-100   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
+  - WRI Aqueduct 4.0 future water stress   - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
-                                           - hex-level: MAP travel time, ACAG PM2.5, tree cover, Ookla
+                                           - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
+                                           - EU cities: QoL perception survey on GISCO city polygons
+                                           - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
+                                             GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE + GEM
+                                             plants, Sentinel-5P NO2, Overture places;
+                                             US tracts: FEMA NRI, CDC PLACES, Opportunity Atlas
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
   |               pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 6] [--bbox ...] <stage>)  |
   |                                                                                                        |
   |  fetch     download + sha256 each source per pipeline/sources.yaml -> data/raw/<id>/                  |
-  |            manual sources (GEE export, registration) are checked for presence, recipe printed         |
+  |            manual sources (registration, browser-only) are checked for presence, recipe printed       |
   |  urban     GHS-SMOD classes -> urban centre / cluster polygons with ids -> data/interim/urban.parquet |
   |  grid      resolution plan (pipeline/resolution_plan.yaml, §9.1): res 4 + 5 from Natural Earth land,  |
   |            res 6 = children of res-5 cells in US/EU/UK/EFTA or touching urban clusters, res 7 =       |
@@ -127,9 +134,11 @@ CORS). No database in the web app.
   |            -> per-hazard 0-100 percentile score + *_ok flag (res 6/7 ranked against res 5, §13.32)    |
   |  dims      prep/<source>.py turns each raw source into a joinable layer; for each dimension in       |
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
-  |            area_weighted_overlay | point_density | raster_mean | point_mean                          |
-  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
-  |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
+  |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
+  |            fill only their own country's hexes (§13.45)                                               |
+  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|city|national|none)        |
+  |  score     exposure = mean(available hazard scores), coverage = count(*_ok) 0-5,                      |
+  |            dry and humid heat are separate hazards, so heat counts twice (§13.47)                     |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
@@ -181,6 +190,9 @@ inhabited     bool     population >= POP_MIN (default 100)
 heat_days     float    projected annual days Tmax > 35C
 heat_score    int
 heat_ok       bool
+humid_days    float    projected annual days with heat index > 35C (§13.47)
+humid_score   int
+humid_ok      bool
 rflood_frac   float    fraction of hex area with riverine 1-in-100 inundation depth >= DEPTH_MIN
 rflood_score  int
 rflood_ok     bool
@@ -192,7 +204,7 @@ wstress_score int
 wstress_ok    bool
 
 -- composites
-coverage      int      count of *_ok true (0-4)
+coverage      int      count of *_ok true (0-5; heat counts twice, dry and humid, §13.47)
 exposure      int      mean of available hazard scores, null if coverage = 0
 wb_value      float    wellbeing raw (SHDI 0-1 or WHR ladder 0-10)
 wb_score      int      0-100, normalized within its source (§8.3)
@@ -258,11 +270,12 @@ Every row has a VERIFY item in §14 and a §15 log line. See §20.6 for the life
 
 | Layer | Source | Resolution / unit | Scenario, horizon | License | Notes |
 |---|---|---|---|---|---|
-| Extreme heat | World Bank CCKP, CMIP6 ensemble, `hd35` (days Tmax > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (§15.1) | Public S3 `wbg-cckp`, us-west-2. Do not use `hi35` (heat index). |
-| Riverine flood | WRI Aqueduct Floods, inundation depth | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100 | CC BY 4.0 (§15.2) | S3 copies removed; one-time Google Earth Engine export (§13.11). |
+| Extreme heat | World Bank CCKP, CMIP6 ensemble, `hd35` (days Tmax > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (§15.1) | Public S3 `wbg-cckp`, us-west-2. Dry-bulb only; `hi35` (heat index) is the separate humid-heat layer below. |
+| Humid heat | World Bank CCKP, CMIP6 ensemble, `hi35` (days with heat index > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (`verified: search`, §15) | Same bucket and file pattern as `hd35`; a fifth hazard beside dry heat, so heat counts twice in `exposure` (§13.47). |
+| Riverine flood | WRI Aqueduct Floods, inundation depth | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100 | CC BY 4.0 (§15.2) | Direct download from WRI's mirror (§13.19, replacing the one-time GEE export of §13.11). |
 | Coastal flood | WRI Aqueduct Floods, coastal with subsidence | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100, 50th pct SLR | CC BY 4.0 (§15.2) | Same family and access path as riverine. |
 | Water stress | WRI Aqueduct Water Risk Atlas 4.0, future | polygons (basin x province x aquifer) | 2050 business-as-usual (`bau50_ws_x_c`) | CC BY 4.0 (§15.3) | Vector: join hex centroid to polygon. -1 = arid/low use. |
-| Wellbeing (subnational) | Global Data Lab, Subnational HDI 8.3 | admin1 polygons, ~1,800 regions | latest year | Free with citation, **non-commercial**, registration (§15.4) | Join on GDL-Code via GDL shapefiles; crosswalk to geoBoundaries names. |
+| Wellbeing (subnational) | Global Data Lab, Subnational HDI v10.2 (§15) | admin1 polygons, ~1,800 regions | latest year | Free with citation, **non-commercial**, registration (§15.4) | Join on GDL-Code via GDL shapefiles; crosswalk to geoBoundaries names. |
 | Wellbeing (national fallback) | World Happiness Report 2026, ladder | country, 147 | 3-year rolling 2023-2025 | Free download (§15.5) | Used only where SHDI has no region. |
 | Population | JRC GHSL GHS-POP R2023A | 30 arc-sec WGS84, persons per cell | epoch E2025 | CC BY 4.0 (§15.6) | Drives inhabited flag and population-weighted joins. |
 | Boundaries | geoBoundaries 6.0.0 CGAZ ADM0 + ADM1 | polygons | current | CC BY 4.0 (§15.7) | Git LFS files; pin release; shapeID not stable across releases. |
@@ -282,6 +295,8 @@ Walk Score, Cook PVI, GreatSchools, NHGIS and IPUMS International (no redistribu
 
 - Heat: mean of the projected hot-days grid over the hex. Unit: days per year. Hexes in
   perpetually hot regions saturate near 365; the percentile rank handles that.
+- Humid heat: the projected days with a heat index above 35C (CCKP `hi35`), sampled at the hex
+  centroid exactly like heat. Unit: days per year. A fifth hazard beside dry heat (§13.47).
 - Riverine and coastal flood: fraction of hex pixels with inundation depth >= DEPTH_MIN
   (0.15 m). Unit: 0 to 1. v2 replaces area fraction with GHSL-weighted population fraction.
 - Water stress: Aqueduct category at hex centroid, 0 (low) to 4 (extremely high). Arid and low
@@ -301,8 +316,9 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 8.4 Composites
 
-- `exposure` = mean of available hazard scores. `coverage` = how many were available (0 to 4).
-  `coverage < 4` renders as reduced confidence (§9.3).
+- `exposure` = mean of available hazard scores. `coverage` = how many were available (0 to 5).
+  `coverage < 5` renders as reduced confidence (§9.3). Dry heat and humid heat are both among
+  the five, so heat weighs twice in `exposure` (§13.47), stated on /methodology.
 - `bivar` = 3x3 class from tercile of `exposure` by tercile of `wb_score`, computed over
   inhabited hexes. Class 0 if either side is null. Default map view; needs no weighting.
 - "My priorities" (weighted view, §20.5): computed client-side from tile attributes so no rebuild
@@ -310,7 +326,7 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 8.5 Sanity checks the pipeline must run and print
 
-- Percentage of inhabited hexes with `coverage = 4`, `= 0`.
+- Percentage of inhabited hexes with `coverage = 5` (every hazard), `= 0`.
 - Percentage of inhabited hexes by `wb_res`, and per life dimension by `{id}_res`.
 - Spot checks: Dhaka (high flood, mid wellbeing), Phoenix (high heat, high wellbeing),
   Reykjavik (low exposure, high wellbeing), Sahel band (water stress + heat, low wellbeing).
@@ -364,7 +380,7 @@ app reads the PMTiles via HTTP range requests.
 - Per-hazard and per-dimension layers: `*_score` single-hue sequential ramp (rust for hazards,
   teal for wellbeing, green for life dimensions, blue-violet for the priorities match);
   `*_ok = false` or `*_res = 'none'` in grey.
-- Confidence: `coverage < 4` gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
+- Confidence: `coverage < 5` (fewer than every hazard layer, §13.47) gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
   a faint dashed outline (it covers whole countries while SHDI is absent, so it must read as a
   texture, not an error); `wb_res = 'none'` grey on wellbeing views.
 - Hex seams are drawn in the paper tone at low alpha so the mesh recedes; the hovered hex gets a
@@ -407,7 +423,7 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   summary (what the colour means, hazard layers present, national wellbeing fallback, priorities
   match with what is missing), the person's weighted priorities as thin bars (a missing
   dimension is a hatched "no data here" row), each hazard's raw value and score with its `_ok`
-  state, wellbeing value with source and resolution in words, coverage "3 of 4 hazard layers",
+  state, wellbeing value with source and resolution in words, coverage "4 of 5 hazard layers",
   bivariate class in words, each life dimension's value and resolution (or "no data here"), one
   "Sources" disclosure listing the manifest entries, and "Compare with another place". The
   numbers in the bars come from `web/src/lib/chart.ts`, a TypeScript twin of the §20.5
@@ -486,7 +502,7 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
 
 `pipeline/fixtures/make_fixtures.py` deterministically generates a synthetic 4° x 4° region:
 land polygon with a coast, two countries and five admin1 regions, a population raster with
-towns, four hazard inputs (heat NetCDF, two flood GeoTIFFs, water-stress polygons), and small
+towns, five hazard inputs (heat and humid-heat NetCDFs, two flood GeoTIFFs, water-stress polygons), and small
 tabular files for wellbeing and life dimensions. `python -m pipeline --fixtures <stage>` runs
 against it; tests use it. Real data never enters the repo.
 
@@ -558,9 +574,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     source, producing the columns `dimensions.yaml` names; joiners stay generic.
 28. **Present-day environment is its own group (`env`), not a hazard.** Air quality, tree cover,
     wildfire (observed burned area 2001-2020) and drought risk (Aqueduct baseline) are shown
-    beside the four 2050 hazards and can be weighted in My priorities, but `exposure`,
-    `coverage` and the bivariate class stay the four projected hazards so the map's headline
-    axis keeps one scenario and one horizon (2026-09-22).
+    beside the 2050 hazards (four then, five since §13.47) and can be weighted in My priorities,
+    but `exposure`, `coverage` and the bivariate class stay the projected hazards so the map's
+    headline axis keeps one scenario and one horizon (2026-09-22).
 29. **Hex-level layers** are joined by two new joiners (`raster_mean`, `point_mean`, §20.3) and
     carry the resolution tag `hex`; Aqueduct sub-basins sampled at the centroid carry `basin`.
     Rasters that are not plain GeoTIFFs (the ACAG PM2.5 NetCDF, the GFED5 monthly burned-area
@@ -782,6 +798,160 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       cells itself), `tiler.lnglat_to_tile` (now a helper in `tests/test_tiler.py`) and ten
       unused exports in `web/src/lib`.
 
+45. **Review pass** (2026-11-14, a full read of the code, the web flow and the open items):
+    - *Single-country domains stay in their country.* `config.DOMAIN_COUNTRIES` maps the domains
+      that belong to one country (`us` incl. PR and the territories, `uk` -> GB, `de`, `nl`,
+      `fr` incl. the overseas departments, `ca`, `au`) to ISO2 codes; a joiner fills only hexes
+      whose `iso_a2` is listed, and the next joiner takes the rest. Before this, a Canadian border
+      hex that overlapped US tracts by 5% took the ACS value, got `_dom = us` and was ranked among
+      US hexes, and the StatCan joiner never ran for it. A joiner's own `countries:` overrides the
+      map; `global`, `oecd`, `eu` and `country` are not restricted. Fixtures map `us` to XB and the
+      others to XA (`make_fixtures.apply`). Known remainder: England-only IoD vs Wales/Scotland.
+    - *Prep cache keyed on the source's entry.* Editing `sheet:`, `member:`, `layer:` or a
+      geometry / also_needs source re-runs the loader (display-only `verified` and `min_nonnull`
+      do not).
+    - *Unzip caches tied to the archive.* A member copy records its size and CRC; a directory
+      extraction records the archive's size and mtime and is redone (old files removed) when a
+      new download replaces it.
+    - *Wellbeing min-max bounds at res 5 come from inhabited hexes,* matching the derived
+      resolutions, so a neighbourhood and its parent share bounds.
+    - *Tercile ties.* `tercile = (v >= c0) + (v > c1)`: a value on the upper cut is middle, and
+      all-equal wellbeing (a WHR-only subregion) is middle instead of high. This moves the few
+      hexes exactly on an upper cut from high to middle.
+    - *Missing never becomes 0:* MEDSL drops a county whose Democratic or Republican count is
+      blank; `point_radius` sums are NaN when the point set is empty and raise when no point has a
+      numeric value; `point_density` (unused, `fillna(0)`) is removed.
+    - *Atomic writes:* the tiler and the raster preps write through `stage_cache.atomic_path`.
+      `export.refresh_refs` records the parquet it rewrites so the next export skips it.
+    - *Web:* bars colour by direction; the place panel says which numbers are a match and which
+      are a rank; outlines follow the selection; compare picking has a banner, Cancel and Escape;
+      searched names survive; weights stay in the URL in every view; Reset weights and a note for
+      weighted layers with no data; a legend in the phone sheet's peek; keyboard and screen-reader
+      fixes; plain words instead of codes on /methodology and /about, with "How to read the map".
+      The Next 16 error boundary prop is `retry` (checked against the installed docs).
+    - Fixture world VERSION 14 (the ACS-like `rent_share_income` is a percentage, like B25071).
+    The first real run after this rebuilds `dims` and later stages once more, which the release
+    rebuild already does.
+
+46. **Heavy industry nearby** (Saj, 2026-11-14): a new env dimension `industry` counts large
+    industrial facilities within 10 km of the hex centre from Climate TRACE's emitting assets
+    (`climate_trace_assets`, CC BY 4.0, `point_radius` sum of one point per asset). Decisions:
+    - *Count, not CO2e.* Tons of greenhouse gas measure climate impact, not local harm; a big gas
+      plant would outrank a small coal plant. Each facility counts once.
+    - *Point-like heavy industry only:* the `subsectors:` allow-list in sources.yaml (power,
+      refining, coal mining, steel, cement, chemicals, aluminium, steam cracking, pulp and paper,
+      landfills). Area-like assets (oil and gas fields, pipelines, farms, roads) are left out.
+    - *0 is real* (the asset list is global, like UCDP), labelled "none recorded nearby", because
+      Climate TRACE models large emitters and under-represents small plants and some countries.
+      The radius floors at the hex edge (§13.36), so the coarsest hexes count within ~23 km.
+    - *Climate TRACE only;* Global Energy Monitor trackers (form-gated, overlapping) come later.
+    - Group `env`: present-day, never part of the 2050 exposure (§13.28); no preset weights it yet.
+    - `access: manual` (four sector zips, `docs/manual-steps.md` item 15), `verified: search`:
+      file layout, column names and subsector names are from memory, and the loader stops with
+      the columns it found when they differ. Fixture world VERSION 15 adds six stand-in facilities.
+
+47. **Humid heat, a fifth hazard** (Saj, 2026-11-14): a new hazard `humid` (raw `humid_days`,
+    `humid_score`, `humid_ok`) counts the projected days per year with a heat index above 35 °C,
+    from the World Bank CCKP CMIP6 0.25° climatology `hi35` (`cckp_hi35`, SSP2-4.5, 2040-2059,
+    ensemble median, CC BY 4.0), sampled at the hex centroid exactly like `heat` (§8.1).
+    - *Fifth, not a replacement.* `hd35` (dry-bulb days above 35 °C) stays: it is confirmed
+      first-hand (§15) and reads well in dry heat (the Sahel, the US South-West), where the heat
+      index adds little. The heat index combines temperature and humidity, so `humid` shows the
+      heat stress `hd35` misses in Bangladesh, the US Gulf coast, West Africa and Southeast Asia
+      (the §16 caveat). Replacing `hd35` would lose the dry-heat signal and its confirmed source.
+    - *Heat counts twice.* `exposure` is the plain mean of the available hazard scores, so with
+      dry heat and humid heat both in it, heat carries two fifths of the combined exposure. This
+      is deliberate and stated plainly on /methodology, in the manifest's processing notes, on
+      the humid-heat row of the place panel and in the `humid` registry note. A place that is
+      only hot ranks higher than before against a place that only floods.
+    - *Coverage runs 0 to 5;* the hatch marks `coverage < 5`. Nothing hard-codes the count: the
+      pipeline uses `len(HAZARDS)` / `HAZARD_IDS` and the web `HAZARD_IDS.length`. The manifest
+      key `share_inhabited_coverage4` became `share_inhabited_coverage_full` (score report:
+      `coverage_full_share`).
+    - *URL order.* `humid` is appended to the web `DIM_ORDER` after `industry` so old `w=` links
+      keep their meaning; panels list it beside heat (`DISPLAY_ORDER`). Presets that weight heat
+      weight humid heat the same; Climate first weights all five hazards.
+    - *NRI cross-check:* NRI has one heat-wave loss rate, so `nri_check` pairs both heat scores
+      with it.
+    - `verified: search`: the URL, file name and variable (`climatology-hi35-annual-mean`) follow
+      the confirmed `hd35` file in the same bucket and were not fetched here. `heat_days` falls
+      back to the only gridded variable when the named one is absent and stops otherwise.
+      `publish --target r2` refuses until the source is confirmed on the laptop (§15).
+    - Fixture world VERSION 16 adds `humid.nc`: highest along the south-east coast, masked in
+      the north-west corner so the missing path (NaN, never 0; coverage 4) is exercised.
+48. **EU cities survey and the Opportunity Atlas** (Saj, 2026-11-14): two open sources, both
+    `access: manual` and `verified: search` (layouts, column names, codes, URLs and licences are
+    from memory; the container cannot reach the hosts, and every loader stops with the columns it
+    found when they differ).
+    - *Perception of quality of life in European cities* (2023 wave, about 83 cities in the EU,
+      EFTA, UK, Western Balkans and Türkiye; Eurostat `urb_percep` or the DG REGIO results file,
+      Eurostat reuse policy, CC BY 4.0 expected). Saj chose three items: "good place for gay or
+      lesbian people" becomes a second `lgbtq` joiner after ACS (the first non-US signal),
+      "good place for immigrants from other countries" a new life dimension `immig`, and "I feel
+      safe walking alone at night" a new life dimension `safe`; all higher = better. Value: the
+      share who strongly or somewhat agree, as published (the base includes "don't know"); a
+      published "agree (total)" row wins over summing its parts; only the latest year in the
+      table is kept, so every value comes from one wave. US `lgbtq` is a presence proxy and EU
+      `lgbtq` a perception of acceptance: different constructs, labelled, ranked separately.
+    - *City polygons:* GISCO Urban Audit 2021 cities (`gisco_urau_cities`, URAU codes like
+      `DE001C`; GISCO / EuroGeographics terms allow non-commercial reuse with attribution, which
+      fits §13.13). One prep loader (`prep/eu_qol.py`) builds one layer, city polygons with the
+      three item columns, matched on the URAU code stem, else on the normalised name; a surveyed
+      city without a polygon is printed and stays missing. Joiner `polygon_centroid` (hex
+      centroid inside the city).
+    - *New resolution tag `city`:* a whole city's survey figure, coarser than `area`, finer than
+      `admin1` (`config.RES_TAGS`, web `RES_LABELS` "city survey"). Outside surveyed cities the
+      three layers stay missing (`_res = none`), never 0.
+    - *Scoring domain `eucities`:* one multi-country domain, so it is not in
+      `config.DOMAIN_COUNTRIES`; the web chip reads "EU cities" (`lgbtq`: "US / EU cities").
+    - *Opportunity Atlas* (Opportunity Insights, tract outcomes, children born 1978-1983, adult
+      household incomes around 2014-2015; terms from memory: free with citation, to be checked).
+      Saj chose both measures as two life dimensions: `opp` ("Kids' adult income, all
+      families", `kfr_pooled_pooled_mean`, pooled over all parent incomes, so it partly reflects
+      where well-off families already live, not only upward mobility) and `opp25` ("Upward
+      mobility: kids from low-income families", `kfr_pooled_pooled_p25`, the standard
+      upward-mobility measure). Both higher = better, domain `us` (so the §13.45 country filter
+      applies), tag `tract`, `area_weighted_overlay` onto `cb_tracts` like PLACES. NHGIS / IPUMS
+      crosswalks stay excluded.
+    - *2010 -> 2020 tracts:* the Atlas is on 2010 tracts and `cb_tracts` on 2020 tracts. The
+      Census 2020-to-2010 tract relationship file (public domain, pipe-delimited,
+      `census_tract_rel_2020_2010`) carries each measure across as a **land-area-weighted** mean
+      (`AREALAND_PART`; the file has no population; water-only tracts use total area). A 2020
+      tract keeps a measure only where 2010 tracts with that value cover at least half its land;
+      suppressed values stay missing. Hexes weight tracts by the Atlas child count apportioned by
+      land share, or by land area when the file has no count column. Connecticut's tract ids
+      probably changed with its 2022 planning regions, so its tracts may not join (check on the
+      first real run).
+    - Manual downloads: `docs/manual-steps.md` items 21 (EU survey + GISCO) and 22 (Atlas).
+      Fixture world VERSION 17: three city polygons in XKA (Birch lacks the immigrants item),
+      2010-like tracts each split across two XKB tracts, and a relationship-file stand-in; the
+      fixture tracts carry values computed by the real crosswalk.
+49. **NO2, everyday amenities and GEM plants** (Saj, 2026-11-14, "add all three plus the worth it
+    later"; humid heat is §13.47, the EU city survey and Opportunity Atlas §13.48):
+    - *`no2`* (env, higher = worse): Sentinel-5P TROPOMI tropospheric NO2 column, 2023 annual
+      mean, exported once from Earth Engine at 0.05° (`docs/gee-export.md`), shown in µmol/m². A
+      column over the place, not street-level concentration, so it ranks places by traffic and
+      combustion rather than measuring what a person breathes. New `raster_mean` mode
+      `sample: auto`: the pixel mean where a hex covers at least two pixels' area (res 4-5 here),
+      the centroid sample where it is smaller (res 6-7), so no small hex goes blank for want of
+      a pixel centre.
+    - *`amen`* (life, higher = better): Overture Maps places in an allow-list of everyday
+      categories (groceries, pharmacies, clinics, schools, parks, playgrounds, libraries; one
+      combined count, Saj's choice) within 1 km, divided by the area searched (`point_radius`
+      `per_km2`), so the value is a density that compares across resolutions even though the
+      radius floors at the hex edge (§13.36). 0 is "none recorded": Overture's coverage follows
+      how well places are mapped. The raw file is a slim extract made on the laptop by
+      `python -m pipeline.prep.overture_places` (DuckDB on the public bucket; optional extra
+      `overture`), so nobody downloads the whole places theme.
+    - *GEM in `industry`:* Global Energy Monitor's coal, gas, steel and cement trackers are an
+      optional companion of `climate_trace_assets` (new `also_uses:` key: files count as inputs
+      only when present). Operating plants are added where no Climate TRACE asset lies within 2 km,
+      so one facility is never counted twice. Listing `gem_trackers` on the dimension means
+      `publish` refuses until it is verified too; remove it from `sources:` to ship without GEM.
+    - All three are `access: manual`, `verified: search` (URLs, column and category names from
+      memory; the loaders stop with what they found when names differ). Fixture world VERSION 18
+      adds a 0.05° NO2 grid with a nodata hole, amenity points around the towns and a GEM stub.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -803,8 +973,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
 ## 15. Verification log
 
 Status key: **search** = found via search results and S3/registry probes from a network-restricted
-container, not a first-hand page read; **confirmed** = fetched and inspected. Everything below is
-**search** until re-checked from a network-open machine.
+container, not a first-hand page read; **confirmed** = fetched and inspected. Each row says which;
+the 2026-09-22 rows confirmed most of the 2026-09-20 ones. `pipeline/sources.yaml` `verified:` is
+the live status per source.
 
 | Date | Item | Result | Source URL |
 |---|---|---|---|
@@ -828,7 +999,7 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-22 | 14.4 GDL SHDI | **confirmed** terms (non-commercial, citation); current version v10.2 (2026-05-13), downloads login-gated: `Subnational HDI Data v10.2.csv` and the GDL shapefile zip. | https://globaldatalab.org/shdi/archive/ ; https://globaldatalab.org/termsofuse/ |
 | 2026-09-22 | 14.5 WHR | **confirmed**: `https://files.worldhappiness.report/WHR26_Data_Figure_2.1.xlsx` (134 KB), 2011-2025 panel, column `Life evaluation (3-year average)`; 147 countries for 2025 after name mapping. No explicit license text; citation requested. | https://www.worldhappiness.report/data-sharing/ |
 | 2026-09-22 | 14.6-14.8 GHSL, geoBoundaries, Natural Earth | **confirmed** by download and use: GHSL zip contains a 21384 x 43202 float64 tiled GeoTIFF (extracted once); geoBoundaries gpkg via media.githubusercontent.com; Natural Earth zip read directly. Some geoBoundaries names are mojibake (repaired in `prep.util.fix_mojibake`). | as above |
-| 2026-09-22 | 14.10 PMTiles size | res 4 global archive built by the python tiler; see `data/out/tiles_report.json` (res 5 pending). | - |
+| 2026-09-22 | 14.10 PMTiles size | res 4 global archive built by the python tiler; see `data/out/tiles_report.json` (res 5 and the res-6/7 archives followed in Session 8). | - |
 | 2026-09-22 | 14.12 tippecanoe | **confirmed** no Windows build (no release binaries, no conda-forge win-64, no MSYS2 package). Decision §13.18. | https://github.com/felt/tippecanoe/releases |
 | 2026-09-22 | 14.13 MapLibre | **confirmed** in the browser: maplibre-gl 6.10.0 ESM, `setWorkerUrl` needed because the worker and its `maplibre-gl-shared.mjs` are resolved relative to the module URL (both copied to `public/` by `web/scripts/copy-worker.mjs`); `addProtocol("pmtiles", new Protocol().tile)` unchanged; pmtiles 4.5.0. | https://maplibre.org/maplibre-gl-js/docs/ |
 | 2026-09-22 | 14.14 R2 CORS | rules written by `publish --target r2` (`range`, `if-match` allowed; `etag`, `content-length`, `content-range`, `accept-ranges` exposed) and checked with a Range request; not yet exercised against a real bucket (credentials pending). | https://developers.cloudflare.com/r2/buckets/cors/ |
@@ -858,6 +1029,15 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 | 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
 | 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
+| 2026-11-14 | CCKP hi35 humid heat (§13.47) | search. From memory, not fetched here (the container blocks the bucket): `https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hi35/ensemble-all-ssp245/climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc`, by analogy with the confirmed hd35 file; variable assumed `climatology-hi35-annual-mean` (time, lat, lon). CC BY 4.0 like the rest of the collection. Confirm the URL, size, variable name, units (days per year) and the heat-index definition on the laptop. | https://github.com/worldbank/climateknowledgeportal/blob/main/docs/collections/cmip6-x0.25.md |
+| 2026-11-14 | Perception of quality of life in European cities, 2023 (§13.48) | search. From memory, not read here (the container blocks ec.europa.eu): Eurostat dataset `urb_percep` (SDMX-CSV with labels or bulk TSV) or the DG REGIO 2023 results file; items "good place for gay or lesbian people", "good place for immigrants from other countries", "I feel safe walking alone at night", answers strongly / somewhat agree; city codes like `DE001C`; Eurostat reuse policy CC BY 4.0. Confirm the 2023 wave is in the table, the item wording or codes, and the licence. | https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table |
+| 2026-11-14 | GISCO Urban Audit 2021 city boundaries (§13.48) | search. From memory: cities layer with `URAU_CODE` and `URAU_NAME`, GeoJSON in EPSG:4326; GISCO / EuroGeographics terms: non-commercial reuse with attribution. Confirm the file, the columns, and whether the UK, Western Balkan and Turkish survey cities have polygons. | https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit |
+| 2026-11-14 | Opportunity Atlas tract outcomes (§13.48) | search. From memory: `tract_outcomes_simple.csv` with `state`, `county`, `tract`, `kfr_pooled_pooled_mean` (`opp`) and `kfr_pooled_pooled_p25` (`opp25`), 0-1 ranks, 2010 tracts, children born 1978-1983; terms free with citation (check). Confirm the file name, both columns, a child count column if any, and the terms. | https://opportunityinsights.org/data/ |
+| 2026-11-14 | Census 2020-to-2010 tract relationship file (§13.48) | search. URL and columns (`GEOID_TRACT_20`, `GEOID_TRACT_10`, `AREALAND_PART`, `AREAWATER_PART`, pipe-delimited) from memory; public domain. Confirm on first fetch. | https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_natl.txt |
+| 2026-11-14 | Climate TRACE assets (§13.46) | search. From memory, not read here (the container blocks climatetrace.org): per-sector zips on climatetrace.org/data with `*emissions_sources*.csv` (source_id, subsector, lat, lon, gas, emissions_quantity), CC BY 4.0. Confirm the licence, file and column names and the subsector list on the laptop. | https://climatetrace.org/data |
+| 2026-11-14 | Sentinel-5P NO2 (§13.49) | search. Earth Engine collection `COPERNICUS/S5P/OFFL/L3_NO2`, band `tropospheric_NO2_column_number_density` (mol/m²); Copernicus Sentinel data free and open with attribution. From memory; check on the laptop with the export. | https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S5P_OFFL_L3_NO2 |
+| 2026-11-14 | Overture places (§13.49) | search. Public bucket `s3://overturemaps-us-west-2/release/<release>/theme=places/type=place/`, fields `categories.primary` (or `basic_category` in newer releases) and `confidence`; places CDLA-Permissive 2.0. From memory. | https://docs.overturemaps.org/guides/places/ |
+| 2026-11-14 | GEM trackers (§13.49) | search. Coal, oil and gas plant, steel and cement trackers as xlsx behind a short form, CC BY 4.0, Latitude / Longitude / Status columns. From memory. | https://globalenergymonitor.org/projects/ |
 
 ## 16. Phasing and session plan
 
@@ -867,13 +1047,14 @@ scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US lif
 bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
-**v2.** Candidate new sources (FEMA NRI, CDC PLACES, Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
-panel; population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
-permissions land; drought (JRC GDO) and wildfire (GWIS); GEM seismic as labeled non-climate;
+**v2.** Candidate new sources (FEMA NRI and CDC PLACES now wired, §13.38; the EU cities survey and the Opportunity Atlas wired, §13.48; Overture amenities, Climate TRACE / GEM facilities, NO2) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; (place search and compare-two-places
+shipped in Session 9); population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
+permissions land; projected drought (JRC GDO) and wildfire (GWIS) (present-day `drought` and `fire`
+already ship as env layers); GEM seismic as labeled non-climate;
 embeddable iframe.
 
-**Later.** Downloadable hex data with attribution bundle; plain-language place summaries
-(clearly labeled); time-slider across horizons.
+**Later.** Downloadable hex data with attribution bundle; richer plain-language place summaries
+(a short one ships in the place panel, `web/src/lib/summary.ts`); time-slider across horizons.
 
 **Finer resolution (decided 2026-09-22).** Three tiers, physical layers first:
 
@@ -905,8 +1086,10 @@ Map honesty, before or with the first public release:
 - [x] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
   Gulf coast, West Africa, Southeast Asia) look milder than their heat stress is. Now: say so
   in `/methodology` and on the heat row of the place panel. (Caveat shipped 2026-11-11:
-  `HEAT_CAVEAT` in `web/src/lib/inspect.ts`, the `heat` note in `dimensions.yaml`; the layer below stays open.) Later: a humid-heat layer (CCKP
-  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships.
+  `HEAT_CAVEAT` in `web/src/lib/inspect.ts`, the `heat` note in `dimensions.yaml`.) Later: a humid-heat layer (CCKP
+  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships. (Layer shipped
+  2026-11-14 as the fifth hazard `humid`, CCKP `hi35`, §13.47; heat now counts twice in
+  `exposure`. The first-hand check of the file is still open: `verified: search`, §15.)
 - [x] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
   percentile among inhabited land at that resolution, not an absolute risk level. (Shipped
   2026-11-11 as `SCORE_MEANING`; the CMIP6 spread note below stays open.) Optionally
@@ -917,6 +1100,9 @@ Map honesty, before or with the first public release:
   county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
   constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
   gross misses, not a tight fit.
+- [ ] *Humid-heat layer and CMIP6 spread note.* Still open from the two items above; recommended
+  as data work after the first real build, together with the next new source (Climate TRACE /
+  GEM facility proximity, `docs/source-candidates-2026-11.md`).
 - [ ] *`--adopt-cache`, only if needed.* A one-time flag that stamps existing outputs with the
   §13.39 fingerprints instead of rebuilding them. Moot once the release-candidate rebuild has
   run.
@@ -934,22 +1120,45 @@ Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 - [x] Tests for `rawfiles` (zip extraction), `timing` and the GSAP / SHDI poverty loaders.
 - [x] Remove the dead `config.h3_backend()` (§13.44).
 
+From the 2026-11-14 review pass (§13.45):
+
+- [x] Single-country joiners fill only their own country's hexes; prep cache keyed on the
+  `sources.yaml` entry; unzip caches tied to the archive; inhabited min-max bounds at res 5;
+  tie-safe terciles; MEDSL and `point_radius` never turn a gap into 0; atomic tiler / raster writes;
+  `export.refresh_refs` re-records.
+- [ ] *Per-dimension fingerprints over-invalidate.* The `dims` code digest reaches every prep
+  loader through the `LOADERS` strings, so editing one loader marks every dimension stale (use
+  `--only` meanwhile); and a `grid` rerun that writes identical bytes still cascades because
+  fingerprints use size + mtime. Fix: digest only the loaders a dimension's sources use, and
+  content-hash small stage outputs.
+- [x] Climate TRACE facility proximity (`industry`, §13.46); first-hand check is manual-steps item 15.
+- [x] NO2, Overture everyday amenities, GEM plants in `industry` (§13.49); first-hand checks are
+  manual-steps items.
+- [ ] An environmental-justice preset (PM2.5, NO2, `industry`, read against `wealth` / `incmix`)
+  and amenities in the Retiring / Raising kids presets: a product call for Saj.
+- [x] EU cities survey (`lgbtq` EU-city joiner, `immig`, `safe`, tag `city`) and Opportunity Atlas
+  (`opp`, `opp25`, 2010 -> 2020 tract crosswalk), §13.48; first-hand checks are manual-steps items 21 and 22.
+- [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
+  stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
+- [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
+  automated accessibility scan (axe) in the e2e job.
+
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |
 | 1 | acceptEdits | Python | Repo layout, `sources.yaml`, `dimensions.yaml`, `fetch` with checksums, `grid`, `pop`, `admin`, joiners, fixtures, tests, CI, README | Done 2026-09-20 |
 | 2 | acceptEdits | Python | Aqueduct riverine + coastal to hexes | Done 2026-09-22 (direct mirror, §13.19; Dhaka / Reykjavik checked) |
 | 3 | acceptEdits | Python | CCKP heat + Aqueduct water stress | Done 2026-09-22 (Phoenix / Sahel checked) |
-| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | Done 2026-09-22 at res 4; SHDI waits on Saj's download (WHR fallback runs); res 5 run pending |
+| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | Done 2026-09-22 at res 4, res 5 since; SHDI waits on Saj's download (WHR fallback runs) |
 | 4b | acceptEdits | Python | Global life dimensions | Done 2026-09-22 (GSAP, OECD via TL2 crosswalk §13.21, ILOSTAT) |
 | 4c | acceptEdits | Python | US life dimensions | Done 2026-09-22 (ACS with B09019 §13.20, EPA SLD, Urban/NCES, HRSA); MEDSL waits on the guestbook or a manual download (§13.26) |
 | 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
 | 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
 | 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
-| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Built 2026-09-22 (PR `claude/neighborhood`): urban stage, resolution plan, reference scoring, two archives, Eurostat grid and England IoD 2025; Zensus, CBS, IRIS, DAs and SA2 remain (§13.34); plan in docs/superpowers/plans/2026-09-22-session-8-neighbourhood-resolution.md |
+| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Built 2026-09-22 (PR `claude/neighborhood`): urban stage, resolution plan, reference scoring, two archives, Eurostat grid and England IoD 2025; Zensus, CBS, IRIS, DAs and SA2 followed (§13.35); plan in docs/superpowers/plans/2026-09-22-session-8-neighbourhood-resolution.md |
 | 10 | acceptEdits | Python + TypeScript | Point readouts: COGs on R2 for the physical layers, geotiff.js reads under a click, "what is here" panel | Planned after Session 8 (see "Finer resolution" above) |
 | 11 | acceptEdits | Python | Block hexes (res 9/10) inside urban centres, physical layers and OSM/GTFS distances, per-region archives | Planned after Session 10; needs a larger build machine |
-| 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); Session 8 (neighbourhood resolution) is still outlined only, in `docs/superpowers/plans/` on the cost/rent branch |
+| 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); review pass 2026-11-14 (§13.45) |
 
 ## 17. Acceptance criteria (v1)
 
@@ -958,7 +1167,7 @@ Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
   are unchanged. (res 4, 2026-09-22; every stage is cached by input fingerprint)
 - [x] `python -m pipeline --fixtures all` runs every implemented stage on the fixture world in
   under a minute and is exercised by CI. (Session 1, 2026-09-20)
-- [x] Every inhabited hex has `coverage` in 0 to 4, `wb_res` in {admin1, national, none}, and
+- [x] Every inhabited hex has `coverage` in 0 to 5 (five hazards since §13.47), `wb_res` in {admin1, national, none}, and
   `bivar` in 0 to 9; the §8.5 percentages are printed and recorded on `/methodology`. (tests +
   manifest `coverage_summary`, 2026-09-22)
 - [x] All four §8.5 spot checks land in plausible classes, with the reason in the manifest notes.
@@ -1038,14 +1247,14 @@ keeps the scoring and the UI uniform.
 ```yaml
 - id: jobs                 # short; ships in every tile
   name: Job market
-  group: life              # hazard | wellbeing | life
+  group: life              # hazard | wellbeing | life | env
   kind: score              # score | signed | composition
   higher_is: better        # score only: better | worse
   coverage: [global, oecd, us]
-  sources: [ilostat_youth_unemp, oecd_reg_unemp, acs_b23001]
+  sources: [ilostat_youth_unemp, oecd_regional_wellbeing, acs_summary]   # illustrative; see dimensions.yaml
   joiners:
-    - {source: acs_b23001, joiner: area_weighted_overlay, res: tract, field: unemp_16_29}
-    - {source: oecd_reg_unemp, joiner: polygon_centroid, res: admin1, field: youth_unemp}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score}
     - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: value}
 ```
 
@@ -1070,12 +1279,12 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `polygon_centroid` | hex centroid in polygon, pick a field | SHDI admin1, GSAP admin1, OECD TL2, US county, Aqueduct water stress |
 | `iso_lookup` | `iso_a2` to a national table | WHR, ILOSTAT, V-Dem |
 | `area_weighted_overlay` | small polygons to hex, weighted by overlap area x polygon population density | ACS tracts, EPA SLD block groups, school districts |
-| `point_density` | points per hex, optionally per 10k residents | transit stops |
-| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
+| `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex, `sample: auto` picks per resolution (§13.49) | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
 | `point_mean` | weighted mean of point values inside the hex (tag `hex`, or `grid` for statistical grid cells) | Ookla speed tiles at their centroids, weighted by tests; Eurostat 1 km census cells at their centres, weighted by 15-64 population |
-| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km) |
+| `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country; `per_km2` divides a sum by the area searched) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km), industrial facilities (sum, 10 km), everyday amenities (sum per km², 1 km) |
 
-All seven are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
+All six are idempotent and bbox-aware (`point_density` was removed unused, §13.45). A joiner
+whose domain belongs to one country fills only that country's hexes (§13.45). The pop stage's GHSL sums are the population weights so
 joins agree with `population`.
 
 ### 20.4 Scoring within a coverage domain
@@ -1094,23 +1303,23 @@ denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`
 
 | Preset | Emphasis |
 |---|---|
-| Early career | jobs, transit, housing cost, low exposure |
-| Raising kids | schools, low exposure, housing, healthcare |
-| Queer and looking for community | LGBTQ+ protection and presence, politics (left lean), jobs |
-| Retiring | healthcare, heat, low exposure, wellbeing |
-| Climate first | four hazards only |
+| Early career | jobs 3; transit, housing cost burden, cost of living, rent 2; city access, internet, the five hazards 1 |
+| Raising kids | schools 3; air, armed conflict, housing, healthcare 2; trees, water points, the five hazards 1 |
+| Queer and looking for community | LGBTQ+ presence 3; politics (left lean), jobs 2 |
+| Retiring | healthcare 3; travel to care, heat, humid heat, wellbeing, cost of living 2; walking to care, air, the other three hazards 1 |
+| Climate first | the five hazards, 1 each |
 
 Each life dimension in the panel shows a coverage chip (Global / OECD / US only) and greys out
 where the hovered or clicked hex has `_res = none`.
 
-### 20.6 Sources by dimension (researched 2026-09-20, status search; see §15)
+### 20.6 Sources by dimension (researched 2026-09-20; live status per source in `sources.yaml`, see §15)
 
 | id | Dimension | Global source (res) | US source (res) | License notes |
 |---|---|---|---|---|
 | jobs | Youth / early-career job market | ILOSTAT youth unemployment CC BY 4.0 (national); OECD regional labour (TL2); EU: Eurostat 2021 1 km census grid employment rate of 15-64s (`grid`, Session 8); England: IoD 2025 employment deprivation (LSOA, `area`); France: INSEE RP 2021 employment rate 15-64 (IRIS, `area`); Canada: StatCan 2021 employment rate (DA, `area`); Australia: ABS 2021 employment-to-population (SA2, `area`) | ACS B23001 age 16-29 unemployment (tract); BLS LAUS (county, all ages) | All open. ACS is public domain; pull the Summary File at build time. |
 | transit | Public transit access | Mobility Database catalog CC0 + OSM ODbL (points) - v2 | EPA Smart Location Database v3 transit frequency `D4C` and walkability (block group), public domain | OSM per-hex derivatives are a derivative database under ODbL; keep tiles-only or license that layer ODbL. Walk Score and AllTransit excluded. |
 | school | School quality | GDL SHDI education sub-index (admin1; attainment, not quality) | Urban Institute Education Data Portal ODC-BY (district); NCES CCD boundaries public domain | SEDA is best but non-transferable; ask Stanford. PISA is CC BY-NC-SA (national). GreatSchools excluded. |
-| lgbtq | LGBTQ+ protection and presence | Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B11009 same-sex couple households per 1k households (tract, PD, proxy); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
+| lgbtq | LGBTQ+ protection and presence | EU cities: Perception of quality of life in European cities 2023, share who agree the city is a good place for gay or lesbian people (`city`, about 83 cities, CC BY 4.0, §13.48); Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B09019 same-sex couples per 1k households (tract, PD, proxy; B11009 has no tract rows, §13.20); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
 | pol | Political lean (signed) | none subnational; V-Dem CC BY-SA (national) is a different construct, v2 | MIT Election Lab county presidential returns 2000-2024 (county, CC0 expected) | Cook PVI excluded. Verify MEDSL license block on the DOI. |
 | race | Racial / ethnic composition | none comparable; most countries do not collect it | ACS B03002 (tract) or 2020 DHC P2 (block), public domain | NHGIS and IPUMS excluded (no redistribution). Differential-privacy noise is negligible at hex scale. |
 | incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2); France: Filosofi 2021 poverty rate (IRIS); Netherlands: CBS low-income household share (500 m, `grid`); Canada: LIM-AT low income (DA) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |
@@ -1129,8 +1338,16 @@ where the hovered or clicked hex has `_res = none`.
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |
+| industry | Heavy industry nearby, group `env` | Climate TRACE emitting assets plus GEM operating plants not within 2 km of one, count within 10 km, CC BY 4.0 (`hex`, §13.46, §13.49) | same | - |
+| no2 | Traffic and combustion pollution, group `env` | Sentinel-5P TROPOMI NO2 column 2023 mean, 0.05° (`hex`, sample auto, §13.49) | same | Copernicus Sentinel terms |
+| amen | Everyday amenities nearby | Overture Maps places, everyday categories per km² within 1 km (`hex`, §13.49) | same | CDLA-Permissive 2.0 |
+| immig | Welcoming to immigrants (EU cities) | Perception of quality of life in European cities 2023, share who agree the city is a good place for immigrants from other countries (`city`, CC BY 4.0, §13.48) | - | a perception by residents, not immigrants' experience |
+| safe | Feeling safe at night (EU cities) | same survey, share who feel safe walking alone at night in the city (`city`, §13.48) | - | a perception, not a crime rate |
+| opp | Kids' adult income, all families | - | Opportunity Atlas `kfr_pooled_pooled_mean`, 2010 tracts crosswalked to 2020 by land area (`tract`, §13.48), terms: free with citation (check) | pooled over all parent incomes, so it partly reflects where well-off families already live |
+| opp25 | Upward mobility: kids from low-income families | - | Opportunity Atlas `kfr_pooled_pooled_p25`, same crosswalk (`tract`, §13.48) | the standard upward-mobility measure |
 | fire | Wildfire (burned area), group `env` | GFED5 burned area 2001-2020 mean, 0.25°, CC BY 4.0 (`hex`, centroid) | same | GWIS country profiles (no download) |
 | drought | Drought risk, group `env` | Aqueduct 4.0 baseline `drr_cat` 0-4 (Aqueduct 3.0 lineage), CC BY 4.0 (`basin`) | same | JRC GDO SPI-12 kept as a fallback (1°, CC BY 4.0) |
 
 Design rule from this table: three dimensions (lgbtq, pol, race) have no global answer. The UI
-greys them out outside the US instead of substituting a country-level proxy.
+greys them out where they have no sub-national value (outside the US, and for lgbtq also outside
+the surveyed EU cities, §13.48) instead of substituting a country-level proxy.

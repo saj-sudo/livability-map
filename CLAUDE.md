@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A global climate-livability map: projected climate hazard exposure (4 hazards, one scenario, 2050)
+A global climate-livability map: projected climate hazard exposure (5 hazards, one scenario, 2050)
 beside present-day wellbeing and user-weighted "life dimensions" on H3 hexes, built only from
 open-licensed data. `SPEC.md` is the source of truth; build prompts and code comments cite its
 section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, §15 verification log,
@@ -16,6 +16,8 @@ Status (2026-09-24): every stage and the map app run end to end on real data at 
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
 8, three PMTiles archives: hexes 191 MB, hexes_nbhd 264 MB, hexes_city 152 MB), with 29 dimensions
 (4 hazard, 1 wellbeing, 19 life, 5 env) incl. the Eurostat 1 km grid and England IoD 2025.
+Humid heat (`humid`, CCKP `hi35`, `verified: search`) is a fifth hazard beside dry heat, so heat
+counts twice in `exposure` and `coverage` runs 0-5 (SPEC §13.47); fixture world VERSION 16.
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
 US tract layers from FEMA NRI (`nri`) and CDC PLACES (`phealth`) are wired but `verified: search`
 until fetched first-hand (SPEC §13.38; PLACES is a manual download).
@@ -28,8 +30,16 @@ sources in `dims`, lazy per-dimension layers and array accumulators / chunked po
 gain unproven until a res-6 `dims` run on the laptop), per-dimension crash resume, the NRI cross-check
 tool (`pipeline/nri_check.py`), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
 real run after §13.44 rebuilds every stage once more.
-Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
-manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
+Review pass (2026-11-14, SPEC §13.45): single-country joiner domains stay in their country
+(`Settings.domain_countries`), prep and unzip caches keyed on what they read, tie-safe terciles,
+inhabited min-max bounds, `point_density` removed; Climate TRACE `industry` env layer (§13.46,
+manual download, `verified: search`), NO2 `no2`, Overture `amen` and GEM plants in `industry`
+(§13.49, all manual and `verified: search`); web UX honesty fixes (match vs rank labels,
+selection reducer `lib/selection.ts`, compare picking banner, a11y, plain-language /methodology).
+Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and the
+manual downloads and first-hand checks in `docs/manual-steps.md` (GDL SHDI, MEDSL county returns, HUD
+FMR workbook, CDC PLACES, Climate TRACE, the CCKP hi35 check, the NO2 Earth Engine export, the
+Overture extract, the EU cities survey + GISCO boundaries, the Opportunity Atlas; GEM optional). SPEC §13 records the
 decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
 rebuild takes ~8 hours.
 
@@ -69,7 +79,8 @@ code does.
 CLI options (`--fixtures`, `--res`, `--bbox minlng,minlat,maxlng,maxlat`, `--force`) are typer
 callback options and must precede the stage name. `--res` picks resolutions from the plan
 (default: all of them). `all` runs stages in order and stops cleanly
-at the first stage that is still planned (`pipeline/stages/PLANNED` maps stage to session).
+at the first stage that is still planned (the `PLANNED` dict in `pipeline/stages/__init__.py`
+maps stage to session; empty today).
 
 ## Environment constraint
 
@@ -150,19 +161,23 @@ EPSG:4326.
 
 **Joiners** (`pipeline/joiners/`): `polygon_centroid`, `iso_lookup`, `area_weighted_overlay`
 (population-weighted via `weight_field`, equal-area CRS 6933, `min_coverage` guard),
-`point_density`, and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
+and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
 rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
 (weighted mean of points per hex) and `point_radius` (mean or sum of points within a radius of
-the centre; `domain_by_country` ranks such values within each country). All return a Series aligned to the hexes index with NaN for
+the centre; `domain_by_country` ranks such values within each country; `per_km2` turns a sum
+into a density). `raster_mean` `sample: auto` averages where a hex covers two or more pixels and
+samples the centroid where it is smaller (§13.49). A source's `also_uses:` lists optional
+companions whose files count only when present (GEM inside Climate TRACE). All return a Series aligned to the hexes index with NaN for
 missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster sources reach it
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
 sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km
 census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside the US, England
-LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
+LSOA), `city` (a whole city's survey figure, EU QoL survey, §13.48), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 6): a 4°x4° synthetic region
-(countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`, five admin1
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 20): a 4°x4° synthetic region
+(countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`; the US-like
+stand-ins sit in XB and the UK/EU ones in XA, `make_fixtures.apply` sets both overrides, five admin1
 regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress
 inputs, tabular wellbeing, and stand-ins for every life-dimension source (GSAP, OECD TL2,
 ILOSTAT, ACS-like tracts, SLD block groups, districts, counties, BEA-like states, ICP / WDI
@@ -191,8 +206,9 @@ natural_earth_places`). Below 640px the panels live in a bottom sheet. Compositi
 failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
 `lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.41). `scripts/headers.mjs`
 writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
-with those headers and Range support for `web/e2e/` (Playwright 1.56.1, pinned to the container's
-Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go under
+with those headers and Range support for `web/e2e/` (Playwright 1.56.1; the CI `e2e` job installs
+its own browser). The cloud container's Chromium has moved on (1243 in Nov 2026), so run e2e there
+with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`. Playwright screenshots go under
 `.playwright-mcp/` (ignored).
 
 ## Rules that are easy to break
@@ -201,7 +217,9 @@ Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go und
   The one documented exception is `population` (a count) in the `pop` stage.
 - Keep tile attribute names short (they ship in every vector tile) and follow §6.1 naming:
   `{id}_raw / {id}_score / {id}_res`, `{id}_lean` for signed, `{id}_w/b/h/a/o/maj` for composition.
-- Never percentile a US-only value against the world; scoring domains are per joiner (§20.4).
+- Never percentile a US-only value against the world; scoring domains are per joiner (§20.4), and a
+  joiner whose domain is one country (`config.DOMAIN_COUNTRIES`) only fills that country's hexes
+  (§13.45). A new single-country domain needs an entry there and in `make_fixtures.DOMAIN_COUNTRIES`.
 - No paid or non-redistributable data (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo,
   SEDA without permission). SHDI is non-commercial only and the project is non-commercial (§13.13).
 - `data/raw/`, `data/interim/`, `data/out/`, `pipeline/fixtures/{data,_run}/`, `web/public/data/`

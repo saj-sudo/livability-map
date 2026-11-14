@@ -5,7 +5,7 @@
 // theme (PALETTES.light when none is given).
 
 import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
-import { weightable, type DimInfo } from "./dims";
+import { HAZARD_IDS, weightable, type DimInfo } from "./dims";
 import { PALETTES, type Palette } from "./palette";
 import type { PolPick } from "../presets";
 
@@ -45,8 +45,8 @@ export function rampFor(dim: DimInfo, pal: Palette = PALETTES.light): string[] {
 export const inhabitedFilter = (showUninhabited: boolean): FilterSpecification =>
   (showUninhabited ? ["boolean", true] : ["==", ["get", "inhabited"], true]) as unknown as FilterSpecification;
 
-/** Reduced-confidence hatch: fewer than four hazard layers (§9.3, decision §13.4). */
-export const hatchFilter = (): FilterSpecification => ["<", ["coalesce", ["get", "coverage"], 0], 4] as unknown as FilterSpecification;
+/** Reduced-confidence hatch: fewer than all hazard layers, five since §13.47 (§9.3, decision §13.4). */
+export const hatchFilter = (): FilterSpecification => ["<", ["coalesce", ["get", "coverage"], 0], HAZARD_IDS.length] as unknown as FilterSpecification;
 
 /** National-fallback wellbeing gets a dashed outline (§9.3). */
 export const nationalFilter = (): FilterSpecification => ["==", ["coalesce", ["get", "wb_res"], "none"], "national"] as unknown as FilterSpecification;

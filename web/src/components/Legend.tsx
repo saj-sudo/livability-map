@@ -1,9 +1,12 @@
+"use client";
+
 // Legend (SPEC §9.3, §10): the 3x3 bivariate grid is the piece the whole map is read against,
 // so it is drawn large, with its axes as sentences, the corner meanings spelled out and the
 // hovered hex's cell lit; single layers and the priorities composite get a ticked ramp; the
 // keys for no data, reduced confidence and national fallback follow.
 
-import type { DimInfo } from "../lib/dims";
+import { useTheme } from "./useTheme";
+import { HAZARD_IDS, shortName, type DimInfo } from "../lib/dims";
 import { rampFor } from "../lib/expressions";
 import { BIVAR_WORDS, paletteFor } from "../lib/palette";
 import type { Theme } from "../lib/theme";
@@ -63,7 +66,7 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
               <div
                 className="grid grid-cols-3 gap-[2px]"
                 role="img"
-                aria-label="Bivariate legend: rows are wellbeing terciles from low at the bottom to high at the top; columns are climate exposure terciles from low on the left to high on the right"
+                aria-label="Colour key: rows are wellbeing, from the lowest third of places at the bottom to the highest third at the top; columns are climate exposure, from the lowest third on the left to the highest third on the right"
               >
                 {GRID.flat().map((k) => (
                   <div
@@ -93,7 +96,7 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
         </div>
       )}
       {view !== "bivar" && view !== "priorities" && dim && (
-        <Ramp colors={rampFor(dim, pal)} label={`${dim.name}, percentile score`} low={dim.group === "hazard" || dim.higher_is === "worse" ? "0 least" : "0"} high={dim.group === "hazard" || dim.higher_is === "worse" ? "100 most" : "100"} />
+        <Ramp colors={rampFor(dim, pal)} label={`${dim.name}, rank among inhabited places`} low={dim.group === "hazard" || dim.higher_is === "worse" ? "0 least" : "0"} high={dim.group === "hazard" || dim.higher_is === "worse" ? "100 most" : "100"} />
       )}
       {view === "priorities" && <Ramp colors={pal.rampPriority} label="Match with your priorities" low="0 poor" high="100 best" />}
       <ul className="space-y-1 text-[11px] text-muted">
@@ -108,7 +111,7 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
               style={{ background: `repeating-linear-gradient(45deg, rgba(${pal.hatch[0]},${pal.hatch[1]},${pal.hatch[2]},0.6) 0 2px, transparent 2px 6px)` }}
               aria-hidden="true"
             />
-            fewer than 4 hazard layers, reduced confidence
+            missing some hazard data (fewer than {HAZARD_IDS.length} of {HAZARD_IDS.length} layers)
           </li>
         )}
         {(view === "bivar" || view === "wb") && (
@@ -118,6 +121,52 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
           </li>
         )}
       </ul>
+    </div>
+  );
+}
+
+/** The key in one line, for the phone sheet at its peek height (the full legend is in Layers). */
+export function CompactLegend({ view, dims, conf }: { view: ViewId; dims: DimInfo[]; conf: boolean }) {
+  const [theme] = useTheme();
+  const pal = paletteFor(theme);
+  const dim = dims.find((d) => d.id === view);
+  const worse = dim ? dim.group === "hazard" || dim.higher_is === "worse" : false;
+  return (
+    <div className="flex items-center gap-3 text-[11px] leading-tight text-muted" data-testid="compact-legend">
+      {view === "bivar" ? (
+        <>
+          <span className="grid w-[30px] shrink-0 grid-cols-3 gap-px" role="img" aria-label="Colour key: redder means more climate exposure, bluer means higher wellbeing">
+            {GRID.flat().map((k) => (
+              <i key={k} className="block aspect-square" style={{ background: pal.bivar[k] }} />
+            ))}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-ink">Redder: more climate exposure</span>
+            <span className="block text-ink">Bluer: higher wellbeing</span>
+          </span>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-ink">{view === "priorities" ? "Match with your priorities" : `${dim ? shortName(dim.name) : view}, rank among inhabited places`}</span>
+          <span className="mt-0.5 flex items-center gap-1.5">
+            <span>{view === "priorities" ? "poor" : worse ? "least" : "lowest"}</span>
+            <span className="h-2 flex-1 rounded-[2px]" style={{ background: `linear-gradient(90deg, ${(view === "priorities" ? pal.rampPriority : dim ? rampFor(dim, pal) : pal.rampHazard).join(", ")})` }} aria-hidden="true" />
+            <span>{view === "priorities" ? "best" : worse ? "most" : "highest"}</span>
+          </span>
+        </span>
+      )}
+      <span className="flex shrink-0 flex-col gap-0.5">
+        <span className="flex items-center gap-1">
+          <i className="inline-block h-2.5 w-3.5 rounded-[2px]" style={{ background: pal.grey }} aria-hidden="true" />
+          no data
+        </span>
+        {conf && (
+          <span className="flex items-center gap-1">
+            <i className="inline-block h-2.5 w-3.5 rounded-[2px]" style={{ background: `repeating-linear-gradient(45deg, rgba(${pal.hatch[0]},${pal.hatch[1]},${pal.hatch[2]},0.6) 0 2px, transparent 2px 5px)` }} aria-hidden="true" />
+            some missing
+          </span>
+        )}
+      </span>
     </div>
   );
 }

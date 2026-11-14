@@ -1030,3 +1030,103 @@
   attribution: "Water Point Data Exchange (WPdx), Global Water Challenge; data contributed by national governments and partners"
   processing: "is_duplicate rows and status Unknown dropped; has_water = status_id Yes (1) / No (0), averaged within 5 km of the hex centre (point_radius mean); missing where no point is recorded (prep/wpdx.py)"
   files: [wpdx_plus_eqje-vguj.csv]
+
+# ---------------------------------------------------------------- EU cities survey (§13.48: lgbtq EU-city joiner, immig, safe)
+- id: eu_qol_cities
+  name: Perception of quality of life in European cities, survey results by city (2023 wave)
+  group: life
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container (the container blocks ec.europa.eu):
+    1. Open the Eurostat data browser for dataset urb_percep ("Perception survey results"):
+       https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table
+       and download the full dataset as SDMX-CSV with "Codes and labels" (the loader recognises
+       the three items by their wording). Save it as data/raw/eu_qol_cities/urb_percep.csv.
+    2. Check that the 2023 wave is in it (the loader keeps only the latest year) and that the
+       three items are there: "good place to live for gay or lesbian people", "good place to live
+       for immigrants from other countries", "I feel safe walking alone at night in my city",
+       each with strongly / somewhat agree answers. If urb_percep stops before 2023, take the
+       2023 results file from the DG REGIO "Quality of life in European cities" page instead and
+       save it as a long CSV with columns city (URAU code or name), question, answer, value under
+       the same file name. If the table carries codes only, list each item's codes under
+       `items:` on this source (gay_good_pct, immig_good_pct, safe_night_pct).
+    3. Check the reuse terms (expected: Eurostat copyright notice, CC BY 4.0), set verified and
+       vintage here, add a SPEC §15 row, then: uv run python -m pipeline fetch, then
+       uv run python -m pipeline --res 5 dims --only lgbtq --only immig --only safe
+  url: https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table
+  format: csv
+  geometry: gisco_urau_cities
+  license: CC BY 4.0 (Eurostat reuse policy)
+  license_note: "From memory of the Eurostat copyright notice (Commission Decision 2011/833/EU, CC BY 4.0); not read first-hand from this container (§15)"
+  verified: search
+  vintage: VERIFY (2023 survey wave, published 2024; record the release)
+  attribution: "European Commission, Eurostat and DG REGIO, Perception of quality of life in European cities (2023 survey)"
+  processing: "share of respondents who strongly or somewhat agree (as published, the base includes don't know) for three items: good place for gay or lesbian people, good place for immigrants from other countries, feel safe walking alone at night; latest year in the table only; joined to GISCO Urban Audit city polygons on the URAU code (prep/eu_qol.py); hexes whose centroid is in a surveyed city (polygon_centroid, tag city)"
+  files: [urb_percep.csv]
+
+- id: gisco_urau_cities
+  name: GISCO Urban Audit 2021 city boundaries (URAU, cities layer)
+  group: reference
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container: on the GISCO page
+    https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit download the
+    2021 Urban Audit units, "cities" level (URAU category C), 1:1 million or finer, in EPSG:4326
+    as GeoJSON, and save it as data/raw/gisco_urau_cities/urau_cities_2021.geojson. Check that it
+    has URAU_CODE (like DE001C) and URAU_NAME columns and whether it covers the survey's UK,
+    Western Balkan and Turkish cities (cities without a polygon stay missing). Check the GISCO
+    terms (expected: free for non-commercial use with the EuroGeographics attribution).
+  url: https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit
+  format: geojson
+  crs: EPSG:4326
+  license: "GISCO / EuroGeographics terms: non-commercial reuse with attribution (the project is non-commercial, §13.13)"
+  license_note: "From memory of the GISCO copyright page ('© EuroGeographics for the administrative boundaries'); not read first-hand (§15)"
+  verified: search
+  vintage: VERIFY (Urban Audit 2021)
+  attribution: "© EuroGeographics for the administrative boundaries; Eurostat GISCO Urban Audit 2021"
+  processing: "city polygons for eu_qol_cities, matched on the URAU code stem (prep/eu_qol.py)"
+  files: [urau_cities_2021.geojson]
+
+# ---------------------------------------------------------------- Opportunity Atlas (§13.48: life opp)
+- id: opp_atlas
+  name: Opportunity Atlas, children's outcomes by census tract (Opportunity Insights)
+  group: life
+  access: manual
+  recipe: |
+    From memory, not checked from the cloud container: on https://opportunityinsights.org/data/
+    open "The Opportunity Atlas: Mapping the Childhood Roots of Social Mobility", download the
+    tract outcomes CSV (tract_outcomes_simple.csv) and save it as
+    data/raw/opp_atlas/tract_outcomes_simple.csv. It must have state, county and tract columns,
+    kfr_pooled_pooled_mean (all parents, all races and genders) and kfr_pooled_pooled_p25
+    (parents at the 25th percentile); if the simple file lacks either, use the full tract
+    outcomes file and save its CSV under the same name (the loader reads only the columns it
+    needs). Check
+    the terms on the data page (expected: free to use with citation of Chetty, Friedman,
+    Hendren, Jones and Porter 2018), set verified and vintage here, add a SPEC §15 row, then:
+    uv run python -m pipeline fetch --only opp_atlas --only census_tract_rel_2020_2010, then
+    uv run python -m pipeline --res 5 dims --only opp --only opp25
+  url: https://opportunityinsights.org/data/
+  format: csv
+  geometry: cb_tracts
+  also_needs: [census_tract_rel_2020_2010]
+  license: "Opportunity Insights data terms: free to use with citation (check the terms)"
+  license_note: "From memory; check the terms on opportunityinsights.org/data before publish (§15)"
+  verified: search
+  vintage: "Opportunity Atlas (2018 release): children born 1978-1983, adult household incomes about 2014-2015, 2010 census tracts"
+  attribution: "Chetty, R., Friedman, J., Hendren, N., Jones, M. and Porter, S. (2018) The Opportunity Atlas: Mapping the Childhood Roots of Social Mobility. Opportunity Insights"
+  processing: "kfr_pooled_pooled_mean (mean household income rank in adulthood, 0-1, children of all parent incomes, races and genders; `opp`) and kfr_pooled_pooled_p25 (the same for children whose parents were at the 25th percentile; `opp25`) on 2010 tracts, each carried to 2020 tracts by the Census 2020-2010 tract relationship file, land-area-weighted, kept where valued 2010 tracts cover half the 2020 tract's land (prep/opp_atlas.py); then into hexes by area_weighted_overlay weighted by the apportioned child count"
+  files: [tract_outcomes_simple.csv]
+
+- id: census_tract_rel_2020_2010
+  name: US Census 2020 to 2010 census tract relationship file (national)
+  group: reference
+  access: direct
+  # URL as remembered from the Census relationship-files page; confirm on first fetch (§15)
+  url: https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_natl.txt
+  format: txt-pipe
+  license: Public domain (US federal)
+  verified: search
+  vintage: "2020 census tracts to 2010 census tracts"
+  attribution: "US Census Bureau, 2020 Census Tract Relationship Files"
+  processing: "pipe-delimited overlaps (GEOID_TRACT_20, GEOID_TRACT_10, AREALAND_PART, AREAWATER_PART) used as land-area weights to carry Opportunity Atlas 2010-tract values onto 2020 tracts (prep/opp_atlas.py)"
+  files: [tab20_tract20_tract10_natl.txt]

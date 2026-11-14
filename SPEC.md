@@ -112,9 +112,10 @@ CORS). No database in the web app.
                                            - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
+                                           - EU cities: QoL perception survey on GISCO city polygons
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
                                              GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE assets;
-                                             US tracts: FEMA NRI, CDC PLACES
+                                             US tracts: FEMA NRI, CDC PLACES, Opportunity Atlas
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
@@ -134,7 +135,7 @@ CORS). No database in the web app.
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
   |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
   |            fill only their own country's hexes (§13.45)                                               |
-  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
+  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|city|national|none)        |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
@@ -840,6 +841,54 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       file layout, column names and subsector names are from memory, and the loader stops with
       the columns it found when they differ. Fixture world VERSION 15 adds six stand-in facilities.
 
+48. **EU cities survey and the Opportunity Atlas** (Saj, 2026-11-14): two open sources, both
+    `access: manual` and `verified: search` (layouts, column names, codes, URLs and licences are
+    from memory; the container cannot reach the hosts, and every loader stops with the columns it
+    found when they differ).
+    - *Perception of quality of life in European cities* (2023 wave, about 83 cities in the EU,
+      EFTA, UK, Western Balkans and Türkiye; Eurostat `urb_percep` or the DG REGIO results file,
+      Eurostat reuse policy, CC BY 4.0 expected). Saj chose three items: "good place for gay or
+      lesbian people" becomes a second `lgbtq` joiner after ACS (the first non-US signal),
+      "good place for immigrants from other countries" a new life dimension `immig`, and "I feel
+      safe walking alone at night" a new life dimension `safe`; all higher = better. Value: the
+      share who strongly or somewhat agree, as published (the base includes "don't know"); a
+      published "agree (total)" row wins over summing its parts; only the latest year in the
+      table is kept, so every value comes from one wave. US `lgbtq` is a presence proxy and EU
+      `lgbtq` a perception of acceptance: different constructs, labelled, ranked separately.
+    - *City polygons:* GISCO Urban Audit 2021 cities (`gisco_urau_cities`, URAU codes like
+      `DE001C`; GISCO / EuroGeographics terms allow non-commercial reuse with attribution, which
+      fits §13.13). One prep loader (`prep/eu_qol.py`) builds one layer, city polygons with the
+      three item columns, matched on the URAU code stem, else on the normalised name; a surveyed
+      city without a polygon is printed and stays missing. Joiner `polygon_centroid` (hex
+      centroid inside the city).
+    - *New resolution tag `city`:* a whole city's survey figure, coarser than `area`, finer than
+      `admin1` (`config.RES_TAGS`, web `RES_LABELS` "city survey"). Outside surveyed cities the
+      three layers stay missing (`_res = none`), never 0.
+    - *Scoring domain `eucities`:* one multi-country domain, so it is not in
+      `config.DOMAIN_COUNTRIES`; the web chip reads "EU cities" (`lgbtq`: "US / EU cities").
+    - *Opportunity Atlas* (Opportunity Insights, tract outcomes, children born 1978-1983, adult
+      household incomes around 2014-2015; terms from memory: free with citation, to be checked).
+      Saj chose both measures as two life dimensions: `opp` ("Kids' adult income, all
+      families", `kfr_pooled_pooled_mean`, pooled over all parent incomes, so it partly reflects
+      where well-off families already live, not only upward mobility) and `opp25` ("Upward
+      mobility: kids from low-income families", `kfr_pooled_pooled_p25`, the standard
+      upward-mobility measure). Both higher = better, domain `us` (so the §13.45 country filter
+      applies), tag `tract`, `area_weighted_overlay` onto `cb_tracts` like PLACES. NHGIS / IPUMS
+      crosswalks stay excluded.
+    - *2010 -> 2020 tracts:* the Atlas is on 2010 tracts and `cb_tracts` on 2020 tracts. The
+      Census 2020-to-2010 tract relationship file (public domain, pipe-delimited,
+      `census_tract_rel_2020_2010`) carries each measure across as a **land-area-weighted** mean
+      (`AREALAND_PART`; the file has no population; water-only tracts use total area). A 2020
+      tract keeps a measure only where 2010 tracts with that value cover at least half its land;
+      suppressed values stay missing. Hexes weight tracts by the Atlas child count apportioned by
+      land share, or by land area when the file has no count column. Connecticut's tract ids
+      probably changed with its 2022 planning regions, so its tracts may not join (check on the
+      first real run).
+    - Manual downloads: `docs/manual-steps.md` items 16 (EU survey + GISCO) and 17 (Atlas).
+      Fixture world VERSION 17: three city polygons in XKA (Birch lacks the immigrants item),
+      2010-like tracts each split across two XKB tracts, and a relationship-file stand-in; the
+      fixture tracts carry values computed by the real crosswalk.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -917,6 +966,10 @@ the live status per source.
 | 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 | 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
 | 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
+| 2026-11-14 | Perception of quality of life in European cities, 2023 (§13.48) | search. From memory, not read here (the container blocks ec.europa.eu): Eurostat dataset `urb_percep` (SDMX-CSV with labels or bulk TSV) or the DG REGIO 2023 results file; items "good place for gay or lesbian people", "good place for immigrants from other countries", "I feel safe walking alone at night", answers strongly / somewhat agree; city codes like `DE001C`; Eurostat reuse policy CC BY 4.0. Confirm the 2023 wave is in the table, the item wording or codes, and the licence. | https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table |
+| 2026-11-14 | GISCO Urban Audit 2021 city boundaries (§13.48) | search. From memory: cities layer with `URAU_CODE` and `URAU_NAME`, GeoJSON in EPSG:4326; GISCO / EuroGeographics terms: non-commercial reuse with attribution. Confirm the file, the columns, and whether the UK, Western Balkan and Turkish survey cities have polygons. | https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit |
+| 2026-11-14 | Opportunity Atlas tract outcomes (§13.48) | search. From memory: `tract_outcomes_simple.csv` with `state`, `county`, `tract`, `kfr_pooled_pooled_mean` (`opp`) and `kfr_pooled_pooled_p25` (`opp25`), 0-1 ranks, 2010 tracts, children born 1978-1983; terms free with citation (check). Confirm the file name, both columns, a child count column if any, and the terms. | https://opportunityinsights.org/data/ |
+| 2026-11-14 | Census 2020-to-2010 tract relationship file (§13.48) | search. URL and columns (`GEOID_TRACT_20`, `GEOID_TRACT_10`, `AREALAND_PART`, `AREAWATER_PART`, pipe-delimited) from memory; public domain. Confirm on first fetch. | https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_natl.txt |
 | 2026-11-14 | Climate TRACE assets (§13.46) | search. From memory, not read here (the container blocks climatetrace.org): per-sector zips on climatetrace.org/data with `*emissions_sources*.csv` (source_id, subsector, lat, lon, gas, emissions_quantity), CC BY 4.0. Confirm the licence, file and column names and the subsector list on the laptop. | https://climatetrace.org/data |
 
 ## 16. Phasing and session plan
@@ -927,7 +980,7 @@ scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US lif
 bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
-**v2.** Candidate new sources (FEMA NRI and CDC PLACES now wired, §13.38; Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; (place search and compare-two-places
+**v2.** Candidate new sources (FEMA NRI and CDC PLACES now wired, §13.38; the EU cities survey and the Opportunity Atlas wired, §13.48; Overture amenities, Climate TRACE / GEM facilities, NO2) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; (place search and compare-two-places
 shipped in Session 9); population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
 permissions land; projected drought (JRC GDO) and wildfire (GWIS) (present-day `drought` and `fire`
 already ship as env layers); GEM seismic as labeled non-climate;
@@ -1012,6 +1065,8 @@ From the 2026-11-14 review pass (§13.45):
 - [x] Climate TRACE facility proximity (`industry`, §13.46); first-hand check is manual-steps item 15.
 - [ ] Global Energy Monitor trackers as a second `industry` joiner (smaller coal plants), and an
   environmental-justice preset (PM2.5, `industry`, read against `wealth` / `incmix`).
+- [x] EU cities survey (`lgbtq` EU-city joiner, `immig`, `safe`, tag `city`) and Opportunity Atlas
+  (`opp`, `opp25`, 2010 -> 2020 tract crosswalk), §13.48; first-hand checks are manual-steps items 16 and 17.
 - [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
   stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
 - [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
@@ -1193,7 +1248,7 @@ where the hovered or clicked hex has `_res = none`.
 | jobs | Youth / early-career job market | ILOSTAT youth unemployment CC BY 4.0 (national); OECD regional labour (TL2); EU: Eurostat 2021 1 km census grid employment rate of 15-64s (`grid`, Session 8); England: IoD 2025 employment deprivation (LSOA, `area`); France: INSEE RP 2021 employment rate 15-64 (IRIS, `area`); Canada: StatCan 2021 employment rate (DA, `area`); Australia: ABS 2021 employment-to-population (SA2, `area`) | ACS B23001 age 16-29 unemployment (tract); BLS LAUS (county, all ages) | All open. ACS is public domain; pull the Summary File at build time. |
 | transit | Public transit access | Mobility Database catalog CC0 + OSM ODbL (points) - v2 | EPA Smart Location Database v3 transit frequency `D4C` and walkability (block group), public domain | OSM per-hex derivatives are a derivative database under ODbL; keep tiles-only or license that layer ODbL. Walk Score and AllTransit excluded. |
 | school | School quality | GDL SHDI education sub-index (admin1; attainment, not quality) | Urban Institute Education Data Portal ODC-BY (district); NCES CCD boundaries public domain | SEDA is best but non-transferable; ask Stanford. PISA is CC BY-NC-SA (national). GreatSchools excluded. |
-| lgbtq | LGBTQ+ protection and presence | Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B09019 same-sex couples per 1k households (tract, PD, proxy; B11009 has no tract rows, §13.20); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
+| lgbtq | LGBTQ+ protection and presence | EU cities: Perception of quality of life in European cities 2023, share who agree the city is a good place for gay or lesbian people (`city`, about 83 cities, CC BY 4.0, §13.48); Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B09019 same-sex couples per 1k households (tract, PD, proxy; B11009 has no tract rows, §13.20); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
 | pol | Political lean (signed) | none subnational; V-Dem CC BY-SA (national) is a different construct, v2 | MIT Election Lab county presidential returns 2000-2024 (county, CC0 expected) | Cook PVI excluded. Verify MEDSL license block on the DOI. |
 | race | Racial / ethnic composition | none comparable; most countries do not collect it | ACS B03002 (tract) or 2020 DHC P2 (block), public domain | NHGIS and IPUMS excluded (no redistribution). Differential-privacy noise is negligible at hex scale. |
 | incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2); France: Filosofi 2021 poverty rate (IRIS); Netherlands: CBS low-income household share (500 m, `grid`); Canada: LIM-AT low income (DA) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |
@@ -1212,9 +1267,14 @@ where the hovered or clicked hex has `_res = none`.
 | net | Internet speed | Ookla Open Data 2026 Q2 fixed, then mobile, CC BY-NC-SA 4.0 (`hex`) | same | - |
 | air | Air quality (PM2.5), group `env` | WashU ACAG SatPM2.5 V6.GL.03 2024, 0.01°, CC BY 4.0 (`hex`) | same | - |
 | trees | Tree cover, group `env` | Copernicus Global Land Cover 100 m tree-cover fraction 2019, CC BY 4.0 (`hex`, block-averaged to 1 km) | same | ESA WorldCover 10 m (too large for the laptop) |
+| immig | Welcoming to immigrants (EU cities) | Perception of quality of life in European cities 2023, share who agree the city is a good place for immigrants from other countries (`city`, CC BY 4.0, §13.48) | - | a perception by residents, not immigrants' experience |
+| safe | Feeling safe at night (EU cities) | same survey, share who feel safe walking alone at night in the city (`city`, §13.48) | - | a perception, not a crime rate |
+| opp | Kids' adult income, all families | - | Opportunity Atlas `kfr_pooled_pooled_mean`, 2010 tracts crosswalked to 2020 by land area (`tract`, §13.48), terms: free with citation (check) | pooled over all parent incomes, so it partly reflects where well-off families already live |
+| opp25 | Upward mobility: kids from low-income families | - | Opportunity Atlas `kfr_pooled_pooled_p25`, same crosswalk (`tract`, §13.48) | the standard upward-mobility measure |
 | industry | Heavy industry nearby, group `env` | Climate TRACE emitting assets, count within 10 km, CC BY 4.0 (`hex`, §13.46) | same | GEM trackers later |
 | fire | Wildfire (burned area), group `env` | GFED5 burned area 2001-2020 mean, 0.25°, CC BY 4.0 (`hex`, centroid) | same | GWIS country profiles (no download) |
 | drought | Drought risk, group `env` | Aqueduct 4.0 baseline `drr_cat` 0-4 (Aqueduct 3.0 lineage), CC BY 4.0 (`basin`) | same | JRC GDO SPI-12 kept as a fallback (1°, CC BY 4.0) |
 
 Design rule from this table: three dimensions (lgbtq, pol, race) have no global answer. The UI
-greys them out outside the US instead of substituting a country-level proxy.
+greys them out where they have no sub-national value (outside the US, and for lgbtq also outside
+the surveyed EU cities, §13.48) instead of substituting a country-level proxy.

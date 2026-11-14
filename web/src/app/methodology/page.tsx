@@ -14,7 +14,7 @@ import { BIVAR_WORDS } from "../../lib/palette";
 export const metadata = { title: "Methodology — livability-map" };
 
 const pct = (share: unknown) => (typeof share === "number" ? `${(100 * share).toFixed(1)}%` : "n/a");
-const TAG_ORDER = ["hex", "grid", "basin", "tract", "area", "county", "admin1", "national", "none"];
+const TAG_ORDER = ["hex", "grid", "basin", "tract", "area", "city", "county", "admin1", "national", "none"];
 const REPO = "https://github.com/saj-sudo/livability-map";
 
 /** "hexagons of about 1,770 km²" for a resolution number. */

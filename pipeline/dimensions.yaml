@@ -104,15 +104,16 @@
   note: "EDFacts adjusted-cohort graduation rate (all students, 2019) by school district, tagged county (a district is closer to county than tract scale); attainment/outcome, not school quality. SEDA excluded (non-transferable)"
 
 - id: lgbtq
-  name: LGBTQ+ presence (same-sex couple households)
+  name: LGBTQ+ presence and acceptance (US couples, EU city survey)
   group: life
   kind: score
   higher_is: better
-  coverage: [us]
-  sources: [acs_summary, cb_tracts]
+  coverage: [us, eucities]
+  sources: [acs_summary, cb_tracts, eu_qol_cities, gisco_urau_cities]
   joiners:
     - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: ss_couples_per_1k, weight_field: households, domain: us, label: acs, unit: "same-sex couples per 1,000 households", decimals: 1}
-  note: "proxy: same-sex spouses + same-sex unmarried partners (ACS B09019, SPEC §13.20) per 1,000 households; state policy tallies (MAP) added once permission is granted"
+    - {source: eu_qol_cities, joiner: polygon_centroid, res: city, field: gay_good_pct, domain: eucities, label: euqol, unit: "% of residents who say the city is a good place for gay or lesbian people", decimals: 0}
+  note: "US: a presence proxy, same-sex spouses + same-sex unmarried partners (ACS B09019, SPEC §13.20) per 1,000 households, by tract. EU cities (about 83 cities in the EU, EFTA, UK, Western Balkans and Türkiye): a perception, the share of residents who strongly or somewhat agree their city is a good place for gay or lesbian people (2023 survey, one value for the whole city, SPEC §13.48). Different constructs, labeled and ranked separately; missing outside US tracts and surveyed cities. State policy tallies (MAP) added once permission is granted"
 
 - id: pol
   name: Political lean
@@ -363,3 +364,48 @@
   joiners:
     - {source: climate_trace_assets, joiner: point_radius, res: hex, field: one, radius_km: 10, agg: sum, domain: global, label: ctrace, unit: "large industrial facilities within 10 km", decimals: 0}
   note: "Large industrial facilities within 10 km (Climate TRACE assets: power plants, refineries, coal mines, steel, cement, chemicals, aluminium, pulp and paper, landfills), counted, not weighted by CO2e, because tons of greenhouse gas measure climate impact rather than local harm. Climate TRACE models large emitters, so small plants and some countries are under-represented: 0 means none recorded nearby, not none. On the coarsest, zoomed-out hexagons the radius is the hexagon size (about 23 km), never smaller. Present-day environment: never part of the 2050 exposure score"
+
+# ---- EU cities perception survey and the Opportunity Atlas (added 2026-11-14, SPEC §13.48) ----
+- id: immig
+  name: Welcoming to immigrants (EU cities)
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [eucities]
+  sources: [eu_qol_cities, gisco_urau_cities]
+  joiners:
+    - {source: eu_qol_cities, joiner: polygon_centroid, res: city, field: immig_good_pct, domain: eucities, label: euqol, unit: "% of residents who say the city is a good place for immigrants from other countries", decimals: 0}
+  note: "Share of residents who strongly or somewhat agree their city is a good place to live for immigrants from other countries (Perception of quality of life in European cities, 2023 survey, about 83 cities). What residents think, not what immigrants experience; one value for the whole city, missing outside surveyed cities"
+
+- id: safe
+  name: Feeling safe at night (EU cities)
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [eucities]
+  sources: [eu_qol_cities, gisco_urau_cities]
+  joiners:
+    - {source: eu_qol_cities, joiner: polygon_centroid, res: city, field: safe_night_pct, domain: eucities, label: euqol, unit: "% of residents who feel safe walking alone at night in the city", decimals: 0}
+  note: "Share of residents who strongly or somewhat agree that they feel safe walking alone at night in their city (Perception of quality of life in European cities, 2023 survey, about 83 cities). A perception, not a crime rate; one value for the whole city, missing outside surveyed cities"
+
+- id: opp
+  name: Kids' adult income, all families (US)
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [us]
+  sources: [opp_atlas, census_tract_rel_2020_2010, cb_tracts]
+  joiners:
+    - {source: opp_atlas, joiner: area_weighted_overlay, res: tract, field: kfr_pooled, weight_field: children, domain: us, label: atlas, unit: "income percentile in adulthood of children who grew up here (0-100)", multiply: 100, decimals: 0}
+  note: "Opportunity Atlas (Opportunity Insights): mean household income rank in adulthood (national percentile within the birth cohort) of children who grew up in the tract, children born 1978-1983, adult incomes around 2014-2015, all races and genders. Pooled over all parent incomes, so it partly reflects where well-off families already live, not only upward mobility. Published on 2010 tracts; carried to 2020 tracts by land area through the Census tract relationship file"
+
+- id: opp25
+  name: "Upward mobility: kids from low-income families (US)"
+  group: life
+  kind: score
+  higher_is: better
+  coverage: [us]
+  sources: [opp_atlas, census_tract_rel_2020_2010, cb_tracts]
+  joiners:
+    - {source: opp_atlas, joiner: area_weighted_overlay, res: tract, field: kfr_p25, weight_field: children, domain: us, label: atlas, unit: "mean adult income rank (0-100) of kids whose parents were at the 25th percentile", multiply: 100, decimals: 0}
+  note: "The standard upward-mobility measure: how children from low-income families in this tract did as adults (Opportunity Atlas, Opportunity Insights: predicted household income rank in adulthood of children whose parents were at the 25th income percentile, all races and genders). Children born 1978-1983, adult incomes around 2014-2015. Published on 2010 tracts; carried to 2020 tracts by land area through the Census tract relationship file"

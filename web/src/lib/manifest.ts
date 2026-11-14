@@ -3,7 +3,7 @@
 // and the dimension registry the panel renders.
 
 // hex = computed per hex from a raster or point set; basin = Aqueduct sub-basin at the centroid
-export type ResTag = "hex" | "grid" | "basin" | "admin1" | "county" | "tract" | "area" | "national" | "none";
+export type ResTag = "hex" | "grid" | "basin" | "admin1" | "county" | "tract" | "area" | "city" | "national" | "none";
 export type DimKind = "score" | "signed" | "composition";
 // env = present-day environment (air, trees, fire, drought): shown beside the 2050 hazards but
 // never part of exposure / coverage (SPEC §13.28)

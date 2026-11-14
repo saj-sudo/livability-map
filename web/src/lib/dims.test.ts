@@ -46,7 +46,9 @@ describe("dimension registry from the manifest", () => {
     expect(DIM_ORDER.slice(14, 16)).toEqual(["cost", "rent"]);
     expect(DIM_ORDER.slice(16, 22)).toEqual(["care", "air", "trees", "net", "fire", "drought"]);
     expect(DIM_ORDER.slice(22, 27)).toEqual(["city", "wealth", "conflict", "walkcare", "water"]);
-    expect(DIM_ORDER.slice(27)).toEqual(["nri", "phealth", "industry"]);
+    expect(DIM_ORDER.slice(27, 30)).toEqual(["nri", "phealth", "industry"]);
+    // EU cities survey and the Opportunity Atlas (§13.48) are the last four slots
+    expect(DIM_ORDER.slice(-4)).toEqual(["immig", "safe", "opp", "opp25"]);
     expect(new Set(DIM_ORDER).size).toBe(DIM_ORDER.length);
   });
 
@@ -97,6 +99,24 @@ describe("dimension registry from the manifest", () => {
   it("labels the country domains added after Session 8", () => {
     const d = dim("rent", { domains: { "7": { us: 3, de: 4, nl: 2, fr: 1, ca: 1, au: 1 } } });
     expect(chipFor(d)).toBe("US / Germany / Netherlands / France / Canada / Australia");
+  });
+
+  it("labels the EU cities survey domain and its `city` tag (§13.48)", () => {
+    const lgbtq = dim("lgbtq", {
+      domains: { "5": { us: 900, eucities: 40 } },
+      joiners: [
+        { source: "acs_summary", joiner: "area_weighted_overlay", res: "tract", field: "ss_couples_per_1k", domain: "us", label: "acs", unit: "same-sex couples per 1,000 households", multiply: 1, decimals: 1 },
+        { source: "eu_qol_cities", joiner: "polygon_centroid", res: "city", field: "gay_good_pct", domain: "eucities", label: "euqol", unit: "% of residents who say the city is a good place for gay or lesbian people", multiply: 1, decimals: 0 },
+      ] as never,
+    });
+    expect(chipFor(lgbtq)).toBe("US / EU cities");
+    expect(unitsFrom(lgbtq).city.unit).toContain("gay or lesbian");
+    expect(chipFor(dim("safe", { domains: { "5": { eucities: 40 } } }))).toBe("EU cities");
+    expect(resLabel("city")).toBe("city survey");
+    const fallback = dimensionsFrom(EMPTY_MANIFEST);
+    expect(fallback.find((d) => d.id === "lgbtq")!.chip).toBe("US / EU cities");
+    expect(fallback.find((d) => d.id === "immig")!.chip).toBe("EU cities");
+    expect(fallback.filter((d) => d.id.startsWith("opp")).map((d) => [d.chip, d.higher_is])).toEqual([["US only", "better"], ["US only", "better"]]);
   });
 
   it("reads per-country domains (country:TZ) as one 'within country' chip", () => {

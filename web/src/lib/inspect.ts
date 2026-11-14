@@ -42,7 +42,7 @@ export interface LifeRow {
   kind: DimInfo["kind"];
   value: string | null; // formatted value, null = no data here
   score: number | null;
-  res: string; // admin1 | county | tract | national | none
+  res: string; // a resolution tag: hex | grid | basin | tract | area | city | county | admin1 | national | none
   chip: string;
   /** the dimension's direction: a high score is bad news when more of it is worse */
   higherIs: DimInfo["higher_is"];

@@ -33,8 +33,9 @@ Review pass (2026-11-14, SPEC §13.45): single-country joiner domains stay in th
 inhabited min-max bounds, `point_density` removed; Climate TRACE `industry` env layer (§13.46,
 manual download, `verified: search`); web UX honesty fixes (match vs rank labels,
 selection reducer `lib/selection.ts`, compare picking banner, a11y, plain-language /methodology).
-Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and five
-manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook, CDC PLACES, Climate TRACE). SPEC §13 records the
+Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and seven
+manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook, CDC PLACES, Climate TRACE, EU cities
+survey + GISCO city boundaries, Opportunity Atlas; §13.48). SPEC §13 records the
 decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
 rebuild takes ~8 hours.
 
@@ -164,10 +165,10 @@ missing, never 0. The `dims` stage drives them from `dimensions.yaml`; raster so
 through `prep.load_raster` (`RASTER_LOADERS` in `prep/__init__.py` build NetCDF / multi-file
 sources into one GeoTIFF under `interim/prep/`). Resolution tags: `hex`, `grid` (Eurostat 1 km
 census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside the US, England
-LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
+LSOA), `city` (a whole city's survey figure, EU QoL survey, §13.48), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 15): a 4°x4° synthetic region
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 17): a 4°x4° synthetic region
 (countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`; the US-like
 stand-ins sit in XB and the UK/EU ones in XA, `make_fixtures.apply` sets both overrides, five admin1
 regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress

@@ -11,7 +11,7 @@ export interface DimInfo {
   group: DimGroup;
   kind: DimKind;
   higher_is: "better" | "worse";
-  /** coverage chip text: Global / OECD / US only */
+  /** coverage chip text: Global / OECD / US only / EU cities */
   chip: string;
   note: string;
   scale: "percentile" | "minmax";
@@ -38,7 +38,7 @@ export function unitsFrom(d: Pick<ManifestDimension, "joiners" | "unit" | "multi
 }
 
 export const HAZARD_IDS = ["heat", "rflood", "cflood", "wstress"] as const;
-export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry"] as const;
+export const DIM_ORDER = ["heat", "rflood", "cflood", "wstress", "wb", "jobs", "transit", "school", "lgbtq", "pol", "race", "incmix", "house", "health", "cost", "rent", "care", "air", "trees", "net", "fire", "drought", "city", "wealth", "conflict", "walkcare", "water", "nri", "phealth", "industry", "immig", "safe", "opp", "opp25"] as const;
 
 export const HAZARD_RAW: Record<string, { attr: string; unit: string; label: string }> = {
   heat: { attr: "heat_days", unit: "days/yr", label: "days above 35 °C" },
@@ -59,7 +59,7 @@ const FALLBACK: DimInfo[] = [
   F("jobs", "Early-career job market", "life", "score", "better", "Global / OECD / US"),
   F("transit", "Public transit access", "life", "score", "better", "US only"),
   F("school", "Schools", "life", "score", "better", "US only"),
-  F("lgbtq", "LGBTQ+ presence", "life", "score", "better", "US only"),
+  F("lgbtq", "LGBTQ+ presence and acceptance", "life", "score", "better", "US / EU cities"),
   F("pol", "Political lean", "life", "signed", "better", "US only"),
   F("race", "Racial and ethnic composition", "life", "composition", "better", "US only"),
   F("incmix", "Income mix", "life", "score", "better", "Global / US"),
@@ -84,6 +84,11 @@ const FALLBACK: DimInfo[] = [
   F("nri", "Natural hazard losses today (US)", "env", "score", "worse", "US only"),
   F("phealth", "Adults in fair or poor health (US)", "life", "score", "worse", "US only"),
   F("industry", "Heavy industry nearby", "env", "score", "worse", "Global"),
+  // EU cities perception survey and the Opportunity Atlas (2026-11, SPEC §13.48)
+  F("immig", "Welcoming to immigrants (EU cities)", "life", "score", "better", "EU cities"),
+  F("safe", "Feeling safe at night (EU cities)", "life", "score", "better", "EU cities"),
+  F("opp", "Kids' adult income, all families (US)", "life", "score", "better", "US only"),
+  F("opp25", "Upward mobility: kids from low-income families (US)", "life", "score", "better", "US only"),
 ];
 
 /** Composition dimensions (racial and ethnic composition) are context in the place panel, never
@@ -93,10 +98,10 @@ export const weightable = (d: Pick<DimInfo, "kind">): boolean => d.kind !== "com
 export const CONTEXT_ONLY_IDS: ReadonlySet<string> = new Set(FALLBACK.filter((d) => !weightable(d)).map((d) => d.id));
 
 // scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country
-const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia", country: "Within country" };
+const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", eucities: "EU cities", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia", country: "Within country" };
 /** A scoring domain (§20.4) in words; "country:TZ" style per-country domains read "within country". */
 export const domainLabel = (k: string): string => CHIP[k.split(":")[0]] ?? k;
-const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk", "de", "nl", "fr", "ca", "au", "country"];
+const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "eucities", "uk", "de", "nl", "fr", "ca", "au", "country"];
 
 /**
  * Coverage chip. The manifest overwrites a dimension's `coverage` list with per-resolution
@@ -164,6 +169,7 @@ export const RES_LABELS: Record<string, string> = {
   basin: "river basin",
   tract: "census tract",
   area: "small-area figure",
+  city: "city survey",
   county: "county figure",
   admin1: "regional figure",
   national: "national figure",

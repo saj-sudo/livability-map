@@ -66,6 +66,9 @@ LOADERS: dict[str, str] = {
     "wpdx_water_points": "pipeline.prep.wpdx:load",
     # heavy industry nearby (SPEC §13.46)
     "climate_trace_assets": "pipeline.prep.climate_trace:load",
+    # EU cities perception survey and the Opportunity Atlas (SPEC §13.48)
+    "eu_qol_cities": "pipeline.prep.eu_qol:load",
+    "opp_atlas": "pipeline.prep.opp_atlas:load",
 }
 
 # raster sources that must be rebuilt into one EPSG:4326 GeoTIFF before `raster_mean` can read

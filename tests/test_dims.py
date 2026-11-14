@@ -76,9 +76,10 @@ def test_us_life_dims_on_fixtures(settings):
     shares = [cedar[f"race_{k}"] for k in ("w", "b", "h", "a", "o")]
     assert sum(shares) == 100 and cedar["race_maj"] in {"w", "b", "h", "a", "o"} and cedar["race_res"] == "tract"
     assert cedar["health_res"] == "county" and cedar["health_raw"] == 35.0
-    alder = df.loc[_cell(43.0, 11.0)]  # XKA: no US-only dimension
-    for dim in ("transit", "school", "lgbtq", "pol", "race"):
+    alder = df.loc[_cell(43.0, 11.0)]  # XKA: no US-only dimension; lgbtq comes from the EU city survey there (§13.48)
+    for dim in ("transit", "school", "pol", "race"):
         assert alder[f"{dim}_res"] == "none", dim
+    assert alder["lgbtq_res"] == "city" and alder["lgbtq_dom"] == "eucities"
     assert pd.isna(alder["pol_lean"]) and alder["race_maj"] == "none" and pd.isna(alder["race_w"])
     # SLD stand-in stops at lng 12.6: XKB hexes west of it have no transit value, never 0
     west = df[(df["iso_a2"] == "XB") & (df["lng"] < 12.3)]

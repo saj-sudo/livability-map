@@ -9,7 +9,7 @@ const WSTRESS_LABELS: Record<number, string> = { [-1]: "arid and low water use (
 
 export function formatHazardRaw(id: string, v: number | null): string | null {
   if (v === null) return null;
-  if (id === "heat") return `${Math.round(v)} days/yr`;
+  if (id === "heat" || id === "humid") return `${Math.round(v)} days/yr`;
   if (id === "rflood" || id === "cflood") return `${(100 * v).toFixed(1)}% of area`;
   if (id === "wstress") return WSTRESS_LABELS[v] ?? String(v);
   return formatNumber(v);

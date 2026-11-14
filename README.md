@@ -1,7 +1,8 @@
 # livability-map
 
-A free, global, explorable map that puts **projected climate hazard exposure** (heat, riverine
-flood, coastal flood, water stress; one moderate scenario, 2050) beside **present-day wellbeing**
+A free, global, explorable map that puts **projected climate hazard exposure** (five hazards:
+dry heat, humid heat, riverine flood, coastal flood, water stress; one moderate scenario, 2050;
+heat counts twice in the combined exposure, SPEC §13.47) beside **present-day wellbeing**
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
 presence, political lean, income mix, housing cost burden, healthcare, cost
 of living, rent, travel time to healthcare and to a city, walking time to healthcare, internet
@@ -26,9 +27,10 @@ e2e) and hardening are done (SPEC §13.39-45). The map is not deployed yet: publ
 Pages needs credentials in `.env` (see [`docs/manual-steps.md`](docs/manual-steps.md)).
 
 The current build has H3 res 4 and 5 on all land, res 6 across the US, EU, UK, EFTA and urban
-clusters, and res 7 inside urban centres, with 30 dimensions (4 hazards, wellbeing, 19 life
+clusters, and res 7 inside urban centres, with 31 dimensions (5 hazards, wellbeing, 19 life
 dimensions, 6 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
-`hexes_city` 152 MB; the 30th dimension, heavy industry nearby, was added after that build). Five
+`hexes_city` 152 MB; heavy industry nearby and humid heat, the fifth hazard, were added after that
+build, and humid heat still needs its first-hand source check, `docs/manual-steps.md` item 16). Five
 inputs wait on a manual download, and until they arrive these layers
 are empty or coarser than designed:
 
@@ -59,10 +61,10 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
 
   HAZARD (raster / vector)                 WELLBEING + LIFE DIMENSIONS (tabular + polygons)   REFERENCE
   - WB CCKP CMIP6 hd35: hot days > 35C     - Global Data Lab Subnational HDI (admin1)         - geoBoundaries CGAZ admin0 + admin1
-  - WRI Aqueduct Floods riverine 1-in-100  - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
-  - WRI Aqueduct Floods coastal 1-in-100   - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
-  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
-                                           - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
+  - WB CCKP CMIP6 hi35: heat index > 35C   - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
+  - WRI Aqueduct Floods riverine 1-in-100  - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
+  - WRI Aqueduct Floods coastal 1-in-100   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
+  - WRI Aqueduct 4.0 future water stress   - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
@@ -88,7 +90,8 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
   |            fill only their own country's hexes (§13.45)                                               |
   |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
-  |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
+  |  score     exposure = mean(available hazard scores), coverage = count(*_ok) 0-5,                      |
+  |            dry and humid heat are separate hazards, so heat counts twice (§13.47)                     |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |

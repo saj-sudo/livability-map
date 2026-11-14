@@ -4,8 +4,8 @@ NRI"), for the first real build with `nri` on the map (§13.38).
     uv run python -m pipeline.nri_check [--fixtures] [--res 5]
 
 For every inhabited hex that has an NRI tract value, it correlates (Spearman, rank based like the
-scores) the riverine, coastal and heat scores with the NRI building loss rate for the same hazard
-and with the all-hazard rate, overall and by state, and prints a markdown table to paste into
+scores) the riverine, coastal, heat and humid-heat scores with the NRI building loss rate for the
+same hazard (both heat scores against NRI's heat-wave rate) and with the all-hazard rate, overall and by state, and prints a markdown table to paste into
 SPEC §15 beside the §8.5 spot checks.
 
 The constructs differ (present-day loss vs 2050 exposure), so this looks for sign errors and gross
@@ -35,6 +35,7 @@ HAZARDS = [
     ("rflood_score", "riverine flood", "rflood_per_1k"),
     ("cflood_score", "coastal flood", "cflood_per_1k"),
     ("heat_score", "heat", "heat_per_1k"),
+    ("humid_score", "humid heat", "heat_per_1k"),  # NRI has one heat-wave rate for both (§13.47)
 ]
 ALL_HAZARD = "loss_per_1k"
 WEAK = 0.10  # |rho| under this reads as "no relationship"
@@ -129,9 +130,10 @@ def run(settings: Settings, res: int) -> list[Row]:
     if paired.empty:
         raise FileNotFoundError(f"no inhabited hex at res {res} has an NRI tract value (is the `fema_nri` layer prepared and covering the area?)")
     paired["loss_per_1k"] = paired["nri_raw"].astype("float64")
-    extra = rates_on_hexes(settings, paired, res, [rate for _, _, rate in HAZARDS])
+    rates = list(dict.fromkeys(rate for _, _, rate in HAZARDS))  # heat and humid heat share one
+    extra = rates_on_hexes(settings, paired, res, rates)
     paired = pd.concat([paired, extra], axis=1)
-    missing = [rate for _, _, rate in HAZARDS if rate not in paired.columns]
+    missing = [rate for rate in rates if rate not in paired.columns]
     if missing:
         print(f"nri_check: the prepared NRI layer has no {', '.join(missing)}; only the all-hazard rate is compared for those hazards.", file=sys.stderr)
     return correlate(paired)

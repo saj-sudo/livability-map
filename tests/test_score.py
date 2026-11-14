@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from pipeline import sanity, scoring
+from pipeline.attrs import HAZARD_IDS
 from pipeline.stages import admin, dims, fetch, grid, hazards, pop, score
 
 
@@ -21,15 +22,26 @@ def test_composites_and_bivar(settings):
     _run_all(settings)
     df = sanity.load_merged(settings, 4)
     inh = df[df["inhabited"]]
-    assert inh["coverage"].between(0, 4).all() and inh["bivar"].between(0, 9).all()
+    assert len(HAZARD_IDS) == 5  # humid heat is the fifth hazard (SPEC §13.47)
+    assert inh["coverage"].between(0, 5).all() and inh["bivar"].between(0, 9).all()
+    assert (inh["coverage"] == 5).any() and (inh["coverage"] == 4).any()  # full coverage is reachable; the masked hi35 corner is not
     assert df.loc[df["coverage"] == 0, "exposure"].isna().all()
     assert df.loc[df["coverage"] > 0, "exposure"].between(0, 100).all()
     both = inh[inh["exposure"].notna() & inh["wb_score"].notna()]
     assert both["bivar"].between(1, 9).all() and len(both) > 0
     assert inh.loc[inh["wb_score"].isna(), "bivar"].eq(0).all()
-    # the desert has wstress -1 -> coverage 3 there, never 0 because of a missing layer
+    # the desert has wstress -1 -> coverage 4 there, never 0 because of a missing layer
     desert = df[df["admin1_name"] == "B-South"]
-    assert (desert.loc[~desert["wstress_ok"], "coverage"] == 3).all()
+    assert (desert.loc[~desert["wstress_ok"], "coverage"] == 4).all()
+    # exposure is the mean of all five hazard scores where every layer is present: dry heat and
+    # humid heat both count, so heat weighs twice (§13.47)
+    full = df[df["coverage"] == 5]
+    mean5 = full[[f"{hz}_score" for hz in HAZARD_IDS]].astype("float64").mean(axis=1)
+    assert len(full) > 0 and (full["exposure"].astype("float64") - mean5).abs().max() <= 0.5
+    # where humid heat is missing the mean runs over the other four, never a 0 for the gap
+    part = df[(df["coverage"] == 4) & ~df["humid_ok"]]
+    mean4 = part[[f"{hz}_score" for hz in HAZARD_IDS if hz != "humid"]].astype("float64").mean(axis=1)
+    assert len(part) > 0 and (part["exposure"].astype("float64") - mean4).abs().max() <= 0.5
     # wb min-max within source: A-North (0.82) is the SHDI max, B-North (0.60) the min
     assert (df.loc[df["admin1_name"] == "A-North", "wb_score"] == 100).all()
     assert (df.loc[df["admin1_name"] == "B-North", "wb_score"] == 0).all()
@@ -57,9 +69,9 @@ def test_life_dimension_scores_are_per_domain(settings):
 def test_no_score_is_zero_because_of_missing_data(settings):
     _run_all(settings)
     df = sanity.load_merged(settings, 4)
-    for hz in ("heat", "rflood", "cflood", "wstress"):
+    for hz in HAZARD_IDS:
         assert df.loc[~df[f"{hz}_ok"], f"{hz}_score"].isna().all()
-    life = [c for c in df.columns if c.endswith("_score") and c[:-6] not in ("heat", "rflood", "cflood", "wstress")]
+    life = [c for c in df.columns if c.endswith("_score") and c[:-6] not in HAZARD_IDS]
     assert life, "no life dimension scores found"
     for col in life:
         tag = df[col[:-6] + "_res"]

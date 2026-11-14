@@ -17,7 +17,17 @@
   higher_is: worse
   coverage: [global]
   sources: [cckp_hd35]
-  note: "Days per year above 35 °C dry-bulb (CCKP hd35). Humidity is not counted, so humid places (Bangladesh, the US Gulf coast, West Africa, Southeast Asia) can look milder than their heat stress; a humid-heat layer waits on first-hand verification (SPEC §16 Next steps)"
+  note: "Days per year above 35 °C dry-bulb (CCKP hd35). Humidity is not counted, so humid places (Bangladesh, the US Gulf coast, West Africa, Southeast Asia) can look milder than their heat stress; the humid-heat layer (humid) covers humidity, so read the two together"
+- id: humid
+  name: Humid heat (heat index > 35 °C)
+  group: hazard
+  kind: score
+  unit: "days/yr with heat index above 35 °C"
+  decimals: 0
+  higher_is: worse
+  coverage: [global]
+  sources: [cckp_hi35]
+  note: "Days per year with a heat index above 35 °C (CCKP hi35). The heat index combines temperature and humidity, so this complements the dry-heat layer; both are hazards, so heat weighs twice in combined exposure (SPEC §13.47)"
 - id: rflood
   name: Riverine flood (1-in-100)
   group: hazard

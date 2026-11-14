@@ -35,7 +35,7 @@ def test_export_writes_parquet_and_manifest(settings):
     wb = next(d for d in m["dimensions"] if d["id"] == "wb")
     assert wb["coverage"]["4"]["admin1"] > 0 and wb["scale"] == "minmax"
     assert m["coverage_summary"]["4"]["hexes_total"] == len(out)
-    assert m["coverage_summary"]["4"]["share_inhabited_coverage4"] is not None
+    assert m["coverage_summary"]["4"]["share_inhabited_coverage_full"] is not None
     assert any("0.15" in n for n in m["processing_notes"])
     spot = next(s for s in m["spot_checks"]["4"] if s["name"].startswith("Alder"))
     assert spot["found"] and spot["inhabited"] is True and "heat_days" in spot

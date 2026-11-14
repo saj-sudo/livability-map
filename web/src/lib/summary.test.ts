@@ -18,10 +18,10 @@ const base: HexModel = {
   areaKm2: "1,770",
   inhabited: true,
   hazards: [],
-  coverage: "4 of 4 hazard layers",
+  coverage: "5 of 5 hazard layers",
   scoreNote: "",
   exposure: 57,
-  coverageN: 4,
+  coverageN: 5,
   wellbeing: { value: "life evaluation 6.82 / 10", score: 85, source: "whr", res: "national" },
   bivar: "high exposure, high wellbeing",
   bivarClass: 9,
@@ -39,12 +39,12 @@ describe("plain-language summary (SPEC §10)", () => {
 
   it("leads with the colour's meaning and flags the national wellbeing figure", () => {
     const s = summarize(base, [], DIMS, {}, PICKS, {});
-    expect(s).toBe("This area in Colorado shows high climate exposure and high wellbeing. All four hazard layers are present. Wellbeing is the national figure, not this region's.");
+    expect(s).toBe("This area in Colorado shows high climate exposure and high wellbeing. All five hazard layers are present. Wellbeing is the national figure, not this region's.");
   });
 
   it("names reduced coverage and unclassified hexes without inventing values", () => {
     const partial = { ...base, coverageN: 2, bivarClass: 0, bivar: "not classified", wellbeing: { value: null, score: null, source: "none", res: "none" } };
-    expect(summarize(partial, [], DIMS, {}, PICKS, {})).toBe("This area in Colorado has hazard data but no wellbeing figure, so it is not classified. Only 2 of 4 hazard layers are present, so the exposure side is less certain.");
+    expect(summarize(partial, [], DIMS, {}, PICKS, {})).toBe("This area in Colorado has hazard data but no wellbeing figure, so it is not classified. Only 2 of 5 hazard layers are present, so the exposure side is less certain.");
     const empty = { ...partial, coverageN: 0 };
     expect(summarize(empty, [], DIMS, {}, PICKS, {})).toContain("no hazard data");
     const desert = { ...base, inhabited: false };

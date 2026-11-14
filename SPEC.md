@@ -106,10 +106,10 @@ CORS). No database in the web app.
 
   HAZARD (raster / vector)                 WELLBEING + LIFE DIMENSIONS (tabular + polygons)   REFERENCE
   - WB CCKP CMIP6 hd35: hot days > 35C     - Global Data Lab Subnational HDI (admin1)         - geoBoundaries CGAZ admin0 + admin1
-  - WRI Aqueduct Floods riverine 1-in-100  - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
-  - WRI Aqueduct Floods coastal 1-in-100   - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
-  - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
-                                           - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
+  - WB CCKP CMIP6 hi35: heat index > 35C   - World Happiness Report ladder (national)         - Natural Earth 10m land polygons
+  - WRI Aqueduct Floods riverine 1-in-100  - World Bank GSAP poverty (admin1)                 - JRC GHSL GHS-POP 1 km
+  - WRI Aqueduct Floods coastal 1-in-100   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
+  - WRI Aqueduct 4.0 future water stress   - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
@@ -135,7 +135,8 @@ CORS). No database in the web app.
   |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
   |            fill only their own country's hexes (§13.45)                                               |
   |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
-  |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
+  |  score     exposure = mean(available hazard scores), coverage = count(*_ok) 0-5,                      |
+  |            dry and humid heat are separate hazards, so heat counts twice (§13.47)                     |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
   |            wb_score, bivar class 1-9 (§8.4); res 6/7 use res-5 distributions (§13.32)                |
   |  export    data/out/hexes_r{res}.parquet (+ ref on refined parents) + manifest.json with the plan    |
@@ -187,6 +188,9 @@ inhabited     bool     population >= POP_MIN (default 100)
 heat_days     float    projected annual days Tmax > 35C
 heat_score    int
 heat_ok       bool
+humid_days    float    projected annual days with heat index > 35C (§13.47)
+humid_score   int
+humid_ok      bool
 rflood_frac   float    fraction of hex area with riverine 1-in-100 inundation depth >= DEPTH_MIN
 rflood_score  int
 rflood_ok     bool
@@ -198,7 +202,7 @@ wstress_score int
 wstress_ok    bool
 
 -- composites
-coverage      int      count of *_ok true (0-4)
+coverage      int      count of *_ok true (0-5; heat counts twice, dry and humid, §13.47)
 exposure      int      mean of available hazard scores, null if coverage = 0
 wb_value      float    wellbeing raw (SHDI 0-1 or WHR ladder 0-10)
 wb_score      int      0-100, normalized within its source (§8.3)
@@ -264,7 +268,8 @@ Every row has a VERIFY item in §14 and a §15 log line. See §20.6 for the life
 
 | Layer | Source | Resolution / unit | Scenario, horizon | License | Notes |
 |---|---|---|---|---|---|
-| Extreme heat | World Bank CCKP, CMIP6 ensemble, `hd35` (days Tmax > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (§15.1) | Public S3 `wbg-cckp`, us-west-2. Do not use `hi35` (heat index). |
+| Extreme heat | World Bank CCKP, CMIP6 ensemble, `hd35` (days Tmax > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (§15.1) | Public S3 `wbg-cckp`, us-west-2. Dry-bulb only; `hi35` (heat index) is the separate humid-heat layer below. |
+| Humid heat | World Bank CCKP, CMIP6 ensemble, `hi35` (days with heat index > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (`verified: search`, §15) | Same bucket and file pattern as `hd35`; a fifth hazard beside dry heat, so heat counts twice in `exposure` (§13.47). |
 | Riverine flood | WRI Aqueduct Floods, inundation depth | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100 | CC BY 4.0 (§15.2) | Direct download from WRI's mirror (§13.19, replacing the one-time GEE export of §13.11). |
 | Coastal flood | WRI Aqueduct Floods, coastal with subsidence | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100, 50th pct SLR | CC BY 4.0 (§15.2) | Same family and access path as riverine. |
 | Water stress | WRI Aqueduct Water Risk Atlas 4.0, future | polygons (basin x province x aquifer) | 2050 business-as-usual (`bau50_ws_x_c`) | CC BY 4.0 (§15.3) | Vector: join hex centroid to polygon. -1 = arid/low use. |
@@ -288,6 +293,8 @@ Walk Score, Cook PVI, GreatSchools, NHGIS and IPUMS International (no redistribu
 
 - Heat: mean of the projected hot-days grid over the hex. Unit: days per year. Hexes in
   perpetually hot regions saturate near 365; the percentile rank handles that.
+- Humid heat: the projected days with a heat index above 35C (CCKP `hi35`), sampled at the hex
+  centroid exactly like heat. Unit: days per year. A fifth hazard beside dry heat (§13.47).
 - Riverine and coastal flood: fraction of hex pixels with inundation depth >= DEPTH_MIN
   (0.15 m). Unit: 0 to 1. v2 replaces area fraction with GHSL-weighted population fraction.
 - Water stress: Aqueduct category at hex centroid, 0 (low) to 4 (extremely high). Arid and low
@@ -307,8 +314,9 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 8.4 Composites
 
-- `exposure` = mean of available hazard scores. `coverage` = how many were available (0 to 4).
-  `coverage < 4` renders as reduced confidence (§9.3).
+- `exposure` = mean of available hazard scores. `coverage` = how many were available (0 to 5).
+  `coverage < 5` renders as reduced confidence (§9.3). Dry heat and humid heat are both among
+  the five, so heat weighs twice in `exposure` (§13.47), stated on /methodology.
 - `bivar` = 3x3 class from tercile of `exposure` by tercile of `wb_score`, computed over
   inhabited hexes. Class 0 if either side is null. Default map view; needs no weighting.
 - "My priorities" (weighted view, §20.5): computed client-side from tile attributes so no rebuild
@@ -316,7 +324,7 @@ Min-max normalized within its source (SHDI across all admin1 regions; WHR across
 
 ### 8.5 Sanity checks the pipeline must run and print
 
-- Percentage of inhabited hexes with `coverage = 4`, `= 0`.
+- Percentage of inhabited hexes with `coverage = 5` (every hazard), `= 0`.
 - Percentage of inhabited hexes by `wb_res`, and per life dimension by `{id}_res`.
 - Spot checks: Dhaka (high flood, mid wellbeing), Phoenix (high heat, high wellbeing),
   Reykjavik (low exposure, high wellbeing), Sahel band (water stress + heat, low wellbeing).
@@ -370,7 +378,7 @@ app reads the PMTiles via HTTP range requests.
 - Per-hazard and per-dimension layers: `*_score` single-hue sequential ramp (rust for hazards,
   teal for wellbeing, green for life dimensions, blue-violet for the priorities match);
   `*_ok = false` or `*_res = 'none'` in grey.
-- Confidence: `coverage < 4` gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
+- Confidence: `coverage < 5` (fewer than every hazard layer, §13.47) gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
   a faint dashed outline (it covers whole countries while SHDI is absent, so it must read as a
   texture, not an error); `wb_res = 'none'` grey on wellbeing views.
 - Hex seams are drawn in the paper tone at low alpha so the mesh recedes; the hovered hex gets a
@@ -413,7 +421,7 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   summary (what the colour means, hazard layers present, national wellbeing fallback, priorities
   match with what is missing), the person's weighted priorities as thin bars (a missing
   dimension is a hatched "no data here" row), each hazard's raw value and score with its `_ok`
-  state, wellbeing value with source and resolution in words, coverage "3 of 4 hazard layers",
+  state, wellbeing value with source and resolution in words, coverage "4 of 5 hazard layers",
   bivariate class in words, each life dimension's value and resolution (or "no data here"), one
   "Sources" disclosure listing the manifest entries, and "Compare with another place". The
   numbers in the bars come from `web/src/lib/chart.ts`, a TypeScript twin of the §20.5
@@ -492,7 +500,7 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
 
 `pipeline/fixtures/make_fixtures.py` deterministically generates a synthetic 4° x 4° region:
 land polygon with a coast, two countries and five admin1 regions, a population raster with
-towns, four hazard inputs (heat NetCDF, two flood GeoTIFFs, water-stress polygons), and small
+towns, five hazard inputs (heat and humid-heat NetCDFs, two flood GeoTIFFs, water-stress polygons), and small
 tabular files for wellbeing and life dimensions. `python -m pipeline --fixtures <stage>` runs
 against it; tests use it. Real data never enters the repo.
 
@@ -564,9 +572,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
     source, producing the columns `dimensions.yaml` names; joiners stay generic.
 28. **Present-day environment is its own group (`env`), not a hazard.** Air quality, tree cover,
     wildfire (observed burned area 2001-2020) and drought risk (Aqueduct baseline) are shown
-    beside the four 2050 hazards and can be weighted in My priorities, but `exposure`,
-    `coverage` and the bivariate class stay the four projected hazards so the map's headline
-    axis keeps one scenario and one horizon (2026-09-22).
+    beside the 2050 hazards (four then, five since §13.47) and can be weighted in My priorities,
+    but `exposure`, `coverage` and the bivariate class stay the projected hazards so the map's
+    headline axis keeps one scenario and one horizon (2026-09-22).
 29. **Hex-level layers** are joined by two new joiners (`raster_mean`, `point_mean`, §20.3) and
     carry the resolution tag `hex`; Aqueduct sub-basins sampled at the centroid carry `basin`.
     Rasters that are not plain GeoTIFFs (the ACAG PM2.5 NetCDF, the GFED5 monthly burned-area
@@ -840,6 +848,36 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       file layout, column names and subsector names are from memory, and the loader stops with
       the columns it found when they differ. Fixture world VERSION 15 adds six stand-in facilities.
 
+47. **Humid heat, a fifth hazard** (Saj, 2026-11-14): a new hazard `humid` (raw `humid_days`,
+    `humid_score`, `humid_ok`) counts the projected days per year with a heat index above 35 °C,
+    from the World Bank CCKP CMIP6 0.25° climatology `hi35` (`cckp_hi35`, SSP2-4.5, 2040-2059,
+    ensemble median, CC BY 4.0), sampled at the hex centroid exactly like `heat` (§8.1).
+    - *Fifth, not a replacement.* `hd35` (dry-bulb days above 35 °C) stays: it is confirmed
+      first-hand (§15) and reads well in dry heat (the Sahel, the US South-West), where the heat
+      index adds little. The heat index combines temperature and humidity, so `humid` shows the
+      heat stress `hd35` misses in Bangladesh, the US Gulf coast, West Africa and Southeast Asia
+      (the §16 caveat). Replacing `hd35` would lose the dry-heat signal and its confirmed source.
+    - *Heat counts twice.* `exposure` is the plain mean of the available hazard scores, so with
+      dry heat and humid heat both in it, heat carries two fifths of the combined exposure. This
+      is deliberate and stated plainly on /methodology, in the manifest's processing notes, on
+      the humid-heat row of the place panel and in the `humid` registry note. A place that is
+      only hot ranks higher than before against a place that only floods.
+    - *Coverage runs 0 to 5;* the hatch marks `coverage < 5`. Nothing hard-codes the count: the
+      pipeline uses `len(HAZARDS)` / `HAZARD_IDS` and the web `HAZARD_IDS.length`. The manifest
+      key `share_inhabited_coverage4` became `share_inhabited_coverage_full` (score report:
+      `coverage_full_share`).
+    - *URL order.* `humid` is appended to the web `DIM_ORDER` after `industry` so old `w=` links
+      keep their meaning; panels list it beside heat (`DISPLAY_ORDER`). Presets that weight heat
+      weight humid heat the same; Climate first weights all five hazards.
+    - *NRI cross-check:* NRI has one heat-wave loss rate, so `nri_check` pairs both heat scores
+      with it.
+    - `verified: search`: the URL, file name and variable (`climatology-hi35-annual-mean`) follow
+      the confirmed `hd35` file in the same bucket and were not fetched here. `heat_days` falls
+      back to the only gridded variable when the named one is absent and stops otherwise.
+      `publish --target r2` refuses until the source is confirmed on the laptop (§15).
+    - Fixture world VERSION 16 adds `humid.nc`: highest along the south-east coast, masked in
+      the north-west corner so the missing path (NaN, never 0; coverage 4) is exercised.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -917,6 +955,7 @@ the live status per source.
 | 2026-09-23 | WPdx+ water points | **confirmed** by download (Socrata `eqje-vguj`, 544 MB CSV, 440,270 points, 19 countries, HXL `#` column prefixes; status_id Yes 318,821 / No 92,531 / Unknown 28,918; is_duplicate on 25,640). Licence: no user licence on the export; WPdx's HDX country sets say CC BY-SA; providers license to WPdx under CC BY 4.0. Recorded as CC BY-SA 4.0 pending WPdx's confirmation. | https://data.waterpointdata.org/dataset/eqje-vguj |
 | 2026-11-04 | FEMA National Risk Index, tracts | search (not reachable from the container). URL pattern and columns (`TRACTFIPS`, `POPULATION`, `ALR_VALB`, `EAL_VALB`, `BUILDVALUE`) from memory; the loader falls back from `ALR_VALB` to `EAL_VALB / BUILDVALUE`. Public domain. Confirm the zip URL, the NRI version and the column names on first fetch. | https://hazards.fema.gov/nri/data-resources |
 | 2026-11-04 | CDC PLACES tract data (GIS friendly) | search. Wide CSV with `TractFIPS`, `TotalPopulation`, `GHLTH_CrudePrev`; the data.cdc.gov dataset id changes per release, so the source is `manual`. Public domain. Confirm columns and release year on download. | https://www.cdc.gov/places/ |
+| 2026-11-14 | CCKP hi35 humid heat (§13.47) | search. From memory, not fetched here (the container blocks the bucket): `https://wbg-cckp.s3.us-west-2.amazonaws.com/data/cmip6-x0.25/hi35/ensemble-all-ssp245/climatology-hi35-annual-mean_cmip6-x0.25_ensemble-all-ssp245_climatology_median_2040-2059.nc`, by analogy with the confirmed hd35 file; variable assumed `climatology-hi35-annual-mean` (time, lat, lon). CC BY 4.0 like the rest of the collection. Confirm the URL, size, variable name, units (days per year) and the heat-index definition on the laptop. | https://github.com/worldbank/climateknowledgeportal/blob/main/docs/collections/cmip6-x0.25.md |
 | 2026-11-14 | Climate TRACE assets (§13.46) | search. From memory, not read here (the container blocks climatetrace.org): per-sector zips on climatetrace.org/data with `*emissions_sources*.csv` (source_id, subsector, lat, lon, gas, emissions_quantity), CC BY 4.0. Confirm the licence, file and column names and the subsector list on the laptop. | https://climatetrace.org/data |
 
 ## 16. Phasing and session plan
@@ -966,8 +1005,10 @@ Map honesty, before or with the first public release:
 - [x] *Humid heat.* `hd35` counts days above 35 °C dry-bulb, so humid places (Bangladesh, the US
   Gulf coast, West Africa, Southeast Asia) look milder than their heat stress is. Now: say so
   in `/methodology` and on the heat row of the place panel. (Caveat shipped 2026-11-11:
-  `HEAT_CAVEAT` in `web/src/lib/inspect.ts`, the `heat` note in `dimensions.yaml`; the layer below stays open.) Later: a humid-heat layer (CCKP
-  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships.
+  `HEAT_CAVEAT` in `web/src/lib/inspect.ts`, the `heat` note in `dimensions.yaml`.) Later: a humid-heat layer (CCKP
+  `hi35` or a wet-bulb metric), verified first-hand (§14) before it ships. (Layer shipped
+  2026-11-14 as the fifth hazard `humid`, CCKP `hi35`, §13.47; heat now counts twice in
+  `exposure`. The first-hand check of the file is still open: `verified: search`, §15.)
 - [x] *Scores are ranks.* One line in the place panel and `/methodology`: a score is a
   percentile among inhabited land at that resolution, not an absolute risk level. (Shipped
   2026-11-11 as `SCORE_MEANING`; the CMIP6 spread note below stays open.) Optionally
@@ -1041,7 +1082,7 @@ From the 2026-11-14 review pass (§13.45):
   are unchanged. (res 4, 2026-09-22; every stage is cached by input fingerprint)
 - [x] `python -m pipeline --fixtures all` runs every implemented stage on the fixture world in
   under a minute and is exercised by CI. (Session 1, 2026-09-20)
-- [x] Every inhabited hex has `coverage` in 0 to 4, `wb_res` in {admin1, national, none}, and
+- [x] Every inhabited hex has `coverage` in 0 to 5 (five hazards since §13.47), `wb_res` in {admin1, national, none}, and
   `bivar` in 0 to 9; the §8.5 percentages are printed and recorded on `/methodology`. (tests +
   manifest `coverage_summary`, 2026-09-22)
 - [x] All four §8.5 spot checks land in plausible classes, with the reason in the manifest notes.
@@ -1177,11 +1218,11 @@ denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`
 
 | Preset | Emphasis |
 |---|---|
-| Early career | jobs 3; transit, housing cost burden, cost of living, rent 2; city access, internet, the four hazards 1 |
-| Raising kids | schools 3; air, armed conflict, housing, healthcare 2; trees, water points, the four hazards 1 |
+| Early career | jobs 3; transit, housing cost burden, cost of living, rent 2; city access, internet, the five hazards 1 |
+| Raising kids | schools 3; air, armed conflict, housing, healthcare 2; trees, water points, the five hazards 1 |
 | Queer and looking for community | LGBTQ+ presence 3; politics (left lean), jobs 2 |
-| Retiring | healthcare 3; travel to care, heat, wellbeing, cost of living 2; walking to care, air, the other three hazards 1 |
-| Climate first | the four hazards, 1 each |
+| Retiring | healthcare 3; travel to care, heat, humid heat, wellbeing, cost of living 2; walking to care, air, the other three hazards 1 |
+| Climate first | the five hazards, 1 each |
 
 Each life dimension in the panel shows a coverage chip (Global / OECD / US only) and greys out
 where the hovered or clicked hex has `_res = none`.

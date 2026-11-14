@@ -24,7 +24,11 @@ export const EXPOSURE_MEANING = "the average of the hazard ranks present";
 
 /** Why the heat layer understates humid heat: shown on the heat row and on /methodology. */
 export const HEAT_CAVEAT =
-  "Counts dry-air days above 35 °C and ignores humidity, so humid places (Bangladesh, the US Gulf coast, West Africa, Southeast Asia) can look milder than their real heat stress.";
+  "Counts dry-air days above 35 °C and ignores humidity, so humid places (Bangladesh, the US Gulf coast, West Africa, Southeast Asia) can look milder here than their real heat stress. The humid-heat row covers humidity; read the two together.";
+
+/** What the humid-heat layer adds, and that heat counts twice (SPEC §13.47): shown on its row and on /methodology. */
+export const HUMID_NOTE =
+  "Counts days when the heat index (temperature and humidity together) passes 35 °C. It sits beside dry heat rather than replacing it, so heat counts twice in combined exposure.";
 
 export interface HazardRow {
   id: string;
@@ -32,7 +36,7 @@ export interface HazardRow {
   raw: string | null; // formatted raw value with unit, null when missing
   score: number | null;
   ok: boolean;
-  /** a caveat shown under the row (heat: humidity is not counted) */
+  /** a caveat shown under the row (heat: humidity is not counted; humid heat: heat counts twice) */
   note?: string;
 }
 
@@ -112,6 +116,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     const dim = dims.find((d) => d.id === id);
     const row: HazardRow = { id, name: dim?.name ?? id, raw: ok ? formatHazardRaw(id, raw) : id === "wstress" && raw === -1 ? formatHazardRaw(id, raw) : null, score: ok ? num(p[`${id}_score`]) : null, ok };
     if (id === "heat") row.note = HEAT_CAVEAT;
+    if (id === "humid") row.note = HUMID_NOTE;
     return row;
   });
   const coverageN = num(p.coverage) ?? hazards.filter((h) => h.ok).length;
@@ -160,7 +165,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     areaKm2: hexAreaKm2(hexRes),
     inhabited,
     hazards,
-    coverage: `${coverageN} of 4 hazard layers`,
+    coverage: `${coverageN} of ${HAZARD_IDS.length} hazard layers`,
     scoreNote: SCORE_MEANING,
     exposure: num(p.exposure),
     coverageN,

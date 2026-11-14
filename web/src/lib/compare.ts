@@ -3,7 +3,7 @@
 // that row only when both sides have data (invariant 3: a missing side never loses).
 
 import { compositeValue, type Props } from "./chart";
-import type { DimInfo } from "./dims";
+import { HAZARD_IDS, type DimInfo } from "./dims";
 import type { Picks, Weights } from "./expressions";
 import { formatScore } from "./format";
 import { EXPOSURE_MEANING, type HexModel, type LifeRow } from "./inspect";
@@ -38,7 +38,7 @@ export function compareRows(a: Side, b: Side, dims: DimInfo[], weights: Weights,
   const rows: CompareRow[] = [];
   rows.push({ id: "bivar", group: "summary", label: "Combined", a: a.model.bivarClass ? a.model.bivar : null, b: b.model.bivarClass ? b.model.bivar : null, leans: null });
   // data coverage, not a quality of the place: never judged
-  rows.push({ id: "coverage", group: "summary", label: "Hazard layers present", a: `${a.model.coverageN} of 4`, b: `${b.model.coverageN} of 4`, leans: null });
+  rows.push({ id: "coverage", group: "summary", label: "Hazard layers present", a: `${a.model.coverageN} of ${HAZARD_IDS.length}`, b: `${b.model.coverageN} of ${HAZARD_IDS.length}`, leans: null });
 
   if (Object.values(weights).some((w) => w > 0)) {
     const ca = compositeValue(dims, weights, picks, a.props);

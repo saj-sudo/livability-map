@@ -6,7 +6,7 @@
 // keys for no data, reduced confidence and national fallback follow.
 
 import { useTheme } from "./useTheme";
-import { shortName, type DimInfo } from "../lib/dims";
+import { HAZARD_IDS, shortName, type DimInfo } from "../lib/dims";
 import { rampFor } from "../lib/expressions";
 import { BIVAR_WORDS, paletteFor } from "../lib/palette";
 import type { Theme } from "../lib/theme";
@@ -111,7 +111,7 @@ export default function Legend({ view, dims, conf, theme, highlight }: Props) {
               style={{ background: `repeating-linear-gradient(45deg, rgba(${pal.hatch[0]},${pal.hatch[1]},${pal.hatch[2]},0.6) 0 2px, transparent 2px 6px)` }}
               aria-hidden="true"
             />
-            missing some hazard data (fewer than 4 of 4 layers)
+            missing some hazard data (fewer than {HAZARD_IDS.length} of {HAZARD_IDS.length} layers)
           </li>
         )}
         {(view === "bivar" || view === "wb") && (

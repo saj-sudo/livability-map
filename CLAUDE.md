@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A global climate-livability map: projected climate hazard exposure (4 hazards, one scenario, 2050)
+A global climate-livability map: projected climate hazard exposure (5 hazards, one scenario, 2050)
 beside present-day wellbeing and user-weighted "life dimensions" on H3 hexes, built only from
 open-licensed data. `SPEC.md` is the source of truth; build prompts and code comments cite its
 section numbers (§5 architecture, §6 data model, §8 scoring, §13 decisions, §15 verification log,
@@ -16,6 +16,8 @@ Status (2026-09-24): every stage and the map app run end to end on real data at 
 everywhere, res 6 across the US/EU/UK/EFTA and urban clusters, res 7 inside urban centres (Session
 8, three PMTiles archives: hexes 191 MB, hexes_nbhd 264 MB, hexes_city 152 MB), with 29 dimensions
 (4 hazard, 1 wellbeing, 19 life, 5 env) incl. the Eurostat 1 km grid and England IoD 2025.
+Humid heat (`humid`, CCKP `hi35`, `verified: search`) is a fifth hazard beside dry heat, so heat
+counts twice in `exposure` and `coverage` runs 0-5 (SPEC §13.47); fixture world VERSION 16.
 Country small-area / grid sources for DE, NL, FR, CA and AU are wired too (SPEC §13.35).
 US tract layers from FEMA NRI (`nri`) and CDC PLACES (`phealth`) are wired but `verified: search`
 until fetched first-hand (SPEC §13.38; PLACES is a manual download).
@@ -167,7 +169,7 @@ census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside
 LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 15): a 4°x4° synthetic region
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 16): a 4°x4° synthetic region
 (countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`; the US-like
 stand-ins sit in XB and the UK/EU ones in XA, `make_fixtures.apply` sets both overrides, five admin1
 regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress

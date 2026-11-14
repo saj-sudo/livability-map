@@ -16,6 +16,7 @@ import { VIEWS, type AppState, type ViewId } from "../lib/url";
 const VIEW_LABELS: Record<ViewId, string> = {
   bivar: "Climate exposure × wellbeing",
   heat: "Extreme heat",
+  humid: "Humid heat",
   rflood: "Riverine flood",
   cflood: "Coastal flood",
   wstress: "Water stress",

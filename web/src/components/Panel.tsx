@@ -4,7 +4,7 @@
 // confidence and inhabited toggles, and the legend (SPEC §9.3). One surface; hierarchy comes
 // from type and hairlines, not nested boxes.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTheme } from "./useTheme";
 import Legend from "./Legend";
 import PrioritiesPanel from "./PrioritiesPanel";
@@ -63,12 +63,6 @@ export default function Panel({ manifest, dims, state, onChange, highlight, embe
   const [open, setOpen] = useState(true);
   const [theme] = useTheme();
   const pal = paletteFor(theme);
-  // on a phone the panel would cover the whole map, so start collapsed there (after hydration,
-  // because the server render cannot know the viewport)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!embedded && window.matchMedia("(max-width: 640px)").matches) setOpen(false);
-  }, [embedded]);
   const shown = embedded || open;
   return (
     <aside className={embedded ? "" : "absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"}>
@@ -106,10 +100,10 @@ export default function Panel({ manifest, dims, state, onChange, highlight, embe
 
           <div className="space-y-1.5">
             <Toggle checked={state.conf} onChange={(v) => onChange({ conf: v })}>
-              Hatch hexes with fewer than 4 hazard layers
+              Mark places missing some hazard data
             </Toggle>
             <Toggle checked={state.inh} onChange={(v) => onChange({ inh: v })}>
-              Show uninhabited hexes (under 100 people)
+              Show places where almost no one lives (under 100 people)
             </Toggle>
           </div>
 

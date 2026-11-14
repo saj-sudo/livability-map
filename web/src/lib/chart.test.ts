@@ -1,6 +1,6 @@
 import { createExpression } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
-import { compositeValue, matchValue, missingCount, priorityBars } from "./chart";
+import { compositeValue, matchValue, missingCount, missingNote, priorityBars, type Bar } from "./chart";
 import type { DimInfo } from "./dims";
 import { compositeExpression, type Picks } from "./expressions";
 
@@ -54,5 +54,19 @@ describe("chart model agrees with the map expression (SPEC §20.5)", () => {
     expect(matchValue(dim("race", "composition"), props, { pol: "competitive" })).toBeNull();
     expect(priorityBars(props, DIMS, { race: 5, jobs: 1 }, { pol: "competitive" }).map((b) => b.id)).toEqual(["jobs"]);
     expect(compositeValue(DIMS, { race: 5 }, { pol: "competitive" }, props)).toBeNull();
+  });
+});
+
+describe("missing weighted layers note", () => {
+  const bar = (name: string, match: number | null): Bar => ({ id: name, name, chip: "", weight: 1, match });
+  it("names the weighted layers with no data here", () => {
+    expect(missingNote([bar("Jobs", 50), bar("Schools", null), bar("LGBTQ+ presence", null), bar("Political lean (two-party margin)", null)])).toBe("3 of your weighted layers have no data here: Schools, LGBTQ+ presence, Political lean.");
+    expect(missingNote([bar("Jobs", 50), bar("Schools", null)])).toBe("1 of your weighted layers has no data here: Schools.");
+  });
+
+  it("says nothing when none or all are missing (the summary covers that)", () => {
+    expect(missingNote([bar("Jobs", 50)])).toBeNull();
+    expect(missingNote([bar("Jobs", null)])).toBeNull();
+    expect(missingNote([])).toBeNull();
   });
 });

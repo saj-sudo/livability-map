@@ -71,8 +71,8 @@ describe("dimension registry from the manifest", () => {
     expect(lifeDims(dims).map((d) => d.id)).not.toContain("air");
     expect(dims.find((d) => d.id === "cost")!.higher_is).toBe("worse"); // a higher price level is worse for the person
     expect(dims.find((d) => d.id === "rent")!.chip).toBe("US only");
-    expect(resLabel("hex")).toBe("this hex");
-    expect(resLabel("basin")).toBe("sub-basin");
+    expect(resLabel("hex")).toBe("this area");
+    expect(resLabel("basin")).toBe("river basin");
     expect(resLabel("weird")).toBe("weird");
   });
 
@@ -90,8 +90,8 @@ describe("dimension registry from the manifest", () => {
     expect(u.tract.unit).toContain("16-29");
     expect(u.grid.unit).toContain("15-64");
     expect(u.area.unit).toContain("deprived");
-    expect(resLabel("grid")).toBe("1 km grid");
-    expect(resLabel("area")).toBe("small area");
+    expect(resLabel("grid")).toBe("1 km grid cells");
+    expect(resLabel("area")).toBe("small-area figure");
   });
 
   it("labels the country domains added after Session 8", () => {

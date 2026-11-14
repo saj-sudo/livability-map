@@ -93,6 +93,8 @@ export const CONTEXT_ONLY_IDS: ReadonlySet<string> = new Set(FALLBACK.filter((d)
 
 // scoring domains (§20.4) -> chip text; country domains are small-area or grid sources of one country
 const CHIP: Record<string, string> = { global: "Global", oecd: "OECD", us: "US", eu: "EU", uk: "England", de: "Germany", nl: "Netherlands", fr: "France", ca: "Canada", au: "Australia", country: "Within country" };
+/** A scoring domain (§20.4) in words; "country:TZ" style per-country domains read "within country". */
+export const domainLabel = (k: string): string => CHIP[k.split(":")[0]] ?? k;
 const DOMAIN_ORDER = ["global", "oecd", "us", "eu", "uk", "de", "nl", "fr", "ca", "au", "country"];
 
 /**
@@ -153,6 +155,17 @@ export const shortName = (name: string): string => name.replace(/\s*\([^)]*\)\s*
 export const lifeDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "life");
 export const envDims = (dims: DimInfo[]) => dims.filter((d) => d.group === "env");
 
-/** Badge text for a resolution tag (SPEC §6.1); unknown tags show as they are. */
-export const RES_LABELS: Record<string, string> = { hex: "this hex", grid: "1 km grid", area: "small area", basin: "sub-basin", admin1: "region", county: "county", tract: "tract", national: "national", none: "no data" };
+/** Plain words for a resolution tag (SPEC §6.1): the badge beside a value in the place panel, the
+ *  wellbeing line and the /methodology tables all read this one map. Unknown tags show as they are. */
+export const RES_LABELS: Record<string, string> = {
+  hex: "this area",
+  grid: "1 km grid cells",
+  basin: "river basin",
+  tract: "census tract",
+  area: "small-area figure",
+  county: "county figure",
+  admin1: "regional figure",
+  national: "national figure",
+  none: "no data here",
+};
 export const resLabel = (tag: string): string => RES_LABELS[tag] ?? tag;

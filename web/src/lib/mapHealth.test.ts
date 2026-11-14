@@ -37,7 +37,8 @@ describe("map health (SPEC §13.41)", () => {
     p = noteProblem(p, { kind: "tiles", archive: "hexes" });
     p = noteProblem(p, { kind: "tiles", archive: "hexes" });
     expect(p.tiles).toEqual(["hexes"]);
-    expect(problemMessage(p)).toMatch(/map data could not be loaded \(hexes\)/);
+    expect(problemMessage(p)).toMatch(/map data could not be loaded/);
+    expect(problemMessage(p)).not.toMatch(/hexes\b|\(/); // archive ids stay in the console
     expect(noteProblem(p, { kind: "other" })).toBe(p);
   });
 });

@@ -107,3 +107,10 @@ export const SHARE_COLORS: Record<Theme, string[]> = {
   light: ["#7f76c2", "#63a95f", "#d98a3d", "#3d7f93", "#9a9a9a"],
   dark: ["#a9a3dc", "#8cc78e", "#e5a86a", "#7fc5d6", "#8a9297"],
 };
+
+/** Colour of a score bar in the place panel. A score is a rank of the raw value, so a high score
+ *  is good news only when more of the thing is better: housing cost burden 91/100 gets the hazard
+ *  (bad) hue, tree cover 91/100 the good one. */
+export function scoreBarColor(pal: Palette, higherIs: "better" | "worse" | undefined): string {
+  return higherIs === "worse" ? pal.rampHazard[1] : pal.rampGood[1];
+}

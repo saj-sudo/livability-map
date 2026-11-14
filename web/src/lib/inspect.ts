@@ -10,7 +10,17 @@ export type Props = Record<string, unknown>;
 
 /** What a score is (SPEC §16 Next steps): shown in the place panel and on /methodology. */
 export const SCORE_MEANING =
-  "Scores are ranks: a percentile among inhabited land at this resolution (100 = highest), not an absolute risk level.";
+  "Scores out of 100 are ranks among inhabited places at this map scale (a percentile): 75 means higher than 75% of them. A rank is not an absolute risk level.";
+
+/** The note above the first scores in the place panel: with priorities set, the match is named
+ *  first so it is not mistaken for a rank (the same place can show a match of 75 and a rank of 25). */
+export function scoreNoteFor(hasPriorities: boolean): string {
+  if (!hasPriorities) return SCORE_MEANING;
+  return "Your priorities show a match from 0 to 100: how well this place fits what you weighted. The other scores are ranks among inhabited places at this map scale (75 means higher than 75% of them), not an absolute risk level.";
+}
+
+/** What the combined exposure number is (SPEC §8.3): shown beside it in the panel and in compare. */
+export const EXPOSURE_MEANING = "the average of the hazard ranks present";
 
 /** Why the heat layer understates humid heat: shown on the heat row and on /methodology. */
 export const HEAT_CAVEAT =
@@ -34,6 +44,8 @@ export interface LifeRow {
   score: number | null;
   res: string; // admin1 | county | tract | national | none
   chip: string;
+  /** the dimension's direction: a high score is bad news when more of it is worse */
+  higherIs: DimInfo["higher_is"];
   shares?: { key: string; label: string; pct: number }[];
   majority?: string;
 }
@@ -42,7 +54,14 @@ export interface HexModel {
   title: string;
   subtitle: string;
   population: string;
+  /** the count behind `population`, null when unknown (never 0 for missing) */
+  populationN: number | null;
+  /** technical label ("H3 res 4 hex (~1,770 km²)"), for a tooltip only */
   resolution: string;
+  /** H3 resolution of the hex */
+  res: number;
+  /** average area of a hex at this resolution, e.g. "1,770", null when unknown */
+  areaKm2: string | null;
   inhabited: boolean;
   hazards: HazardRow[];
   coverage: string;
@@ -80,6 +99,7 @@ export function countryName(iso2: string | null): string {
 // average H3 cell area per resolution (km², h3 v4), for the inspector's resolution line
 const HEX_AREA: Record<number, string> = { 4: "1,770", 5: "253", 6: "36", 7: "5.2", 8: "0.74", 9: "0.11", 10: "0.015" };
 const resolutionLabel = (r: number): string => `H3 res ${r} hex (~${HEX_AREA[r] ?? "?"} km²)`;
+export const hexAreaKm2 = (r: number): string | null => HEX_AREA[r] ?? null;
 
 export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], manifest: ClientManifest): HexModel {
   const iso = str(p.iso_a2);
@@ -106,7 +126,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
   const bivar = num(p.bivar) ?? 0;
   const rowFor = (d: DimInfo): LifeRow => {
       const res = str(p[`${d.id}_res`]) ?? "none";
-      const row: LifeRow = { id: d.id, name: d.name, kind: d.kind, value: null, score: null, res, chip: d.chip };
+      const row: LifeRow = { id: d.id, name: d.name, kind: d.kind, value: null, score: null, res, chip: d.chip, higherIs: d.higher_is };
       if (res === "none") return row;
       if (d.kind === "score") {
         row.value = formatDimRaw(d, num(p[`${d.id}_raw`]), res);
@@ -124,6 +144,7 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
   };
   const life: LifeRow[] = dims.filter((d) => d.group === "life").map(rowFor);
   const env: LifeRow[] = dims.filter((d) => d.group === "env").map(rowFor);
+  const hexRes = num(p.res) ?? (Number(sourceLayer.replace(/\D/g, "")) || 4);
   const usedIds = new Set<string>(["natural_earth_land", "geoboundaries_adm0", "geoboundaries_adm1", "ghsl_pop"]);
   for (const h of hazards) if (h.ok) for (const s of manifest.dimensionSources[h.id] ?? []) usedIds.add(s);
   if (wbSource === "shdi") ["gdl_shdi", "gdl_shdi_regions"].forEach((s) => usedIds.add(s));
@@ -133,7 +154,10 @@ export function describeHex(p: Props, sourceLayer: string, dims: DimInfo[], mani
     title: admin1 ?? countryName(iso),
     subtitle: admin1 ? countryName(iso) : "",
     population: formatPopulation(pop),
-    resolution: resolutionLabel(num(p.res) ?? (Number(sourceLayer.replace(/\D/g, "")) || 4)),
+    populationN: pop,
+    resolution: resolutionLabel(hexRes),
+    res: hexRes,
+    areaKm2: hexAreaKm2(hexRes),
     inhabited,
     hazards,
     coverage: `${coverageN} of 4 hazard layers`,

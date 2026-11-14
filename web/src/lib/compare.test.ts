@@ -42,6 +42,20 @@ describe("compare two places (SPEC §10)", () => {
     expect(row("pol").leans).toBeNull(); // signed: no "better"
   });
 
+  it("does not judge data coverage, and explains combined exposure and heat", () => {
+    expect(row("coverage").leans).toBeNull();
+    expect(row("exposure").note).toMatch(/average of the hazard ranks/);
+    expect(row("heat").note).toMatch(/humidity/);
+  });
+
+  it("includes the environment-today group like the place panel", () => {
+    const env: DimInfo[] = [...DIMS, dim("air", "score", "env", "worse")];
+    const r = compareRows({ model: describeHex({ ...A, air_res: "hex", air_raw: 8, air_score: 30 }, "hex4", env, MANIFEST), props: A }, { model: describeHex({ ...B, air_res: "hex", air_raw: 60, air_score: 95 }, "hex4", env, MANIFEST), props: B }, env, {}, PICKS);
+    const air = r.find((x) => x.id === "air")!;
+    expect(air.group).toBe("env");
+    expect(air.leans).toBe("a"); // less particulate matter is better
+  });
+
   it("omits the priorities row when nothing is weighted", () => {
     expect(compareRows(side(A), side(B), DIMS, {}, PICKS).some((r) => r.id === "match")).toBe(false);
   });

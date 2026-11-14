@@ -4,7 +4,7 @@
 // Three snaps (peek / half / full); pointer events on the handle drive the drag, CSS
 // transforms do the motion (transitions are cut by the global reduced-motion rule).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { nextSnap, snapHeight, SNAP_FRACTIONS, type Snap } from "../lib/sheet";
 
 export interface SheetTab {
@@ -18,11 +18,27 @@ interface Props {
   tabs: SheetTab[];
   tab: string;
   onTab: (id: string) => void;
+  /** shown instead of the tab content at the peek snap (a compact legend), so a closed sheet
+   *  still carries the colour key */
+  peek?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function Sheet({ snap, onSnap, tabs, tab, onTab, children }: Props) {
+export default function Sheet({ snap, onSnap, tabs, tab, onTab, peek, children }: Props) {
   const root = useRef<HTMLDivElement>(null);
+  const uid = useId();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabId = (id: string) => `${uid}-tab-${id}`;
+  const panelId = `${uid}-panel`;
+  // Left / Right move between tabs (WAI-ARIA tabs pattern, automatic activation)
+  const onTabKey = (e: React.KeyboardEvent, i: number) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    const n = tabs.length;
+    const j = e.key === "Home" ? 0 : e.key === "End" ? n - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + n) % n;
+    onTab(tabs[j].id);
+    tabRefs.current[j]?.focus();
+  };
   const [containerH, setContainerH] = useState(0);
   const [dragDy, setDragDy] = useState<number | null>(null);
   const drag = useRef<{ y0: number; t0: number; yLast: number; tLast: number } | null>(null);
@@ -36,6 +52,7 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, children }: Prop
     return () => ro.disconnect();
   }, []);
 
+  const showPeek = snap === "peek" && dragDy === null && peek;
   const fullH = containerH * SNAP_FRACTIONS.full;
   const visible = containerH ? snapHeight(snap, containerH) - (dragDy ?? 0) : 0;
   const clamped = Math.max(snapHeight("peek", containerH), Math.min(fullH, visible));
@@ -78,21 +95,30 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, children }: Prop
       <div className="touch-none select-none px-3 pb-1 pt-2" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <button
           type="button"
-          className="mx-auto block h-1.5 w-10 rounded-full bg-rule"
+          className="mx-auto -mt-1.5 flex h-[28px] w-16 items-center justify-center"
           aria-label={snap === "full" ? "Collapse panels" : "Expand panels"}
           // keyboard and switch access (detail 0); a pointer tap is already handled by the drag
           // handlers on the parent, so it must not cycle twice
           onClick={(e) => {
             if (e.detail === 0) onSnap(snap === "peek" ? "half" : snap === "half" ? "full" : "peek");
           }}
-        />
-        <div className="mt-2 flex gap-1" role="tablist">
-          {tabs.map((t) => (
+        >
+          <span className="block h-1.5 w-10 rounded-full bg-rule" aria-hidden="true" />
+        </button>
+        <div className="mt-1 flex gap-1" role="tablist" aria-label="Map panels">
+          {tabs.map((t, i) => (
             <button
               key={t.id}
+              ref={(el) => {
+                tabRefs.current[i] = el;
+              }}
+              id={tabId(t.id)}
               type="button"
               role="tab"
               aria-selected={t.id === tab}
+              aria-controls={panelId}
+              tabIndex={t.id === tab ? 0 : -1}
+              onKeyDown={(e) => onTabKey(e, i)}
               onClick={() => {
                 onTab(t.id);
                 if (snap === "peek") onSnap("half");
@@ -104,8 +130,8 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, children }: Prop
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 pb-3" role="tabpanel">
-        {children}
+      <div id={panelId} className="min-h-0 flex-1 overflow-auto px-3 pb-3" role="tabpanel" aria-labelledby={tabId(tab)}>
+        {showPeek ? peek : children}
       </div>
     </div>
   );

@@ -4,12 +4,13 @@
 // A small accent mark shows which side is better on rows where that has a meaning and both
 // sides have data; "no data here" stays visible, never a zero.
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import type { SelectedHex } from "./MapView";
 import type { ClientManifest } from "../lib/clientManifest";
 import { compareRows, type RowGroup } from "../lib/compare";
 import { shortName, type DimInfo } from "../lib/dims";
 import { describeHex } from "../lib/inspect";
+import { placeHeader } from "../lib/place";
 import type { AppState } from "../lib/url";
 
 interface Props {
@@ -24,18 +25,27 @@ interface Props {
   embedded?: boolean;
 }
 
-const GROUP_TITLES: Record<RowGroup, string> = { summary: "", priorities: "Your priorities", hazard: "Climate hazards", wellbeing: "Wellbeing", life: "Life dimensions" };
-const GROUPS: RowGroup[] = ["summary", "priorities", "hazard", "wellbeing", "life"];
+const GROUP_TITLES: Record<RowGroup, string> = { summary: "", priorities: "Your priorities", hazard: "Climate hazards", wellbeing: "Wellbeing", env: "Environment today", life: "Life dimensions" };
+/** what the numbers in a group are, shown beside its title (as in the place panel) */
+const GROUP_SCALES: Partial<Record<RowGroup, string>> = { priorities: "match, 0-100", hazard: "value, rank among inhabited places", wellbeing: "value, score within its source", env: "observed today; value, rank", life: "value, rank among inhabited places" };
+const GROUPS: RowGroup[] = ["summary", "priorities", "hazard", "wellbeing", "env", "life"];
 
 export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRepick, onClose, embedded }: Props) {
   const picks = useMemo(() => ({ pol: state.pol }), [state.pol]);
   const ma = useMemo(() => describeHex(a.props, a.sourceLayer, dims, manifest), [a, dims, manifest]);
   const mb = useMemo(() => describeHex(b.props, b.sourceLayer, dims, manifest), [b, dims, manifest]);
+  const ha = placeHeader(ma, a.place);
+  const hb = placeHeader(mb, b.place);
   const rows = useMemo(() => compareRows({ model: ma, props: a.props }, { model: mb, props: b.props }, dims, state.weights, picks), [ma, mb, a.props, b.props, dims, state.weights, picks]);
 
   const Cell = ({ value, lean }: { value: string | null; lean: boolean }) => (
     <td className={`py-[3px] pr-2 align-top text-[12px] ${value === null ? "text-muted" : ""}`}>
-      {lean && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-label="better on this row" />}
+      {lean && (
+        <>
+          <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden="true" />
+          <span className="sr-only">Better here: </span>
+        </>
+      )}
       {value ?? "no data here"}
     </td>
   );
@@ -63,12 +73,12 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
           <tr className="text-left align-top">
             <th className="w-[30%] pb-1 pr-2 font-normal text-[11px] text-muted"></th>
             <th className="pb-1 pr-2 font-serif text-[15px] font-normal leading-tight">
-              {ma.title}
-              <div className="font-sans text-[11px] text-muted">{ma.subtitle}</div>
+              {ha.title}
+              <div className="font-sans text-[11px] text-muted">{ha.subtitle}</div>
             </th>
             <th className="pb-1 font-serif text-[15px] font-normal leading-tight">
-              {mb.title}
-              <div className="font-sans text-[11px] text-muted">{mb.subtitle}</div>
+              {hb.title}
+              <div className="font-sans text-[11px] text-muted">{hb.subtitle}</div>
             </th>
           </tr>
         </thead>
@@ -79,25 +89,35 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
             return [
               GROUP_TITLES[g] ? (
                 <tr key={`${g}-title`}>
-                  <td colSpan={3} className="border-t border-rule pt-2 font-serif text-[13px]">
-                    {GROUP_TITLES[g]}
+                  <td colSpan={3} className="border-t border-rule pt-2">
+                    <span className="font-serif text-[13px]">{GROUP_TITLES[g]}</span>
+                    {GROUP_SCALES[g] && <span className="ml-2 text-[11px] text-muted">{GROUP_SCALES[g]}</span>}
                   </td>
                 </tr>
               ) : null,
               ...inGroup.map((r) => (
-                <tr key={r.id} className="align-top">
-                  <td className="py-[3px] pr-2 text-[12px] text-muted" title={r.label}>
-                    {shortName(r.label)}
-                  </td>
-                  <Cell value={r.a} lean={r.leans === "a"} />
-                  <Cell value={r.b} lean={r.leans === "b"} />
-                </tr>
+                <Fragment key={r.id}>
+                  <tr className="align-top">
+                    <td className="py-[3px] pr-2 text-[12px] text-muted" title={r.label}>
+                      {shortName(r.label)}
+                    </td>
+                    <Cell value={r.a} lean={r.leans === "a"} />
+                    <Cell value={r.b} lean={r.leans === "b"} />
+                  </tr>
+                  {r.note && (
+                    <tr>
+                      <td colSpan={3} className="pb-[3px] text-[11px] leading-snug text-muted">
+                        {r.note}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )),
             ];
           })}
         </tbody>
       </table>
-      <p className="mt-2 text-[11px] text-muted">A dot marks the side that does better on a row; rows with a side missing are not judged.</p>
+      <p className="mt-2 text-[11px] text-muted">A dot marks the side that does better on a row; rows with a side missing, and how much hazard data each side has, are not judged.</p>
     </section>
   );
 }

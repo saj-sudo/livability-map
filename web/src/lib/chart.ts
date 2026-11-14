@@ -3,7 +3,7 @@
 // chart.test.ts proves the two agree, so the number a person reads is the number the hex
 // is coloured by. Missing stays null (invariant 3), never 0.
 
-import { weightable, type DimInfo } from "./dims";
+import { shortName, weightable, type DimInfo } from "./dims";
 import { hasAttr, type Picks, type Weights } from "./expressions";
 
 export type Props = Record<string, unknown>;
@@ -66,4 +66,14 @@ export function priorityBars(props: Props, dims: DimInfo[], weights: Weights, pi
 /** How many weighted dimensions are missing on the hex, and how many there are. */
 export function missingCount(bars: Bar[]): { missing: number; total: number } {
   return { missing: bars.filter((b) => b.match === null).length, total: bars.length };
+}
+
+/** One line naming the weighted layers with no data on this hex, or null when none is missing
+ *  (and when all are: the summary already says that). "3 of your weighted layers have no data
+ *  here: Schools, LGBTQ+ presence, Political lean." */
+export function missingNote(bars: Bar[]): string | null {
+  const missing = bars.filter((b) => b.match === null);
+  if (!missing.length || missing.length === bars.length) return null;
+  const names = missing.map((b) => shortName(b.name)).join(", ");
+  return missing.length === 1 ? `1 of your weighted layers has no data here: ${names}.` : `${missing.length} of your weighted layers have no data here: ${names}.`;
 }

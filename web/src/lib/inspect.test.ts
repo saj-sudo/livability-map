@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
-import { describeHex, HEAT_CAVEAT, SCORE_MEANING } from "./inspect";
+import { describeHex, HEAT_CAVEAT, SCORE_MEANING, scoreNoteFor } from "./inspect";
 
 // units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
 const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
@@ -80,6 +80,14 @@ describe("describeHex (SPEC §10 inspector)", () => {
     expect(describeHex({ ...props, res: 7 }, "hex7", DIMS, MANIFEST).resolution).toBe("H3 res 7 hex (~5.2 km²)");
     expect(describeHex(props, "hex6", DIMS, MANIFEST).resolution).toBe("H3 res 6 hex (~36 km²)");
     expect(describeHex(props, "hex4", DIMS, MANIFEST).resolution).toBe("H3 res 4 hex (~1,770 km²)");
+    expect(describeHex(props, "hex4", DIMS, MANIFEST)).toMatchObject({ res: 4, areaKm2: "1,770", populationN: null });
+  });
+
+  it("carries each row's direction so a bar can be coloured by it", () => {
+    const worse: DimInfo = { ...DIMS.find((d) => d.id === "rent")!, higher_is: "worse" };
+    const m = describeHex({ h3: "85z", iso_a2: "US", inhabited: true, rent_res: "county", rent_raw: 1450, rent_score: 91 }, "hex5", [...DIMS.filter((d) => d.id !== "rent"), worse], MANIFEST);
+    expect(m.life.find((r) => r.id === "rent")!.higherIs).toBe("worse");
+    expect(m.life.find((r) => r.id === "jobs")!.higherIs).toBe("better");
   });
 
   it("formats signed and composition dimensions", () => {
@@ -153,6 +161,12 @@ describe("honesty notes in the place panel (SPEC §16 Next steps)", () => {
     expect(m.hazards.find((h) => h.id === "heat")!.note).toBe(HEAT_CAVEAT);
     expect(HEAT_CAVEAT).toMatch(/humidity/);
     expect(m.hazards.filter((h) => h.id !== "heat").every((h) => h.note === undefined)).toBe(true);
+  });
+
+  it("tells a priorities match apart from a rank", () => {
+    expect(scoreNoteFor(false)).toBe(SCORE_MEANING);
+    expect(scoreNoteFor(true)).toMatch(/^Your priorities show a match/);
+    expect(scoreNoteFor(true)).toMatch(/other scores are ranks/);
   });
 
   it("keeps the heat caveat when the heat layer has no data", () => {

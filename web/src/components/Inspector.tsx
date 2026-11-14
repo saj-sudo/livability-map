@@ -5,16 +5,17 @@
 // priorities as bars, every dimension the manifest lists with its resolution or "no data
 // here", and a Sources disclosure. Rows are generated from `dims`, so new dimensions appear.
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import type { SelectedHex } from "./MapView";
 import { useTheme } from "./useTheme";
 import type { Theme } from "../lib/theme";
-import { priorityBars, type Bar } from "../lib/chart";
+import { missingNote, priorityBars, type Bar } from "../lib/chart";
 import type { ClientManifest } from "../lib/clientManifest";
-import { shortName, type DimInfo } from "../lib/dims";
+import { resLabel, shortName, type DimInfo } from "../lib/dims";
 import { formatScore } from "../lib/format";
-import { describeHex, type LifeRow } from "../lib/inspect";
-import { paletteFor, SHARE_COLORS, type Palette } from "../lib/palette";
+import { describeHex, EXPOSURE_MEANING, scoreNoteFor, type LifeRow } from "../lib/inspect";
+import { paletteFor, scoreBarColor, SHARE_COLORS, type Palette } from "../lib/palette";
+import { placeHeader } from "../lib/place";
 import { summarize } from "../lib/summary";
 import type { AppState } from "../lib/url";
 
@@ -25,21 +26,28 @@ interface Props {
   state: AppState;
   onClose: () => void;
   onCompare?: () => void;
+  /** a second place is being picked for a comparison */
+  picking?: boolean;
   /** rendered inside the phone bottom sheet: no floating chrome */
   embedded?: boolean;
 }
 
-const RES_WORDS: Record<string, string> = { hex: "this hex", grid: "1 km grid cells", basin: "sub-basin", tract: "tract level", area: "small-area level", county: "county level", admin1: "regional figure", national: "national figure", none: "no data here" };
 const SOURCE_WORDS: Record<string, string> = { shdi: "Subnational HDI", whr: "World Happiness Report" };
 
-export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** A panel section; `scale` names what its numbers are (a match, a rank), right of the title. */
+export function Section({ title, scale, children }: { title: string; scale?: string; children: React.ReactNode }) {
   return (
     <section className="mt-3 border-t border-rule pt-2">
-      <h3 className="mb-1 font-serif text-[14px]">{title}</h3>
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <h3 className="font-serif text-[14px]">{title}</h3>
+        {scale && <span className="text-right text-[11px] leading-tight text-muted">{scale}</span>}
+      </div>
       {children}
     </section>
   );
 }
+
+const RANK = "rank among inhabited places, 0-100";
 
 const NoData = () => <span className="text-muted">no data here</span>;
 
@@ -81,14 +89,14 @@ function DimRow({ row, theme, pal, track }: { row: LifeRow; theme: Theme; pal: P
           {shortName(row.name)}
           {row.chip && <span className="ml-1.5 text-[11px] text-muted">{row.chip}</span>}
         </span>
-        <span className="shrink-0 text-[11px] text-muted">{RES_WORDS[row.res] ?? row.res}</span>
+        <span className="shrink-0 text-[11px] text-muted">{resLabel(row.res)}</span>
       </div>
       {row.res !== "none" && (
         <div className="flex items-baseline justify-between gap-2 text-muted">
           <span className="min-w-0">{row.value ?? <NoData />}</span>
           {row.score !== null && (
             <span className="shrink-0 whitespace-nowrap tabular-nums text-ink">
-              <ScoreBar value={row.score} color={pal.rampGood[1]} track={track} /> {formatScore(row.score)}
+              <ScoreBar value={row.score} color={scoreBarColor(pal, row.higherIs)} track={track} /> {formatScore(row.score)}
             </span>
           )}
         </div>
@@ -104,26 +112,35 @@ function DimRow({ row, theme, pal, track }: { row: LifeRow; theme: Theme; pal: P
   );
 }
 
-export default function Inspector({ hex, manifest, dims, state, onClose, onCompare, embedded }: Props) {
+export default function Inspector({ hex, manifest, dims, state, onClose, onCompare, picking, embedded }: Props) {
   const [theme] = useTheme();
   const pal = paletteFor(theme);
   const picks = useMemo(() => ({ pol: state.pol }), [state.pol]);
   const m = useMemo(() => describeHex(hex.props, hex.sourceLayer, dims, manifest), [hex, dims, manifest]);
   const bars = useMemo(() => priorityBars(hex.props, dims, state.weights, picks), [hex, dims, state.weights, picks]);
   const summary = summarize(m, bars, dims, state.weights, picks, hex.props);
+  const header = placeHeader(m, hex.place);
+  const missing = missingNote(bars);
   const track = "color-mix(in srgb, var(--rule) 70%, transparent)";
+  // keyboard and screen-reader users land on the new place's name (not on every re-render)
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, [hex.h3]);
 
   return (
-    <section className={embedded ? "text-[13px]" : "absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[23rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"} aria-label="Hex details">
+    <section className={embedded ? "text-[13px]" : "absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[23rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"} aria-labelledby="place-title">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="font-serif text-[19px] leading-tight">{m.title}</h2>
+          <h2 id="place-title" ref={heading} tabIndex={-1} className="font-serif text-[19px] leading-tight focus:outline-none focus-visible:outline-2">
+            {header.title}
+          </h2>
+          {header.subtitle && <p className="text-[12px]">{header.subtitle}</p>}
           <p className="text-[12px] text-muted">
-            {m.subtitle ? `${m.subtitle}. ` : ""}
-            {m.population} in a {m.resolution.replace("H3 ", "").replace(" (~", ", about ").replace(")", "")}.
+            {header.line}.
           </p>
         </div>
-        <button type="button" onClick={onClose} className="-mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-panel text-muted hover:bg-rule hover:text-ink" aria-label="Close">
+        <button type="button" onClick={onClose} className="-mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-panel text-muted hover:bg-rule hover:text-ink" aria-label="Close place details">
           <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" />
           </svg>
@@ -131,15 +148,26 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
       </div>
 
       <p className="mt-2 font-serif text-[14px] leading-snug">{summary}</p>
+      <p className="mt-1.5 text-[12px] leading-snug text-muted">
+        {scoreNoteFor(bars.length > 0)}
+      </p>
 
       {bars.length > 0 && (
-        <Section title="Your priorities">
+        <Section title="Your priorities" scale="match with your priorities, 0-100">
           <PriorityBars bars={bars} hatchColor={pal.grey} barColor={pal.rampPriority[1]} track={track} />
+          {missing && <p className="mt-1.5 text-[12px] text-muted">{missing}</p>}
         </Section>
       )}
 
-      <Section title={`Climate hazards, ${manifest.horizon}`}>
+      <Section title={`Climate hazards, ${manifest.horizon}`} scale={RANK}>
         <table className="w-full text-[12px]">
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">Hazard</th>
+              <th scope="col">Projected value</th>
+              <th scope="col">Rank among inhabited places</th>
+            </tr>
+          </thead>
           <tbody>
             {m.hazards.map((h) => (
               <Fragment key={h.id}>
@@ -171,12 +199,11 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
         </table>
         <p className="mt-1 text-[12px] text-muted">
           {m.coverage}
-          {m.exposure !== null ? `; combined exposure ${formatScore(m.exposure)}` : "; exposure not computed"}
+          {m.exposure !== null ? `; combined exposure ${formatScore(m.exposure)}, ${EXPOSURE_MEANING}` : "; combined exposure not computed"}.
         </p>
-        <p className="mt-1 text-[11px] leading-snug text-muted">{m.scoreNote}</p>
       </Section>
 
-      <Section title="Wellbeing">
+      <Section title="Wellbeing" scale="score 0-100 within its source">
         <p className="text-[12px]">
           {m.wellbeing.value ?? <NoData />}
           {m.wellbeing.score !== null && (
@@ -188,14 +215,14 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
         </p>
         {m.wellbeing.source !== "none" && (
           <p className="text-[12px] text-muted">
-            {SOURCE_WORDS[m.wellbeing.source] ?? m.wellbeing.source}, {RES_WORDS[m.wellbeing.res] ?? m.wellbeing.res}
+            {SOURCE_WORDS[m.wellbeing.source] ?? m.wellbeing.source}, {resLabel(m.wellbeing.res)}
           </p>
         )}
         <p className="mt-1 text-[12px]">Combined: {m.bivar}.</p>
       </Section>
 
       {m.env.length > 0 && (
-        <Section title="Environment today">
+        <Section title="Environment today" scale={RANK}>
           <p className="mb-1 text-[11px] text-muted">Observed, not projected; not part of the exposure score.</p>
           <ul className="space-y-1.5 text-[12px]">
             {m.env.map((row) => (
@@ -205,7 +232,7 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
         </Section>
       )}
 
-      <Section title="Life dimensions">
+      <Section title="Life dimensions" scale={RANK}>
         <ul className="space-y-1.5 text-[12px]">
           {m.life.map((row) => (
             <DimRow key={row.id} row={row} theme={theme} pal={pal} track={track} />
@@ -228,8 +255,8 @@ export default function Inspector({ hex, manifest, dims, state, onClose, onCompa
       </details>
 
       {onCompare && (
-        <button type="button" onClick={onCompare} className="mt-3 w-full rounded-panel border border-rule bg-panel-solid py-1.5 text-[13px] hover:border-muted">
-          Compare with another place
+        <button type="button" onClick={onCompare} disabled={picking} className="mt-3 w-full rounded-panel border border-rule bg-panel-solid py-1.5 text-[13px] hover:border-muted disabled:text-muted">
+          {picking ? "Pick a second place on the map, or search for one" : "Compare with another place"}
         </button>
       )}
     </section>

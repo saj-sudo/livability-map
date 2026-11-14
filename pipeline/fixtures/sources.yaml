@@ -671,3 +671,25 @@
   verified: confirmed
   vintage: "fixture"
   files: [gem_plants.csv]
+- id: eu_qol_cities
+  name: fixture EU cities survey (URAU-like city polygons in XKA with agreement shares; Birch lacks the immigrants item)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/eucities.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [eucities.gpkg]
+- id: opp_atlas
+  name: fixture Opportunity Atlas-like values crosswalked onto the tracts (same file as acs_summary; raw stand-ins opp_tracts10.csv and tract_rel_2020_2010.txt)
+  group: life
+  access: fixture
+  url: file://pipeline/fixtures/data/tracts.gpkg
+  format: geopackage
+  crs: EPSG:4326
+  license: CC0 (synthetic fixture)
+  verified: confirmed
+  vintage: "fixture"
+  files: [tracts.gpkg]

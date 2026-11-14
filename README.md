@@ -6,8 +6,11 @@ heat counts twice in the combined exposure, SPEC §13.47) beside **present-day w
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
 presence, political lean, income mix, housing cost burden, healthcare, cost
 of living, rent, travel time to healthcare and to a city, walking time to healthcare, internet
-speed, relative wealth, armed conflict nearby, working water points, and in the US natural hazard
-losses today (FEMA NRI) and adults in fair or poor health (CDC PLACES); racial composition is
+speed, relative wealth, armed conflict nearby, working water points, in about 83 European cities
+how welcoming to immigrants and how safe at night residents say their city is, and in the US
+natural hazard losses today (FEMA NRI), adults in fair or poor health (CDC PLACES) and the adult
+incomes of children who grew up there (Opportunity Atlas: all families, and kids from low-income
+families); racial composition is
 shown per place as context, never weighted, SPEC §13.40) plus the **present-day
 environment** (air quality, traffic and combustion pollution (NO2), tree cover, wildfire, drought
 risk, heavy industry nearby) and everyday amenities nearby (groceries, pharmacies, clinics,
@@ -15,8 +18,10 @@ schools, parks), on H3 hexagons from about
 1,770 km² on all land down to about 5 km² inside urban centres, built only from open-licensed
 data.
 
-LGBTQ+ presence is a proxy and US-only: same-sex couple households per 1,000 households from the
-Census ACS, by tract. LGBTQ+ protection (state and national policy) is not on the map yet; the
+LGBTQ+ presence is a proxy in the US: same-sex couple households per 1,000 households from the
+Census ACS, by tract. In about 83 European cities it is a perception instead: the share of residents
+who agree their city is a good place for gay or lesbian people (2023 survey, SPEC §13.48). The two
+are different measures, labelled and ranked separately. LGBTQ+ protection (state and national policy) is not on the map yet; the
 usable sources are waiting on permission from their publishers (SPEC §20.6).
 
 It does **not** recommend where to live. It shows evidence, shows its sources, and shows its
@@ -29,10 +34,11 @@ e2e) and hardening are done (SPEC §13.39-45). The map is not deployed yet: publ
 Pages needs credentials in `.env` (see [`docs/manual-steps.md`](docs/manual-steps.md)).
 
 The current build has H3 res 4 and 5 on all land, res 6 across the US, EU, UK, EFTA and urban
-clusters, and res 7 inside urban centres, with 31 dimensions (5 hazards, wellbeing, 19 life
-dimensions, 6 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
-`hexes_city` 152 MB; heavy industry nearby and humid heat, the fifth hazard, were added after that
-build, and humid heat still needs its first-hand source check, `docs/manual-steps.md` item 16). Five
+clusters, and res 7 inside urban centres, with 29 dimensions (4 hazards, wellbeing, 19 life
+dimensions, 5 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
+`hexes_city` 152 MB). Heavy industry nearby, humid heat (the fifth hazard), NO2, everyday
+amenities, the two EU city survey layers and the two Opportunity Atlas layers were added after
+that build, making 37 dimensions (5 hazards, wellbeing, 24 life, 7 environment). Several
 inputs wait on a manual download, and until they arrive these layers
 are empty or coarser than designed:
 
@@ -46,6 +52,10 @@ are empty or coarser than designed:
 - **Heavy industry nearby** (Climate TRACE sector downloads, optionally GEM plants), **NO2**
   (an Earth Engine export) and **everyday amenities** (an Overture extract): empty until the files
   are saved and checked (`docs/manual-steps.md` items 15, 18-20).
+- **EU cities survey** (Eurostat QoL in European cities + GISCO city boundaries): `immig`, `safe`
+  and the EU part of LGBTQ+ presence are empty until both files are saved (item 21).
+- **Kids' adult income** (Opportunity Atlas, both measures): empty until the tract CSV is saved
+  (item 22).
 
 See [`SPEC.md`](SPEC.md) for the full spec; section numbers below refer to it.
 
@@ -70,10 +80,11 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   - WRI Aqueduct 4.0 future water stress   - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
                                            - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
+                                           - EU cities: QoL perception survey on GISCO city polygons
                                            - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
                                              GFED5 fire, Meta RWI, UCDP, WPdx, Climate TRACE + GEM
                                              plants, Sentinel-5P NO2, Overture places;
-                                             US tracts: FEMA NRI, CDC PLACES
+                                             US tracts: FEMA NRI, CDC PLACES, Opportunity Atlas
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
@@ -93,7 +104,7 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
   |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
   |            fill only their own country's hexes (§13.45)                                               |
-  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
+  |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|city|national|none)        |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok) 0-5,                      |
   |            dry and humid heat are separate hazards, so heat counts twice (§13.47)                     |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |

@@ -77,6 +77,10 @@ data hosts, so each one is `verified: search` until checked on Saj's laptop (CLA
 **Update 2026-11-14:** FEMA NRI and CDC PLACES are wired (SPEC §13.38); Climate TRACE is wired as
 the `industry` env layer, a count of large facilities within 10 km (SPEC §13.46), with GEM plants
 merged in (§13.49). NO2 (`no2`) and Overture everyday amenities (`amen`) are wired too (§13.49).
+The EU cities survey is wired as a second `lgbtq` joiner and the `immig` and `safe` dimensions on
+GISCO city polygons (new tag `city`), and the Opportunity Atlas as `opp` (all parents) and `opp25`
+(parents at the 25th percentile) via the Census 2010-to-2020 tract relationship file (SPEC §13.48);
+all `verified: search` until checked on the laptop (manual-steps items 21 and 22).
 
 ## Recommended order, if we build any of it
 

@@ -29,8 +29,10 @@ Last updated: 2026-11-14.
 | 18 | [Sentinel-5P NO2 export](#18-sentinel-5p-no2-export-earth-engine) | the `no2` layer (traffic and combustion pollution) | 20 min |
 | 19 | [Overture everyday-amenities extract](#19-overture-everyday-amenities-extract) | the `amen` layer (everyday amenities nearby) | 20 min, one command |
 | 20 | [Global Energy Monitor trackers (optional)](#20-global-energy-monitor-trackers-optional) | adds smaller plants to `industry` | 15 min, four forms |
+| 21 | [EU cities survey and GISCO city boundaries](#21-eu-cities-survey-and-gisco-city-boundaries) | `immig`, `safe` and LGBTQ+ presence in about 83 European cities; lets publish include them | 20 min |
+| 22 | [Opportunity Atlas tract outcomes](#22-opportunity-atlas-tract-outcomes) | US `opp` and `opp25` (kids' adult income, all families and low-income families); lets publish include them | 10 min + read terms |
 
-Items 2-4, 6 and 15 only need a file saved in the right place. After any of them, run
+Items 2-4, 6 and 15-17 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
 (the commands are listed per item).
 
@@ -310,6 +312,60 @@ spreadsheets in `data/raw/gem_trackers/` as `gem_coal_plants.xlsx`, `gem_gas_pla
 and run `uv run python -m pipeline --res 5 dims --only industry`. To ship without GEM instead,
 remove `gem_trackers` from the `industry` `sources:` list in `pipeline/dimensions.yaml` (publish
 refuses any listed source that is not verified).
+
+### 21. EU cities survey and GISCO city boundaries
+
+Three layers come from the "Perception of quality of life in European cities" survey (2023 wave,
+SPEC §13.48): the EU part of `lgbtq` (good place for gay or lesbian people), `immig` (good place
+for immigrants) and `safe` (safe walking alone at night). The dataset id, file layout, item wording
+and licence were written from memory; the cloud container cannot reach ec.europa.eu.
+
+1. **Survey table.** Open the Eurostat data browser for `urb_percep`
+   (https://ec.europa.eu/eurostat/databrowser/view/urb_percep/default/table), download the full
+   dataset as SDMX-CSV with "Codes and labels", and save it as
+   `data/raw/eu_qol_cities/urb_percep.csv`. Check that the 2023 wave is in it and that the three
+   items appear with strongly / somewhat agree answers. If `urb_percep` stops before 2023, take
+   the 2023 results file from the DG REGIO "Quality of life in European cities" page, save it as
+   a long CSV (columns: city code or name, question, answer, value) under the same name, and ask
+   Claude to check the loader reads it. If the table has item codes but no wording, ask Claude to
+   list the codes under `items:` on `eu_qol_cities` in `pipeline/sources.yaml`.
+2. **City polygons.** On https://ec.europa.eu/eurostat/web/gisco/geodata/statistical-units/urban-audit
+   download the 2021 Urban Audit "cities" layer in EPSG:4326 as GeoJSON and save it as
+   `data/raw/gisco_urau_cities/urau_cities_2021.geojson`. Check it has `URAU_CODE` (like `DE001C`)
+   and `URAU_NAME`, and whether the survey's UK, Western Balkan and Turkish cities are in it.
+3. Check both licences (expected: Eurostat CC BY 4.0; GISCO / EuroGeographics non-commercial with
+   attribution), set `verified: confirmed` and `vintage` on `eu_qol_cities` and
+   `gisco_urau_cities`, and add the results to SPEC §15.
+
+Then: `uv run python -m pipeline fetch` (records checksums), then
+`uv run python -m pipeline --res 5 dims --only lgbtq --only immig --only safe` and the usual
+score / export / tiles. The prep step prints any surveyed city without a polygon.
+
+### 22. Opportunity Atlas tract outcomes
+
+`opp` (kids' adult income, all families) and `opp25` (kids from low-income families) come from
+the Opportunity Atlas (SPEC §13.48). The file name, column names and terms were written from
+memory.
+
+1. On https://opportunityinsights.org/data/ open the Opportunity Atlas tract outcomes and save
+   the CSV as `data/raw/opp_atlas/tract_outcomes_simple.csv`. It must have `state`, `county`,
+   `tract`, `kfr_pooled_pooled_mean` and `kfr_pooled_pooled_p25`; if the simple file lacks either
+   measure, save the full tract outcomes CSV under the same name instead (the loader reads only
+   the columns it needs, and stops with the kfr columns it found if one is missing).
+2. Read the data terms on that page (expected: free to use with citation of Chetty, Friedman,
+   Hendren, Jones and Porter 2018). If they forbid redistribution of derived values, tell Claude
+   so the layers can be dropped before publish.
+3. The Census tract relationship file downloads itself:
+   `uv run python -m pipeline fetch --only opp_atlas --only census_tract_rel_2020_2010`. If its URL
+   fails, get the national 2020-to-2010 census tract relationship file from the Census Bureau's
+   relationship files page and save it as
+   `data/raw/census_tract_rel_2020_2010/tab20_tract20_tract10_natl.txt`.
+4. Set `verified: confirmed` and `vintage` on `opp_atlas` and `census_tract_rel_2020_2010`, and
+   add the results to SPEC §15.
+
+Then: `uv run python -m pipeline --res 5 dims --only opp --only opp25` and the usual score /
+export / tiles. Check the printed count of 2020 tracts without a polygon (Connecticut is the
+likely gap).
 ---
 
 ## Done

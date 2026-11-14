@@ -21,7 +21,9 @@ NON_COMMERCIAL: bool = True  # §13.13
 # grid = a statistical grid (Eurostat 1 km census cells) aggregated per hex (Session 8, SPEC §13.34)
 # area = a small statistical area outside the US (England LSOA, French IRIS, Canadian DAs, Australian
 # SA2), kept apart from `tract` so each carries its own unit text on the hex
-RES_TAGS = ("hex", "grid", "basin", "admin1", "county", "tract", "area", "national", "none")
+# city = a whole city's survey figure (Eurostat QoL in European cities on GISCO Urban Audit city
+# polygons, SPEC §13.48), coarser than a small area, finer than admin1
+RES_TAGS = ("hex", "grid", "basin", "admin1", "county", "tract", "area", "city", "national", "none")
 
 BBox = tuple[float, float, float, float]  # minlng, minlat, maxlng, maxlat
 

@@ -18,6 +18,10 @@ A 4 x 4 degree region (lng 10..14, lat 40..44) with:
   national price levels
 - neighbourhood statistics (Session 8): a Eurostat-like 1 km grid of points over north-east XKA
   and LSOA-like deprivation polygons over south-east XKA (west XKA keeps the OECD stand-in)
+- EU cities survey stand-in (SPEC §13.48): three URAU-like city polygons in XKA with agreement
+  shares (Birch lacks the immigrants item), and Opportunity Atlas stand-ins: 2010-like tracts,
+  each split across two of the XKB tracts, plus a Census-like 2020-2010 relationship file; the
+  tracts carry the crosswalked values (`kfr_pooled`, `kfr_p25`, `children`) computed by prep/opp_atlas.py
 
 Everything is analytic or seeded, so regeneration is content-deterministic: rasters, CSV and
 NetCDF are byte-identical; GeoPackage files embed a write timestamp, so their digest in
@@ -43,7 +47,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 19  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 20  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 # the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
 # small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
@@ -647,6 +651,66 @@ def ngo_layers(LNG, LAT, land: np.ndarray, transform, out: Path) -> None:
     pd.DataFrame({"lat": wlat.ravel().round(4), "lng": wlng.ravel().round(4), "has_water": has}).to_csv(out / "wpdx.csv", index=False)
 
 
+# URAU-like city polygons in XKA (the EU / UK stand-ins' country) with survey agreement shares in
+# percent; Birch has no immigrants item, so `immig` is missing there while `lgbtq` and `safe` are not
+EU_CITIES = [  # code, name, box, gay_good_pct, immig_good_pct, safe_night_pct
+    ("XA001C", "Alder", (10.65, 42.65, 11.35, 43.35), 72.0, 61.0, 68.0),
+    ("XA002C", "Birch", (11.2, 40.7, 11.8, 41.3), 55.0, np.nan, 74.0),
+    ("XA003C", "Ash", (10.1, 41.55, 10.7, 42.15), 40.0, 35.0, 81.0),
+]
+
+
+def eu_cities_layer() -> gpd.GeoDataFrame:
+    """Stand-in for the prepared EU QoL layer (prep/eu_qol.py output): city polygons with the
+    three item columns."""
+    return gpd.GeoDataFrame(
+        {
+            "city_code": [c[0] for c in EU_CITIES],
+            "city_name": [c[1] for c in EU_CITIES],
+            "gay_good_pct": [c[3] for c in EU_CITIES],
+            "immig_good_pct": [c[4] for c in EU_CITIES],
+            "safe_night_pct": [c[5] for c in EU_CITIES],
+        },
+        geometry=[box(*c[2]) for c in EU_CITIES],
+        crs=4326,
+    )
+
+
+def opportunity_standins(tracts: gpd.GeoDataFrame, out: Path) -> gpd.GeoDataFrame:
+    """Opportunity Atlas stand-ins (SPEC §13.48). Each 2010-like tract ``X10{k}{j}`` covers the
+    XKB tracts of columns 2k and 2k+1 in row j, so every 2010 tract is split across two 2020
+    tracts. Values rise towards Cedar (the 25th-percentile measure below the all-parents one, as in
+    the real Atlas); 2010 tracts centred in the desert are suppressed (blank),
+    so their 2020 tracts stay missing. Writes the Atlas-like CSV and the pipe-delimited
+    relationship file, then returns ``tracts`` with ``kfr_pooled``, ``kfr_p25`` and ``children`` computed from
+    them by the real crosswalk, which the fixture `opp_atlas` source reads as-is."""
+    import shapely
+
+    from ..prep import opp_atlas
+
+    rows, rel = [], []
+    for _, t in tracts.iterrows():
+        i, j = int(t["GEOID"][3:5]), int(t["GEOID"][5:7])
+        geoid10 = f"X10{i // 2:02d}{j:02d}"
+        part = int(round(t.geometry.area * 1e10))
+        rel.append({"OID_TRACT_20": len(rel) + 1, "GEOID_TRACT_20": t["GEOID"], "NAMELSAD_TRACT_20": f"Census Tract {t['GEOID']}", "AREALAND_TRACT_20": part, "AREAWATER_TRACT_20": 0, "GEOID_TRACT_10": geoid10, "AREALAND_PART": part, "AREAWATER_PART": 0})
+        if geoid10 not in {r["geoid"] for r in rows}:
+            cx, cy = 12.0 + 0.4 * (i // 2) + 0.2, 40.0 + 0.2 * j + 0.1
+            near = float(np.exp(-((cx - 13.0) ** 2 + (cy - 42.5) ** 2) / (2 * 0.4**2)))
+            suppressed = bool(shapely.contains_xy(DESERT, cx, cy))
+            rows.append({"geoid": geoid10, "kfr_pooled_pooled_mean": "" if suppressed else f"{0.35 + 0.3 * near:.4f}", "kfr_pooled_pooled_p25": "" if suppressed else f"{0.30 + 0.2 * near:.4f}", "kfr_pooled_pooled_n": f"{round(30 + 3000 * near)}"})
+    relf = pd.DataFrame(rel)
+    land10 = relf.groupby("GEOID_TRACT_10")["AREALAND_PART"].transform("sum")
+    relf.insert(relf.columns.get_loc("GEOID_TRACT_10") + 1, "AREALAND_TRACT_10", land10)
+    pd.DataFrame(rows).to_csv(out / "opp_tracts10.csv", index=False)
+    relf.to_csv(out / "tract_rel_2020_2010.txt", sep="|", index=False)
+    atlas = opp_atlas.prepare(pd.read_csv(out / "opp_tracts10.csv", dtype=str))
+    table = opp_atlas.crosswalk(atlas, opp_atlas.read_relationship(opp_atlas.read_rel_file(out / "tract_rel_2020_2010.txt")))
+    merged = tracts.merge(table, on="GEOID", how="left")
+    merged[["kfr_pooled", "kfr_p25"]] = merged[["kfr_pooled", "kfr_p25"]].round(4)
+    return gpd.GeoDataFrame(merged, geometry="geometry", crs=4326)
+
+
 def build(out: Path) -> dict[str, str]:
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
@@ -677,7 +741,9 @@ def build(out: Path) -> dict[str, str]:
     whr.to_csv(out / "whr.csv", index=False)
 
     tracts, counties, transit = us_like_layers(land_gdf.geometry.iloc[0], rng)
+    tracts = opportunity_standins(tracts, out)  # §13.48: Atlas-like 2010 values crosswalked onto the tracts
     tracts.to_file(out / "tracts.gpkg", driver="GPKG")
+    eu_cities_layer().to_file(out / "eucities.gpkg", driver="GPKG")
     counties.to_file(out / "counties.gpkg", driver="GPKG")
     transit.to_file(out / "transit_stops.gpkg", driver="GPKG")
     sld, districts = us_like_detail_layers(land_gdf.geometry.iloc[0])

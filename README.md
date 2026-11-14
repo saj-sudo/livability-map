@@ -5,7 +5,8 @@ flood, coastal flood, water stress; one moderate scenario, 2050) beside **presen
 and a set of **life dimensions** you can weight yourself (jobs, transit, schools, LGBTQ+
 presence, political lean, income mix, housing cost burden, healthcare, cost
 of living, rent, travel time to healthcare and to a city, walking time to healthcare, internet
-speed, relative wealth, armed conflict nearby, working water points; racial composition is
+speed, relative wealth, armed conflict nearby, working water points, and in the US natural hazard
+losses today (FEMA NRI) and adults in fair or poor health (CDC PLACES); racial composition is
 shown per place as context, never weighted, SPEC §13.40) plus the **present-day
 environment** (air quality, tree cover, wildfire, drought risk), on H3 hexagons from about
 1,770 km² on all land down to about 5 km² inside urban centres, built only from open-licensed
@@ -19,14 +20,15 @@ It does **not** recommend where to live. It shows evidence, shows its sources, a
 gaps. Every number on the map is traceable to a dataset, a vintage and a license. Missing data
 renders as missing, never as zero.
 
-**Status (2026-09-24):** the pipeline runs end to end on real data on a laptop, and the map app
-runs locally against its output. The map is not deployed yet: publishing to Cloudflare R2 /
+**Status (2026-11-14):** the pipeline runs end to end on real data on a laptop, and the map app
+runs locally against its output. Release safety (validate gate, content-addressed publish, CSP,
+e2e) and hardening are done (SPEC §13.39-45). The map is not deployed yet: publishing to Cloudflare R2 /
 Pages needs credentials in `.env` (see [`docs/manual-steps.md`](docs/manual-steps.md)).
 
 The current build has H3 res 4 and 5 on all land, res 6 across the US, EU, UK, EFTA and urban
 clusters, and res 7 inside urban centres, with 29 dimensions (4 hazards, wellbeing, 19 life
 dimensions, 5 environment layers) in three tile archives (`hexes` 191 MB, `hexes_nbhd` 264 MB,
-`hexes_city` 152 MB). Three inputs wait on a manual download, and until they arrive these layers
+`hexes_city` 152 MB). Four inputs wait on a manual download, and until they arrive these layers
 are empty or coarser than designed:
 
 - **Political lean** (MIT Election Lab county returns): empty. It has no other source.
@@ -34,6 +36,8 @@ are empty or coarser than designed:
   Australia are populated from their national statistics offices.
 - **Regional wellbeing** (Global Data Lab Subnational HDI): wellbeing falls back to the national
   World Happiness Report value wherever that report has one.
+- **Adults in fair or poor health** (CDC PLACES, US tracts): empty until the CSV is saved by hand;
+  FEMA NRI and PLACES also need a first-hand licence check before `publish` includes them.
 
 See [`SPEC.md`](SPEC.md) for the full spec; section numbers below refer to it.
 
@@ -57,14 +61,16 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
                                            - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
-                                           - hex-level: MAP travel time, ACAG PM2.5, tree cover, Ookla
+                                           - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
+                                           - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
+                                             GFED5 fire, Meta RWI, UCDP, WPdx; US tracts: FEMA NRI, CDC PLACES
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
   |               pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 6] [--bbox ...] <stage>)  |
   |                                                                                                        |
   |  fetch     download + sha256 each source per pipeline/sources.yaml -> data/raw/<id>/                  |
-  |            manual sources (GEE export, registration) are checked for presence, recipe printed         |
+  |            manual sources (registration, browser-only) are checked for presence, recipe printed       |
   |  urban     GHS-SMOD classes -> urban centre / cluster polygons with ids -> data/interim/urban.parquet |
   |  grid      resolution plan (pipeline/resolution_plan.yaml, §9.1): res 4 + 5 from Natural Earth land,  |
   |            res 6 = children of res-5 cells in US/EU/UK/EFTA or touching urban clusters, res 7 =       |
@@ -75,7 +81,8 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |            -> per-hazard 0-100 percentile score + *_ok flag (res 6/7 ranked against res 5, §13.32)    |
   |  dims      prep/<source>.py turns each raw source into a joinable layer; for each dimension in       |
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
-  |            area_weighted_overlay | point_density | raster_mean | point_mean                          |
+  |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
+  |            fill only their own country's hexes (§13.45)                                               |
   |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
@@ -137,10 +144,10 @@ npm run deploy                                     # Cloudflare Pages via wrangl
 
 1. Confirm each source in `pipeline/sources.yaml` first-hand and log it in SPEC §15. The
    `fetch` stage refuses any source whose license or URL is still `VERIFY`.
-2. Some sources need a person: Aqueduct Floods (one-time Google Earth Engine export, see
-   [`docs/gee-export.md`](docs/gee-export.md)), and the registration, browser-check and
-   permission items in [`docs/manual-steps.md`](docs/manual-steps.md) (Global Data Lab SHDI, HUD
-   Fair Market Rents, MIT Election Lab county returns, among others).
+2. Some sources need a person: the registration, browser-check and permission items in
+   [`docs/manual-steps.md`](docs/manual-steps.md) (Global Data Lab SHDI, HUD Fair Market Rents,
+   MIT Election Lab county returns, CDC PLACES, among others). Aqueduct Floods now download
+   directly (SPEC §13.19); [`docs/gee-export.md`](docs/gee-export.md) is the fallback recipe.
 3. `python -m pipeline fetch` then `python -m pipeline --res 4 all` for a first global pass
    (about 35 minutes and 6 GB of RAM on a laptop); use `--bbox minlng,minlat,maxlng,maxlat` to
    iterate on a region (Dhaka, Phoenix, Reykjavik, the Sahel are the spot checks; bbox runs get
@@ -157,7 +164,8 @@ pipeline/               Python pipeline package (python -m pipeline <stage>)
   dimensions.yaml       everything a person can weight, with joiners (§20.2)
   stages/               fetch urban grid pop admin hazards dims score export tiles validate publish
   prep/                 one loader per real source -> the columns dimensions.yaml names
-  joiners/              polygon_centroid iso_lookup area_weighted_overlay point_density (§20.3)
+  joiners/              polygon_centroid iso_lookup area_weighted_overlay raster_mean point_mean
+                        point_radius (§20.3)
   crosswalks/           manual OECD TL2 -> geoBoundaries ADM1 overrides (§13.21)
   h3util.py             polygon -> cells, raster -> H3 aggregation (rasterize + bincount)
   scoring.py            percentile / min-max / bivariate class (§8)
@@ -165,7 +173,7 @@ pipeline/               Python pipeline package (python -m pipeline <stage>)
   manifest.py           manifest.json (§6.3)
   fixtures/             synthetic world generator and fixture sources.yaml (§11.1)
 tests/                  pytest, runs on fixtures only
-docs/                   recipes (Earth Engine export)
+docs/                   manual steps, deploy and rollback, source candidates, GEE fallback, screenshots
 web/                    Next.js 16 static export: MapLibre map, inspector, priorities, /methodology, /about
 data/                   gitignored raw / interim / out; data/raw/CHECKSUMS is committed
 ```

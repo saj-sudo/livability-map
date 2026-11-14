@@ -28,8 +28,12 @@ sources in `dims`, lazy per-dimension layers and array accumulators / chunked po
 gain unproven until a res-6 `dims` run on the laptop), per-dimension crash resume, the NRI cross-check
 tool (`pipeline/nri_check.py`), and tests for `rawfiles`, `timing` and the GSAP / SHDI loaders. The first
 real run after §13.44 rebuilds every stage once more.
-Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and three
-manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook). SPEC §13 records the
+Review pass (2026-11-14, SPEC §13.45): single-country joiner domains stay in their country
+(`Settings.domain_countries`), prep and unzip caches keyed on what they read, tie-safe terciles,
+inhabited min-max bounds, `point_density` removed; web UX honesty fixes (match vs rank labels,
+selection reducer `lib/selection.ts`, compare picking banner, a11y, plain-language /methodology).
+Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and four
+manual downloads (GDL SHDI, MEDSL county returns, HUD FMR workbook, CDC PLACES). SPEC §13 records the
 decisions taken; open, unscheduled work is the "Next steps" list in SPEC §16. A full res-6/7
 rebuild takes ~8 hours.
 
@@ -69,7 +73,8 @@ code does.
 CLI options (`--fixtures`, `--res`, `--bbox minlng,minlat,maxlng,maxlat`, `--force`) are typer
 callback options and must precede the stage name. `--res` picks resolutions from the plan
 (default: all of them). `all` runs stages in order and stops cleanly
-at the first stage that is still planned (`pipeline/stages/PLANNED` maps stage to session).
+at the first stage that is still planned (the `PLANNED` dict in `pipeline/stages/__init__.py`
+maps stage to session; empty today).
 
 ## Environment constraint
 
@@ -150,7 +155,7 @@ EPSG:4326.
 
 **Joiners** (`pipeline/joiners/`): `polygon_centroid`, `iso_lookup`, `area_weighted_overlay`
 (population-weighted via `weight_field`, equal-area CRS 6933, `min_coverage` guard),
-`point_density`, and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
+and the hex-level pair `raster_mean` (tag `hex`; `decimate` block-averages 100 m
 rasters to 1 km first, `sample: centroid` for rasters coarser than the hex) and `point_mean`
 (weighted mean of points per hex) and `point_radius` (mean or sum of points within a radius of
 the centre; `domain_by_country` ranks such values within each country). All return a Series aligned to the hexes index with NaN for
@@ -161,8 +166,9 @@ census cells), `basin`, `admin1`, `county`, `tract`, `area` (small areas outside
 LSOA), `national`, `none`; dimension groups: `hazard`, `wellbeing`, `life`, `env`
 (present-day environment, never part of `exposure`, SPEC §13.28).
 
-**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 6): a 4°x4° synthetic region
-(countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`, five admin1
+**Fixture world** (`pipeline/fixtures/make_fixtures.py`, VERSION 14): a 4°x4° synthetic region
+(countries XKA/XKB with user-assigned ISO2 `XA`/`XB` via `Settings.iso_overrides`; the US-like
+stand-ins sit in XB and the UK/EU ones in XA, `make_fixtures.apply` sets both overrides, five admin1
 regions, four towns, a zero-population desert, a coast, an island), heat/flood/water-stress
 inputs, tabular wellbeing, and stand-ins for every life-dimension source (GSAP, OECD TL2,
 ILOSTAT, ACS-like tracts, SLD block groups, districts, counties, BEA-like states, ICP / WDI
@@ -191,8 +197,9 @@ natural_earth_places`). Below 640px the panels live in a bottom sheet. Compositi
 failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
 `lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.41). `scripts/headers.mjs`
 writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
-with those headers and Range support for `web/e2e/` (Playwright 1.56.1, pinned to the container's
-Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go under
+with those headers and Range support for `web/e2e/` (Playwright 1.56.1; the CI `e2e` job installs
+its own browser). The cloud container's Chromium has moved on (1243 in Nov 2026), so run e2e there
+with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`. Playwright screenshots go under
 `.playwright-mcp/` (ignored).
 
 ## Rules that are easy to break
@@ -201,7 +208,9 @@ Chromium 1194; the CI `e2e` job installs its own). Playwright screenshots go und
   The one documented exception is `population` (a count) in the `pop` stage.
 - Keep tile attribute names short (they ship in every vector tile) and follow §6.1 naming:
   `{id}_raw / {id}_score / {id}_res`, `{id}_lean` for signed, `{id}_w/b/h/a/o/maj` for composition.
-- Never percentile a US-only value against the world; scoring domains are per joiner (§20.4).
+- Never percentile a US-only value against the world; scoring domains are per joiner (§20.4), and a
+  joiner whose domain is one country (`config.DOMAIN_COUNTRIES`) only fills that country's hexes
+  (§13.45). A new single-country domain needs an entry there and in `make_fixtures.DOMAIN_COUNTRIES`.
 - No paid or non-redistributable data (Walk Score, Cook PVI, NHGIS, IPUMS, GreatSchools, Numbeo,
   SEDA without permission). SHDI is non-commercial only and the project is non-commercial (§13.13).
 - `data/raw/`, `data/interim/`, `data/out/`, `pipeline/fixtures/{data,_run}/`, `web/public/data/`

@@ -454,9 +454,7 @@
   processing: "total active non-federal MDs (md_nf_activ_23) per 10k residents at county (polygon_centroid)"
   files: [AHRF_2024-2025_CSV.zip]
 
-# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
-# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
-# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
+# ---------------------------------------------------------------- US tract layers (§13.38: env nri, life phealth)
 - id: fema_nri
   name: FEMA National Risk Index, census tracts (table CSV)
   group: env
@@ -491,6 +489,9 @@
   processing: "GHLTH_CrudePrev (% of adults 18+ reporting fair or poor health), population-weighted from tracts (area_weighted_overlay); blank tracts stay missing"
   files: [places_tract_gis.csv]
 
+# ---------------------------------------------------------------- cost of living (§20.6 cost, rent)
+# BEA, Census and HUD facts below were checked first-hand on 2026-09-22 (file headers, GeoFIPS
+# padding, footer lines, HEAD requests on the Census zips: both GENZ2025 files answer 200).
 - id: bea_rpp_metro
   name: BEA Regional Price Parities by metropolitan statistical area (MARPP), all items
   group: life

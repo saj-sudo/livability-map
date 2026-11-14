@@ -1,5 +1,11 @@
 # Session 8: Neighbourhood Resolution Implementation Plan
 
+> **Status (2026-11-14):** built and merged (SPEC §16 Session 8 row, §13.31-35). The step
+> checkboxes below were never ticked during the build and are kept as the historical plan, not a
+> to-do list. The five country sources this plan left as follow-ups (Zensus, CBS, IRIS, DAs, SA2)
+> are wired (§13.35); §13.35 also decided not to add Canada and Australia to the res-6 country
+> list, which overrides the follow-up suggested here.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (native, recommended: the tasks share the `Settings.plan` / `ResEntry` interfaces and the real-data runs happen on this laptop) or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build H3 res 6 across the US and Europe and res 7 inside GHSL urban centres, tiled at z8-13 beside the existing global res 4/5 archive, with two neighbourhood-scale socioeconomic sources (Eurostat 1 km census grid 2021, English Indices of Deprivation 2025), without a global res-7 archive.

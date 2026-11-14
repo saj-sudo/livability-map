@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-11-04.
+Last updated: 2026-11-14.
 
 ## Open
 
@@ -22,8 +22,8 @@ Last updated: 2026-11-04.
 | 9 | [UNICEF Giga API key](#9-unicef-giga-api-key) | school locations and school connectivity | 10 min |
 | 10 | [DHS modeled surfaces](#10-dhs-modeled-surfaces) | 5 km education, vaccination, wealth surfaces | 10 min + read terms |
 | 11 | [WPdx licence confirmation](#11-wpdx-licence-confirmation) | removes a caveat on the `water` layer | email + wait |
-| 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
 | 13 | [Optional: rewrite the author email on two early commits](#13-optional-rewrite-the-author-email-on-two-early-commits) | keeps a personal Gmail out of the public history | 15 min; the repo is already public, so this now only limits future exposure |
+| 14 | [CDC PLACES download and NRI check](#14-cdc-places-download-and-nri-check) | US `phealth` and `nri` layers; lets publish include them | 10 min |
 
 Items 2-4 and 6 only need a file saved in the right place. After any of them, run
 `uv run python -m pipeline fetch` to record checksums, then ask Claude to rebuild the dimension
@@ -183,23 +183,6 @@ map records CC BY-SA 4.0 and labels the derived values share-alike (SPEC §13.37
 export. If they say CC BY 4.0, update `license` on `wpdx_water_points` in `pipeline/sources.yaml`
 and drop the share-alike label; nothing needs rebuilding.
 
-### 14. CDC PLACES download and NRI check
-
-Two US tract layers are wired but not yet confirmed first-hand (SPEC §13.38), and `publish`
-refuses them until they are:
-
-1. **CDC PLACES** (manual, because the dataset id changes every release): on data.cdc.gov search
-   "PLACES: Census Tract Data (GIS Friendly Format)", open the newest release, Export -> CSV, and
-   save it as `data/raw/cdc_places/places_tract_gis.csv`.
-2. **FEMA NRI** downloads itself: run
-   `uv run python -m pipeline fetch --only fema_nri --only cdc_places`. If the NRI URL fails, get
-   the census-tract table zip from https://hazards.fema.gov/nri/data-resources and save it as
-   `data/raw/fema_nri/NRI_Table_CensusTracts.zip`.
-3. Ask Claude to confirm both: check the column names, set `verified: confirmed` and the real
-   `vintage` in `pipeline/sources.yaml`, add §15 rows, then
-   `uv run python -m pipeline --res 5 dims --only nri --only phealth` and the usual score / export /
-   tiles.
-
 ### 13. Optional: rewrite the author email on two early commits
 
 Two commits from 2026-09-20/21, `c1156a0` (Session 1) and `e25784a` (CI install fix), carry a
@@ -209,8 +192,9 @@ Replacing it means rewriting history:
 - It changes the SHA of those two commits **and every commit after them**, so it needs a
   force-push to `main`. Any SHA quoted elsewhere (PR descriptions, notes, this item) stops
   resolving.
-- It is safe only because the history is days old, the repo is private and nobody has forked it.
-  Merge or delete every other branch first, and re-clone (or `git fetch` then
+- The repo is public now (SPEC §13.43), so anyone who cloned or forked it keeps the old commits;
+  the rewrite only limits future exposure. Check the fork list on GitHub first, then merge or
+  delete every other branch, and re-clone (or `git fetch` then
   `git reset --hard origin/main`) on the laptop afterwards.
 - It does not clean everything: GitHub keeps pull-request refs (`refs/pull/*`) that you cannot
   delete, so the old commits stay reachable through the merged PRs' pages. Removing those needs a
@@ -232,6 +216,23 @@ git push --force origin main
 
 GitHub's branch protection, if on, has to allow the force-push for that one push. Then delete
 `../mailmap.txt` and the `livability-map-rewrite` folder.
+
+### 14. CDC PLACES download and NRI check
+
+Two US tract layers are wired but not yet confirmed first-hand (SPEC §13.38), and `publish`
+refuses them until they are:
+
+1. **CDC PLACES** (manual, because the dataset id changes every release): on data.cdc.gov search
+   "PLACES: Census Tract Data (GIS Friendly Format)", open the newest release, Export -> CSV, and
+   save it as `data/raw/cdc_places/places_tract_gis.csv`.
+2. **FEMA NRI** downloads itself: run
+   `uv run python -m pipeline fetch --only fema_nri --only cdc_places`. If the NRI URL fails, get
+   the census-tract table zip from https://hazards.fema.gov/nri/data-resources and save it as
+   `data/raw/fema_nri/NRI_Table_CensusTracts.zip`.
+3. Ask Claude to confirm both: check the column names, set `verified: confirmed` and the real
+   `vintage` in `pipeline/sources.yaml`, add §15 rows, then
+   `uv run python -m pipeline --res 5 dims --only nri --only phealth` and the usual score / export /
+   tiles.
 
 ---
 

@@ -42,7 +42,7 @@ from shapely.geometry import Point, Polygon, box
 
 from ..sanity import Spot
 
-VERSION = 13  # bump when the world changes; ensure() regenerates on mismatch
+VERSION = 14  # bump when the world changes; ensure() regenerates on mismatch
 ISO_OVERRIDES = {"XKA": "XA", "XKB": "XB"}
 # the fixture's US-like stand-ins (tracts, counties, districts) sit in XB; the UK / EU / national
 # small-area stand-ins sit in XA (config.DOMAIN_COUNTRIES for the real world, SPEC §13.45)
@@ -273,7 +273,7 @@ def us_like_layers(land, rng: np.random.Generator):
                     "pct_other": float(pct_other),
                     "income_entropy": float(round(0.6 + 0.35 * near_cedar, 3)),
                     "gini": float(round(0.4 + 0.1 * near_cedar, 3)),
-                    "rent_share_income": float(round(0.22 + 0.2 * near_cedar, 3)),
+                    "rent_share_income": float(round(22.0 + 20.0 * near_cedar, 1)),  # B25071 is a percentage already
                     "renter_households": float(round(30 + 5000 * near_cedar)),
                     # FEMA NRI-like building loss (USD per 1,000 per year), highest on the east side,
                     # and a CDC PLACES-like fair-or-poor health share, blank on the northern edge

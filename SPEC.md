@@ -1,11 +1,13 @@
 # SPEC.md - livability-map (working title: Global Climate Livability Map)
 
-Version 0.3 | 2026-09-22 | Owner: Saj | Status: Sessions 1-7 built; Cloudflare publish/deploy waits on credentials (§13.24)
+Version 0.4 | 2026-11-14 | Owner: Saj | Status: Sessions 1-9 built, release safety and hardening done (§13.39-45); Cloudflare publish/deploy waits on credentials (§13.24)
 
 Sections are numbered so build prompts can cite them. v0.1 (2026-09-08) was the pre-build
 draft; v0.2 records the Session 0 decisions (§13), the verification log (§15), and the new
 life-dimensions design (§20). v0.3 (2026-09-22) records the first-hand verification of every
 source, the decisions taken while building Sessions 2-7 (§13.18-26) and the res-4 global run (§11).
+v0.4 (2026-11-14) adds Sessions 8-9, the country small-area sources, release safety, hardening and
+the 2026-11-14 review pass (§13.27-45).
 
 ## 0. How to use this spec with Claude Code
 
@@ -75,7 +77,7 @@ dimension, and the map renders low-confidence areas visibly differently.
    other dimension carries a resolution tag: `hex` (computed per hex from a raster or point set),
    `grid` (a statistical grid such as the Eurostat 1 km census grid, aggregated per hex),
    `basin` (a hydrological sub-basin polygon at the centroid), `admin1`, `county`, `tract`,
-   `area` (a small statistical area outside the US: England LSOA; later IRIS, DAs, SA2),
+   `area` (a small statistical area outside the US: England LSOA, French IRIS, Canadian DAs, Australian SA2),
    `national`, or `none`.
 3. **No data is not zero risk.** Hexes with missing layers render as visibly uncertain, and
    composites exclude missing layers rather than treating them as 0.
@@ -109,14 +111,16 @@ CORS). No database in the web app.
   - WRI Aqueduct 4.0 future water stress   - OECD Regional Well-Being (TL2), ILOSTAT (nat.)   - JRC GHSL GHS-SMOD 1 km (urban)
                                            - US: Census ACS, MEDSL, EPA SLD, Urban Inst., HRSA
                                            - EU: Eurostat 1 km census grid; England: IoD 2025 (LSOA)
-                                           - hex-level: MAP travel time, ACAG PM2.5, tree cover, Ookla
+                                           - DE Zensus, NL CBS, FR IRIS, CA DAs, AU SA2 (§13.35)
+                                           - hex-level: MAP travel times, ACAG PM2.5, tree cover, Ookla,
+                                             GFED5 fire, Meta RWI, UCDP, WPdx; US tracts: FEMA NRI, CDC PLACES
         |                                          |                                                |
         v                                          v                                                v
   +--------------------------------------------------------------------------------------------------------+
   |               pipeline/  (Python CLI:  python -m pipeline [--fixtures] [--res 6] [--bbox ...] <stage>)  |
   |                                                                                                        |
   |  fetch     download + sha256 each source per pipeline/sources.yaml -> data/raw/<id>/                  |
-  |            manual sources (GEE export, registration) are checked for presence, recipe printed         |
+  |            manual sources (registration, browser-only) are checked for presence, recipe printed       |
   |  urban     GHS-SMOD classes -> urban centre / cluster polygons with ids -> data/interim/urban.parquet |
   |  grid      resolution plan (pipeline/resolution_plan.yaml, §9.1): res 4 + 5 from Natural Earth land,  |
   |            res 6 = children of res-5 cells in US/EU/UK/EFTA or touching urban clusters, res 7 =       |
@@ -127,7 +131,8 @@ CORS). No database in the web app.
   |            -> per-hazard 0-100 percentile score + *_ok flag (res 6/7 ranked against res 5, §13.32)    |
   |  dims      prep/<source>.py turns each raw source into a joinable layer; for each dimension in       |
   |            dimensions.yaml run its joiners (§20.3): polygon_centroid | iso_lookup |                   |
-  |            area_weighted_overlay | point_density | raster_mean | point_mean                          |
+  |            area_weighted_overlay | raster_mean | point_mean | point_radius; single-country domains   |
+  |            fill only their own country's hexes (§13.45)                                               |
   |            -> {id}_raw, {id}_res (hex|grid|basin|admin1|county|tract|area|national|none)             |
   |  score     exposure = mean(available hazard scores), coverage = count(*_ok)                           |
   |            {id}_score = percentile within the dimension's coverage domain (§8.2, §20.4)               |
@@ -259,10 +264,10 @@ Every row has a VERIFY item in §14 and a §15 log line. See §20.6 for the life
 | Layer | Source | Resolution / unit | Scenario, horizon | License | Notes |
 |---|---|---|---|---|---|
 | Extreme heat | World Bank CCKP, CMIP6 ensemble, `hd35` (days Tmax > 35C) | 0.25° NetCDF, EPSG:4326 | SSP2-4.5, 2040-2059, ensemble median | CC BY 4.0 (§15.1) | Public S3 `wbg-cckp`, us-west-2. Do not use `hi35` (heat index). |
-| Riverine flood | WRI Aqueduct Floods, inundation depth | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100 | CC BY 4.0 (§15.2) | S3 copies removed; one-time Google Earth Engine export (§13.11). |
+| Riverine flood | WRI Aqueduct Floods, inundation depth | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100 | CC BY 4.0 (§15.2) | Direct download from WRI's mirror (§13.19, replacing the one-time GEE export of §13.11). |
 | Coastal flood | WRI Aqueduct Floods, coastal with subsidence | ~1 km GeoTIFF | RCP4.5, 2050, 1-in-100, 50th pct SLR | CC BY 4.0 (§15.2) | Same family and access path as riverine. |
 | Water stress | WRI Aqueduct Water Risk Atlas 4.0, future | polygons (basin x province x aquifer) | 2050 business-as-usual (`bau50_ws_x_c`) | CC BY 4.0 (§15.3) | Vector: join hex centroid to polygon. -1 = arid/low use. |
-| Wellbeing (subnational) | Global Data Lab, Subnational HDI 8.3 | admin1 polygons, ~1,800 regions | latest year | Free with citation, **non-commercial**, registration (§15.4) | Join on GDL-Code via GDL shapefiles; crosswalk to geoBoundaries names. |
+| Wellbeing (subnational) | Global Data Lab, Subnational HDI v10.2 (§15) | admin1 polygons, ~1,800 regions | latest year | Free with citation, **non-commercial**, registration (§15.4) | Join on GDL-Code via GDL shapefiles; crosswalk to geoBoundaries names. |
 | Wellbeing (national fallback) | World Happiness Report 2026, ladder | country, 147 | 3-year rolling 2023-2025 | Free download (§15.5) | Used only where SHDI has no region. |
 | Population | JRC GHSL GHS-POP R2023A | 30 arc-sec WGS84, persons per cell | epoch E2025 | CC BY 4.0 (§15.6) | Drives inhabited flag and population-weighted joins. |
 | Boundaries | geoBoundaries 6.0.0 CGAZ ADM0 + ADM1 | polygons | current | CC BY 4.0 (§15.7) | Git LFS files; pin release; shapeID not stable across releases. |
@@ -782,6 +787,41 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       cells itself), `tiler.lnglat_to_tile` (now a helper in `tests/test_tiler.py`) and ten
       unused exports in `web/src/lib`.
 
+45. **Review pass** (2026-11-14, a full read of the code, the web flow and the open items):
+    - *Single-country domains stay in their country.* `config.DOMAIN_COUNTRIES` maps the domains
+      that belong to one country (`us` incl. PR and the territories, `uk` -> GB, `de`, `nl`,
+      `fr` incl. the overseas departments, `ca`, `au`) to ISO2 codes; a joiner fills only hexes
+      whose `iso_a2` is listed, and the next joiner takes the rest. Before this, a Canadian border
+      hex that overlapped US tracts by 5% took the ACS value, got `_dom = us` and was ranked among
+      US hexes, and the StatCan joiner never ran for it. A joiner's own `countries:` overrides the
+      map; `global`, `oecd`, `eu` and `country` are not restricted. Fixtures map `us` to XB and the
+      others to XA (`make_fixtures.apply`). Known remainder: England-only IoD vs Wales/Scotland.
+    - *Prep cache keyed on the source's entry.* Editing `sheet:`, `member:`, `layer:` or a
+      geometry / also_needs source re-runs the loader (display-only `verified` and `min_nonnull`
+      do not).
+    - *Unzip caches tied to the archive.* A member copy records its size and CRC; a directory
+      extraction records the archive's size and mtime and is redone (old files removed) when a
+      new download replaces it.
+    - *Wellbeing min-max bounds at res 5 come from inhabited hexes,* matching the derived
+      resolutions, so a neighbourhood and its parent share bounds.
+    - *Tercile ties.* `tercile = (v >= c0) + (v > c1)`: a value on the upper cut is middle, and
+      all-equal wellbeing (a WHR-only subregion) is middle instead of high. This moves the few
+      hexes exactly on an upper cut from high to middle.
+    - *Missing never becomes 0:* MEDSL drops a county whose Democratic or Republican count is
+      blank; `point_radius` sums are NaN when the point set is empty and raise when no point has a
+      numeric value; `point_density` (unused, `fillna(0)`) is removed.
+    - *Atomic writes:* the tiler and the raster preps write through `stage_cache.atomic_path`.
+      `export.refresh_refs` records the parquet it rewrites so the next export skips it.
+    - *Web:* bars colour by direction; the place panel says which numbers are a match and which
+      are a rank; outlines follow the selection; compare picking has a banner, Cancel and Escape;
+      searched names survive; weights stay in the URL in every view; Reset weights and a note for
+      weighted layers with no data; a legend in the phone sheet's peek; keyboard and screen-reader
+      fixes; plain words instead of codes on /methodology and /about, with "How to read the map".
+      The Next 16 error boundary prop is `retry` (checked against the installed docs).
+    - Fixture world VERSION 14 (the ACS-like `rent_share_income` is a percentage, like B25071).
+    The first real run after this rebuilds `dims` and later stages once more, which the release
+    rebuild already does.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -803,8 +843,9 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
 ## 15. Verification log
 
 Status key: **search** = found via search results and S3/registry probes from a network-restricted
-container, not a first-hand page read; **confirmed** = fetched and inspected. Everything below is
-**search** until re-checked from a network-open machine.
+container, not a first-hand page read; **confirmed** = fetched and inspected. Each row says which;
+the 2026-09-22 rows confirmed most of the 2026-09-20 ones. `pipeline/sources.yaml` `verified:` is
+the live status per source.
 
 | Date | Item | Result | Source URL |
 |---|---|---|---|
@@ -828,7 +869,7 @@ container, not a first-hand page read; **confirmed** = fetched and inspected. Ev
 | 2026-09-22 | 14.4 GDL SHDI | **confirmed** terms (non-commercial, citation); current version v10.2 (2026-05-13), downloads login-gated: `Subnational HDI Data v10.2.csv` and the GDL shapefile zip. | https://globaldatalab.org/shdi/archive/ ; https://globaldatalab.org/termsofuse/ |
 | 2026-09-22 | 14.5 WHR | **confirmed**: `https://files.worldhappiness.report/WHR26_Data_Figure_2.1.xlsx` (134 KB), 2011-2025 panel, column `Life evaluation (3-year average)`; 147 countries for 2025 after name mapping. No explicit license text; citation requested. | https://www.worldhappiness.report/data-sharing/ |
 | 2026-09-22 | 14.6-14.8 GHSL, geoBoundaries, Natural Earth | **confirmed** by download and use: GHSL zip contains a 21384 x 43202 float64 tiled GeoTIFF (extracted once); geoBoundaries gpkg via media.githubusercontent.com; Natural Earth zip read directly. Some geoBoundaries names are mojibake (repaired in `prep.util.fix_mojibake`). | as above |
-| 2026-09-22 | 14.10 PMTiles size | res 4 global archive built by the python tiler; see `data/out/tiles_report.json` (res 5 pending). | - |
+| 2026-09-22 | 14.10 PMTiles size | res 4 global archive built by the python tiler; see `data/out/tiles_report.json` (res 5 and the res-6/7 archives followed in Session 8). | - |
 | 2026-09-22 | 14.12 tippecanoe | **confirmed** no Windows build (no release binaries, no conda-forge win-64, no MSYS2 package). Decision §13.18. | https://github.com/felt/tippecanoe/releases |
 | 2026-09-22 | 14.13 MapLibre | **confirmed** in the browser: maplibre-gl 6.10.0 ESM, `setWorkerUrl` needed because the worker and its `maplibre-gl-shared.mjs` are resolved relative to the module URL (both copied to `public/` by `web/scripts/copy-worker.mjs`); `addProtocol("pmtiles", new Protocol().tile)` unchanged; pmtiles 4.5.0. | https://maplibre.org/maplibre-gl-js/docs/ |
 | 2026-09-22 | 14.14 R2 CORS | rules written by `publish --target r2` (`range`, `if-match` allowed; `etag`, `content-length`, `content-range`, `accept-ranges` exposed) and checked with a Range request; not yet exercised against a real bucket (credentials pending). | https://developers.cloudflare.com/r2/buckets/cors/ |
@@ -867,13 +908,14 @@ scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US lif
 bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
-**v2.** Candidate new sources (FEMA NRI, CDC PLACES, Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; place search via bundled admin1 list; compare-two-places
-panel; population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
-permissions land; drought (JRC GDO) and wildfire (GWIS); GEM seismic as labeled non-climate;
+**v2.** Candidate new sources (FEMA NRI and CDC PLACES now wired, §13.38; Overture amenities, Climate TRACE / GEM facilities, EU cities survey, NO2, Opportunity Atlas) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; (place search and compare-two-places
+shipped in Session 9); population-weighted flood exposure; OSM-derived transit (ODbL); LGBTQ policy layers once
+permissions land; projected drought (JRC GDO) and wildfire (GWIS) (present-day `drought` and `fire`
+already ship as env layers); GEM seismic as labeled non-climate;
 embeddable iframe.
 
-**Later.** Downloadable hex data with attribution bundle; plain-language place summaries
-(clearly labeled); time-slider across horizons.
+**Later.** Downloadable hex data with attribution bundle; richer plain-language place summaries
+(a short one ships in the place panel, `web/src/lib/summary.ts`); time-slider across horizons.
 
 **Finer resolution (decided 2026-09-22).** Three tiers, physical layers first:
 
@@ -917,6 +959,9 @@ Map honesty, before or with the first public release:
   county on the first real build, and log the result in §15 beside the §8.5 spot checks. The
   constructs differ (present-day loss vs 2050 exposure), so the check looks for sign errors and
   gross misses, not a tight fit.
+- [ ] *Humid-heat layer and CMIP6 spread note.* Still open from the two items above; recommended
+  as data work after the first real build, together with the next new source (Climate TRACE /
+  GEM facility proximity, `docs/source-candidates-2026-11.md`).
 - [ ] *`--adopt-cache`, only if needed.* A one-time flag that stamps existing outputs with the
   §13.39 fingerprints instead of rebuilding them. Moot once the release-candidate rebuild has
   run.
@@ -934,22 +979,38 @@ Robustness follow-ups from the 2026-10-18 audit that §13.39-43 did not cover:
 - [x] Tests for `rawfiles` (zip extraction), `timing` and the GSAP / SHDI poverty loaders.
 - [x] Remove the dead `config.h3_backend()` (§13.44).
 
+From the 2026-11-14 review pass (§13.45):
+
+- [x] Single-country joiners fill only their own country's hexes; prep cache keyed on the
+  `sources.yaml` entry; unzip caches tied to the archive; inhabited min-max bounds at res 5;
+  tie-safe terciles; MEDSL and `point_radius` never turn a gap into 0; atomic tiler / raster writes;
+  `export.refresh_refs` re-records.
+- [ ] *Per-dimension fingerprints over-invalidate.* The `dims` code digest reaches every prep
+  loader through the `LOADERS` strings, so editing one loader marks every dimension stale (use
+  `--only` meanwhile); and a `grid` rerun that writes identical bytes still cascades because
+  fingerprints use size + mtime. Fix: digest only the loaders a dimension's sources use, and
+  content-hash small stage outputs.
+- [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
+  stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
+- [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
+  automated accessibility scan (axe) in the e2e job.
+
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
 | 0 | Plan | - | Read spec, ask §13, plan S1 | Done 2026-09-20 |
 | 1 | acceptEdits | Python | Repo layout, `sources.yaml`, `dimensions.yaml`, `fetch` with checksums, `grid`, `pop`, `admin`, joiners, fixtures, tests, CI, README | Done 2026-09-20 |
 | 2 | acceptEdits | Python | Aqueduct riverine + coastal to hexes | Done 2026-09-22 (direct mirror, §13.19; Dhaka / Reykjavik checked) |
 | 3 | acceptEdits | Python | CCKP heat + Aqueduct water stress | Done 2026-09-22 (Phoenix / Sahel checked) |
-| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | Done 2026-09-22 at res 4; SHDI waits on Saj's download (WHR fallback runs); res 5 run pending |
+| 4 | acceptEdits | Python | Wellbeing, composites, manifest, res 5 | Done 2026-09-22 at res 4, res 5 since; SHDI waits on Saj's download (WHR fallback runs) |
 | 4b | acceptEdits | Python | Global life dimensions | Done 2026-09-22 (GSAP, OECD via TL2 crosswalk §13.21, ILOSTAT) |
 | 4c | acceptEdits | Python | US life dimensions | Done 2026-09-22 (ACS with B09019 §13.20, EPA SLD, Urban/NCES, HRSA); MEDSL waits on the guestbook or a manual download (§13.26) |
 | 5 | acceptEdits | Python + shell | Tiles and publish | Done 2026-09-22 (python tiler §13.18, publish local/r2, smoke page); R2 upload waits on credentials |
 | 6 | acceptEdits | TypeScript | Map app | Done 2026-09-22 (verified in a browser on the fixture build) |
 | 7 | acceptEdits | TypeScript | Inspector, priorities, methodology, deploy | Built 2026-09-22; Cloudflare Pages deploy waits on credentials (`web/scripts/deploy.mjs`, `docs/deploy.md`) |
-| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Built 2026-09-22 (PR `claude/neighborhood`): urban stage, resolution plan, reference scoring, two archives, Eurostat grid and England IoD 2025; Zensus, CBS, IRIS, DAs and SA2 remain (§13.34); plan in docs/superpowers/plans/2026-09-22-session-8-neighbourhood-resolution.md |
+| 8 | acceptEdits | Python (+ web layer list) | Neighbourhood resolution: `urban` mask, resolution plan in `grid`, hex6/hex7 tiles, statistical grids by country | Built 2026-09-22 (PR `claude/neighborhood`): urban stage, resolution plan, reference scoring, two archives, Eurostat grid and England IoD 2025; Zensus, CBS, IRIS, DAs and SA2 followed (§13.35); plan in docs/superpowers/plans/2026-09-22-session-8-neighbourhood-resolution.md |
 | 10 | acceptEdits | Python + TypeScript | Point readouts: COGs on R2 for the physical layers, geotiff.js reads under a click, "what is here" panel | Planned after Session 8 (see "Finer resolution" above) |
 | 11 | acceptEdits | Python | Block hexes (res 9/10) inside urban centres, physical layers and OSM/GTFS distances, per-region archives | Planned after Session 10; needs a larger build machine |
-| 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); Session 8 (neighbourhood resolution) is still outlined only, in `docs/superpowers/plans/` on the cost/rent branch |
+| 9 | acceptEdits | TypeScript (+ one gazetteer script) | Visual identity, search, hover, inspector summary and bars, compare, intro, phone sheet | Built 2026-09-22 on `claude/design` (§13.10 "Atlas", §9.3 palette, §10 surfaces); review pass 2026-11-14 (§13.45) |
 
 ## 17. Acceptance criteria (v1)
 
@@ -1038,14 +1099,14 @@ keeps the scoring and the UI uniform.
 ```yaml
 - id: jobs                 # short; ships in every tile
   name: Job market
-  group: life              # hazard | wellbeing | life
+  group: life              # hazard | wellbeing | life | env
   kind: score              # score | signed | composition
   higher_is: better        # score only: better | worse
   coverage: [global, oecd, us]
-  sources: [ilostat_youth_unemp, oecd_reg_unemp, acs_b23001]
+  sources: [ilostat_youth_unemp, oecd_regional_wellbeing, acs_summary]   # illustrative; see dimensions.yaml
   joiners:
-    - {source: acs_b23001, joiner: area_weighted_overlay, res: tract, field: unemp_16_29}
-    - {source: oecd_reg_unemp, joiner: polygon_centroid, res: admin1, field: youth_unemp}
+    - {source: acs_summary, joiner: area_weighted_overlay, res: tract, field: emp_rate_16_29}
+    - {source: oecd_regional_wellbeing, joiner: polygon_centroid, res: admin1, field: jobs_score}
     - {source: ilostat_youth_unemp, joiner: iso_lookup, res: national, field: value}
 ```
 
@@ -1070,12 +1131,12 @@ A national fallback is applied only when the registry lists it, and the tag says
 | `polygon_centroid` | hex centroid in polygon, pick a field | SHDI admin1, GSAP admin1, OECD TL2, US county, Aqueduct water stress |
 | `iso_lookup` | `iso_a2` to a national table | WHR, ILOSTAT, V-Dem |
 | `area_weighted_overlay` | small polygons to hex, weighted by overlap area x polygon population density | ACS tracts, EPA SLD block groups, school districts |
-| `point_density` | points per hex, optionally per 10k residents | transit stops |
 | `raster_mean` | mean of a raster's valid pixels inside the hex (tag `hex`; the block-average factor is capped per resolution so a res-7 hex still spans a few pixels); `decimate` block-averages very fine rasters first, `sample: centroid` point-samples rasters coarser than the hex | travel time to healthcare (1 km), PM2.5 (0.01°), tree cover (100 m, decimate 10), burned area (0.25°, centroid) |
 | `point_mean` | weighted mean of point values inside the hex (tag `hex`, or `grid` for statistical grid cells) | Ookla speed tiles at their centroids, weighted by tests; Eurostat 1 km census cells at their centres, weighted by 15-64 population |
 | `point_radius` | mean or sum of point values within a radius of the hex centre (tag `hex`; radius never below the hex edge; `domain_by_country` ranks within each country) | Meta Relative Wealth Index tiles (mean, 3 km), UCDP conflict deaths (sum, 25 km) |
 
-All seven are idempotent and bbox-aware. The pop stage's GHSL sums are the population weights so
+All six are idempotent and bbox-aware (`point_density` was removed unused, §13.45). A joiner
+whose domain belongs to one country fills only that country's hexes (§13.45). The pop stage's GHSL sums are the population weights so
 joins agree with `population`.
 
 ### 20.4 Scoring within a coverage domain
@@ -1094,23 +1155,23 @@ denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`
 
 | Preset | Emphasis |
 |---|---|
-| Early career | jobs, transit, housing cost, low exposure |
-| Raising kids | schools, low exposure, housing, healthcare |
-| Queer and looking for community | LGBTQ+ protection and presence, politics (left lean), jobs |
-| Retiring | healthcare, heat, low exposure, wellbeing |
-| Climate first | four hazards only |
+| Early career | jobs 3; transit, housing cost burden, cost of living, rent 2; city access, internet, the four hazards 1 |
+| Raising kids | schools 3; air, armed conflict, housing, healthcare 2; trees, water points, the four hazards 1 |
+| Queer and looking for community | LGBTQ+ presence 3; politics (left lean), jobs 2 |
+| Retiring | healthcare 3; travel to care, heat, wellbeing, cost of living 2; walking to care, air, the other three hazards 1 |
+| Climate first | the four hazards, 1 each |
 
 Each life dimension in the panel shows a coverage chip (Global / OECD / US only) and greys out
 where the hovered or clicked hex has `_res = none`.
 
-### 20.6 Sources by dimension (researched 2026-09-20, status search; see §15)
+### 20.6 Sources by dimension (researched 2026-09-20; live status per source in `sources.yaml`, see §15)
 
 | id | Dimension | Global source (res) | US source (res) | License notes |
 |---|---|---|---|---|
 | jobs | Youth / early-career job market | ILOSTAT youth unemployment CC BY 4.0 (national); OECD regional labour (TL2); EU: Eurostat 2021 1 km census grid employment rate of 15-64s (`grid`, Session 8); England: IoD 2025 employment deprivation (LSOA, `area`); France: INSEE RP 2021 employment rate 15-64 (IRIS, `area`); Canada: StatCan 2021 employment rate (DA, `area`); Australia: ABS 2021 employment-to-population (SA2, `area`) | ACS B23001 age 16-29 unemployment (tract); BLS LAUS (county, all ages) | All open. ACS is public domain; pull the Summary File at build time. |
 | transit | Public transit access | Mobility Database catalog CC0 + OSM ODbL (points) - v2 | EPA Smart Location Database v3 transit frequency `D4C` and walkability (block group), public domain | OSM per-hex derivatives are a derivative database under ODbL; keep tiles-only or license that layer ODbL. Walk Score and AllTransit excluded. |
 | school | School quality | GDL SHDI education sub-index (admin1; attainment, not quality) | Urban Institute Education Data Portal ODC-BY (district); NCES CCD boundaries public domain | SEDA is best but non-transferable; ask Stanford. PISA is CC BY-NC-SA (national). GreatSchools excluded. |
-| lgbtq | LGBTQ+ protection and presence | Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B11009 same-sex couple households per 1k households (tract, PD, proxy); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
+| lgbtq | LGBTQ+ protection and presence | Equaldex / ILGA are non-commercial, national; Rainbow Europe unlicensed - v2 pending permission | ACS B09019 same-sex couples per 1k households (tract, PD, proxy; B11009 has no tract rows, §13.20); MAP state policy tally (state, permission needed) | Hardest to ship open. Ship the ACS proxy first, clearly labeled. |
 | pol | Political lean (signed) | none subnational; V-Dem CC BY-SA (national) is a different construct, v2 | MIT Election Lab county presidential returns 2000-2024 (county, CC0 expected) | Cook PVI excluded. Verify MEDSL license block on the DOI. |
 | race | Racial / ethnic composition | none comparable; most countries do not collect it | ACS B03002 (tract) or 2020 DHC P2 (block), public domain | NHGIS and IPUMS excluded (no redistribution). Differential-privacy noise is negligible at hex scale. |
 | incmix | Income mix / inequality | World Bank GSAP poverty headcount CC BY 4.0 (admin1, 168 economies, 2023) as level; OECD regional Gini (TL2); France: Filosofi 2021 poverty rate (IRIS); Netherlands: CBS low-income household share (500 m, `grid`); Canada: LIM-AT low income (DA) | ACS B19001 bracket entropy + B19083 Gini (tract) | Global gives between-region level, US gives within-area diversity; labeled as different constructs. |

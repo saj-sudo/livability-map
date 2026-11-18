@@ -1142,6 +1142,11 @@ From the 2026-11-14 review pass (§13.45):
   stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
 - [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
   automated accessibility scan (axe) in the e2e job.
+- [ ] Web: the design redesign in `docs/design-redesign-plan.md` (logged 2026-11-18). A review found the
+  bivariate default reads as a ranking of countries, because wellbeing is mostly a national figure, and
+  that "My priorities" is hidden as the seventh layer. Proposed: a one-variable default, priorities up
+  front, a place panel that leads with a few plain lines, an atlas look. Mockup first; each change lands
+  in §9, §10 and §13.10 before code.
 
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|

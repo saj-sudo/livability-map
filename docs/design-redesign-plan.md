@@ -1,0 +1,130 @@
+# Design redesign plan: livability map
+
+Written 2026-11-18. This is the plan for the map's part of a design pass across Saj's builds. It
+holds what a review saw, what is proposed, what would move, and where the work stands. `SPEC.md`
+stays the source of truth: anything here that ships changes the spec first (§9, §10, §13.10), and
+§16 "Next steps" points at this file. Update the status section at the end of every sitting.
+
+## Verdict: rethink the default view; rework the look
+
+The ethics are the strongest of any of the builds (missing data is never zero, every number has a
+source, no ranking). The limit is structure: the default view works against the product's own
+stance, and the one thing no other map does is hidden. After that, the look: it reads as a stock
+map with panels, not as an atlas.
+
+## What the review saw
+
+Not deployed, so this was judged from `docs/screenshots/session-9/` and `docs/screenshots/2026-11-14/`
+(some are stale: they predate humid heat) and from the components in `web/src/components/`. The
+first step of the mockup sitting is to run the fixture world and look at the real thing.
+
+- **The default view reads as a ranking of countries.** The bivariate default paints Europe blue
+  and Africa and the Middle East red. The blue axis is mostly a national wellbeing figure (the
+  place panel says so: "the national figure, not this region's"), so whole countries are coloured
+  "safe and thriving" or "exposed and struggling" before the reader has asked anything. That is
+  the ranking SPEC §3 refuses to make, delivered by colour.
+  See `docs/screenshots/session-9/light-bivariate.jpg`.
+- **A nine-colour key is the first thing a newcomer has to learn.** The phone sheet's two-line key
+  ("Redder: more climate exposure. Bluer: higher wellbeing.") is clearer than the desktop grid.
+- **"My priorities" is seventh in a list of layers.** It is the differentiator: presets such as
+  "Early career" and "Queer and looking for community", weights the reader sets, a map that
+  recolours on the spot.
+- **The place panel is 30 or more rows of bars** after a good one-sentence summary. Bar colour
+  flips meaning row to row ("Armed conflict 99/100" red, "Internet 90/100" green, "Travel time
+  2/100" grey), so each row has to be decoded.
+- **Desktop crowding.** With Layers and the place panel open, the two take about 600 of 1280px.
+  See `docs/screenshots/session-9/inspector-priorities.jpg`.
+- **The key changes meaning between themes** (the top-right cell is dark plum in light and pink in
+  dark), and the mid-tones sit close to the no-data grey.
+- **The look.** Default OpenFreeMap basemap with place labels in several scripts colliding with
+  the hexes, floating shadowed cards, stock zoom buttons. The Newsreader wordmark and the
+  hairlines are the only atlas cues.
+- **A number that brushes the no-single-number rule.** "My priorities" shows a 0 to 100 match per
+  place ("69/100").
+
+## Proposal (what the mockup will show)
+
+1. **A simpler default.** One variable first ("Climate exposure in 2050"), with the two-variable
+   view one step in. Wellbeing that is only a national figure is shown as a country outline or a
+   pattern, not as a hex fill that looks local.
+   Likely files: `web/src/lib/url.ts` (the default view), `web/src/components/{MapApp,Panel,Legend}.tsx`,
+   `web/src/lib/palette.ts`, `web/src/lib/expressions.ts`.
+2. **"My priorities" up front.** The first-run card offers a choice: start with climate, or start
+   with what matters to you. Presets are the first thing in that path; sliders sit collapsed by
+   group behind them.
+   Likely files: `web/src/components/{Intro,PrioritiesPanel}.tsx`, `web/src/lib/intro.ts`, `web/src/presets.ts`.
+3. **A place panel that leads.** Three to five plain lines first, then "All measures". Bars keep
+   one meaning; direction is said in words.
+   Likely files: `web/src/components/Inspector.tsx`, `web/src/lib/{inspect,chart,summary}.ts`.
+4. **An atlas look.** A quiet basemap with few labels, a plate title on the map ("Heat, 2050"), a
+   docked key that means the same in both themes, a scale bar. SPEC §13.10 already names the
+   "Atlas" identity; this makes it visible.
+   Likely files: `web/src/components/MapView.tsx`, `web/src/lib/{config,palette}.ts`, `web/src/app/globals.css`.
+5. **A shareable "my map".** Pick a preset, the world recolours, and the view can be shared with
+   the preset name, the key and a sources line. No list of places, ever.
+
+## What would move (each needs Saj's yes on the mockup)
+
+- The bivariate view: from the default to one step in.
+- The 0 to 100 "matches your priorities" number: to words or bands ("strong, partial, weak fit"),
+  with exact numbers kept per dimension. Saj's call against SPEC invariant 6.
+- The seven-item Layers list: regrouped so "My priorities" is not the last entry.
+- The full list of measures in the place panel: behind "All measures".
+
+## Rules this touches
+
+- SPEC invariants: no ranking and no single livability number; missing data is never zero and must
+  look different from a low score; every number traceable; scenario and horizon always visible.
+- Composition dimensions (race) stay context only: no slider, never in the composite.
+- `w=` order in the URL is append-only, so old links keep their meaning. A changed default view
+  must not change what an existing link shows.
+- The per-page CSP: no remote fonts, scripts or images. Basemap stays OpenFreeMap (never Mapbox or
+  ArcGIS).
+- Copy keeps "rank among inhabited places" and "match with your priorities" distinct, and keeps
+  the heat caveats.
+- SPEC first, then code; CLAUDE.md and the §17 checkboxes updated at the end of the session.
+
+## Measures of success
+
+- The default key shows one variable.
+- "My priorities" is one tap from the first view on a phone.
+- No whole country reads as one colour because of a national figure.
+- The e2e suite passes with the basemap blocked, plus an axe scan with no violations.
+
+## Finish items to fold into the same build
+
+From the code audit of 2026-11-18:
+- `viewport-fit=cover` (the sheet's safe-area padding resolves to 0 today), `theme-color` per
+  scheme, notices moved off the zoom control, fallback basemap colours aligned to `--paper`.
+- A named type scale with a 12px floor (24 uses of 11px, plus the attribution).
+- Palette guard tests that measure what the comments claim: lightness monotone along each row and
+  column, a minimum distance between no-data grey and every cell, corners separable under protan
+  and deutan simulation.
+- 44px touch targets on phones (close, tabs, chips, sliders are 20 to 32px today).
+- `<main>` and a skip link on the map page; the legend's hover text is no longer a live region;
+  the search input gets the standard focus ring; an axe scan in e2e (already open in §16).
+- Queued behind these: selecting a hex from the keyboard, and a table view of the data that is
+  never a sorted ranking.
+
+## Stages and status
+
+| Stage | State | Link | Date |
+|---|---|---|---|
+| Review from screenshots and code | Done | this file | 2026-11-18 |
+| Run the fixture world and capture real screens | Not started (first step of the mockup sitting) | | |
+| Mockup | Not started. The map is sixth in the order | | |
+| Saj picks a direction | Waiting on the mockup | | |
+| Build and pull request | Not started | | |
+
+## Starting a session on this build
+
+Paste this into a fresh session that has this repository attached:
+
+> Read `docs/design-redesign-plan.md`, `CLAUDE.md` and SPEC.md §3, §9, §10 and §13.10 in this
+> repo. We are doing the next open stage in the plan's status table, and only that stage. If the
+> stage is the mockup: build the fixture world (`uv run python -m pipeline --fixtures --res 4 all`),
+> run the web app, capture today's screens at 390 by 844 and 1440 by 900 in both themes, and
+> publish a mockup page that shows today's screens beside the proposed ones, with the "what would
+> move" list, then stop for my pick. If the stage is the build: change the spec first, build what
+> I picked, check the measures of success, open a pull request with before and after screenshots,
+> and update the status table.

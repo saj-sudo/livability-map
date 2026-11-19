@@ -86,8 +86,10 @@ dimension, and the map renders low-confidence areas visibly differently.
    refuses sources whose license is still `VERIFY`.
 5. **Static-first.** All heavy computation happens in the offline pipeline. The web app serves
    pre-built tiles from R2 and does no per-request geoprocessing.
-6. **Composite scores are transparent and adjustable.** The default view is a bivariate
-   choropleth that needs no weighting. Any single-number composite exposes its weights as sliders.
+6. **Composite scores are transparent and adjustable.** The default view shows one variable
+   (combined climate exposure) and needs no weighting. Any composite exposes its weights as
+   sliders. The priorities fit is shown as a band in words (weak, partial, strong), with the
+   figure behind it one step in; per-dimension numbers are always shown (§13.50).
 7. **No trackers, no analytics scripts, no accounts.**
 8. **Not every dimension has a "better".** Composition dimensions (§20.2) are never ranked by the
    pipeline and never weighted by the person: they are shown per place as context (§13.40).
@@ -370,45 +372,75 @@ app reads the PMTiles via HTTP range requests.
 
 ### 9.3 Styling rules (MapLibre style spec, data-driven)
 
-- Default layer: `bivar` classes 1 to 9 with a red/blue bivariate palette (Joshua Stevens'
-  scheme: exposure warms from grey to red across the columns, wellbeing cools from grey to teal
-  up the rows, both high is a dark mauve); class 0 neutral grey. The dark theme uses a grid
-  derived in OKLCH so lightness climbs with exposure + wellbeing (`web/scripts/bivar_dark.mjs`).
-  Both grids are checked with the dataviz validator: every row and column lightness-monotone,
-  corner cells separable under protan/deutan simulation. Palettes live in `web/src/lib/palette.ts`,
-  one per theme.
+- Default layer (§13.50): `exp`, the combined `exposure` score in five equal steps of a rust
+  ramp; missing exposure in grey. It is one variable, so the first key a person meets is one ramp.
+- Bivariate layer, one step in ("Add wellbeing beside it"): `bivar` classes 1 to 9 with the
+  red/blue bivariate palette (Joshua Stevens' scheme: exposure warms from grey to red across the
+  columns, wellbeing cools from grey to teal up the rows, both high is a dark mauve); class 0
+  neutral grey. The dark theme uses a grid derived in OKLCH (`web/scripts/bivar_dark.mjs`).
+  **A hex only takes a wellbeing colour where `wb_res` is finer than `national`.** Where
+  wellbeing is one figure for a whole country, the hex keeps an exposure-only colour (three steps
+  of the exposure ramp, from the exposure tercile already encoded in `bivar`), and the basemap's
+  country borders are drawn above the hexes in this view, so a country never reads as one
+  wellbeing colour. The key has a row for it and the place panel states the national figure once
+  in words. The per-hex dashed outline is gone.
+- Palettes live in `web/src/lib/palette.ts`, one per theme, and `palette.test.ts` measures what
+  the comments claim: lightness monotone along every row and column of each grid and along each
+  ramp, a minimum distance between the no-data grey and every cell and step, the corner cells
+  separable under protan and deutan simulation, and the exposure-only steps distinguishable from
+  the low-wellbeing row. One rule holds in both themes: the end that stands out most from the
+  ground is "more", and the words under a ramp never change with the theme.
 - Per-hazard and per-dimension layers: `*_score` single-hue sequential ramp (rust for hazards,
-  teal for wellbeing, green for life dimensions, blue-violet for the priorities match);
+  teal for wellbeing, green for life dimensions, blue-violet for the priorities fit);
   `*_ok = false` or `*_res = 'none'` in grey.
-- Confidence: `coverage < 5` (fewer than every hazard layer, §13.47) gets a hatch `fill-pattern` overlay (§13.4); `wb_res = 'national'`
-  a faint dashed outline (it covers whole countries while SHDI is absent, so it must read as a
-  texture, not an error); `wb_res = 'none'` grey on wellbeing views.
+- Confidence: `coverage < 5` (fewer than every hazard layer, §13.47) gets a hatch `fill-pattern`
+  overlay (§13.4); `wb_res = 'none'` grey on wellbeing views.
 - Hex seams are drawn in the paper tone at low alpha so the mesh recedes; the hovered hex gets a
   thin ink outline and the selected hex a haloed ink outline, both driven by feature-state.
 - `inhabited = false` hidden by default, toggle to show (§13.8).
-- Legend is a 3x3 bivariate grid with axis labels "more climate exposure" and "higher
-  wellbeing", corner captions in words, and the hovered hex's cell lit, plus a confidence key,
-  a no-data key and, in the priorities view, a coverage chip per dimension. Chips come from the
-  manifest's scoring domains (`domains`), never from the per-resolution coverage counts.
+- The key is docked on the map (bottom left on a wide screen, in the sheet's peek on a phone):
+  a ramp with "less exposed / more exposed" style end labels in words, a no-data swatch and the
+  confidence swatch. The bivariate key is the 3x3 grid with axis labels "more climate exposure"
+  and "higher wellbeing" and the hovered hex's cell lit, plus the exposure-only row. The key
+  never captions a corner with a verdict ("safe and thriving", "exposed and struggling" are
+  gone): it names the two variables and stops (§3). The hovered cell's words are not a live
+  region. In the priorities view the ramp reads "weaker fit / stronger fit". Coverage chips come
+  from the manifest's scoring domains (`domains`), never from the per-resolution coverage counts.
 
 ### 9.4 Basemap
 
-OpenFreeMap (free vector tiles, no key, no signup). Style `positron` for the light theme and
-`dark` for the dark theme; the theme follows the system preference, can be toggled in the header,
-and is remembered in localStorage only (never a URL parameter, so a shared link never forces a
-theme). A theme change calls `setStyle(url, { transformStyle })` so the hex source and layers
-survive without a tile refetch. Attribution "OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
-comes from the style itself. One-person service with no SLA; if it goes away, the fallback is a
-Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
+OpenFreeMap (free vector tiles, no key, no signup): its `planet` vector tiles and its glyphs,
+drawn with our own small style (`web/src/lib/basemap.ts`, §13.50), not its stock `positron` /
+`dark` styles. The style is a quiet atlas ground: paper-toned land, a slightly different sea,
+country and region borders as hairlines, a handful of labels (countries, larger cities, seas in
+italic serif), no roads, no buildings. Colours come from the same tokens as the page, one set per
+theme, so the plain-background fallback (§13.41) is the same ground without the detail. The hex
+layers sit above every basemap line and below its labels; the country borders are repeated above
+the hexes in the bivariate view (§9.3). The theme follows the system preference, can be toggled
+in the header, and is remembered in localStorage only (never a URL parameter, so a shared link
+never forces a theme). A theme change calls `setStyle(style, { transformStyle })` so the hex
+source and layers survive without a tile refetch. Attribution "OpenFreeMap © OpenMapTiles Data
+from OpenStreetMap" is set on the source. A scale bar sits beside the attribution. One-person
+service with no SLA; if it goes away, the fallback is a Protomaps basemap PMTiles extract
+self-hosted on R2. Never Mapbox, never ArcGIS.
 
 ## 10. Web app surfaces
 
 - `/`: full-screen map under a slim header (wordmark, place search, nav, "How to read this map",
-  theme toggle). Left panel: view selector (Bivariate | Heat | Riverine flood | Coastal flood |
-  Water stress | Wellbeing | My priorities), presets as chips and a 0-5 slider with a readout per
-  dimension visible only in My priorities (dimensions grouped by the manifest `group`, so new
-  ones appear without code; a dimension with no hex data in the build is disabled and says so),
-  scenario and horizon as a static line, confidence toggle, inhabited toggle, legend.
+  theme toggle), inside `<main>` with a skip link. On a wide screen the controls are a docked
+  rail on the left and the place panel a docked rail on the right (hairlines, no floating
+  shadowed cards), so neither covers the map.
+- Two doors (§13.50): the rail opens with a two-way switch, **Climate in 2050** and **What
+  matters to you**. Under the first: "All five hazards together" (view `exp`, the default), the
+  five hazards, "Add wellbeing beside it" (view `bivar`) and "Wellbeing today alone" (view `wb`).
+  Under the second (view `priorities`): presets first, as cards, then a 0-5 slider with a readout
+  per dimension, folded by the manifest `group` with an "n weighted" count (so new dimensions
+  appear without code; a dimension with no hex data in the build is disabled and says so), and
+  "Share this map". Below both: the confidence toggle, the inhabited toggle, and scenario and
+  horizon as a static line.
+- Plate title: the map carries its own title, top left, like an atlas plate ("Climate exposure,
+  2050", "Extreme heat, 2050", "Fit with Early career"), with one line under it that names the
+  pathway for any projected view. Scenario and horizon are therefore always on screen (§3).
 - Place search: an accessible combobox over a bundled gazetteer (`web/public/gazetteer.json`:
   Natural Earth 1:10m populated places with POP_MAX >= 50k or a capital, plus geoBoundaries ADM1
   names; built by `web/scripts/build_gazetteer.py`), fetched lazily from the same origin on first
@@ -416,29 +448,57 @@ Protomaps basemap PMTiles extract self-hosted on R2. Never Mapbox, never ArcGIS.
   population. Picking a place flies the map (zoom 6 city, 5 region) and selects the hex under the
   point once the map is idle. No request leaves the origin (invariant 7).
 - Hover (pointer devices only): a small readout beside the pointer with the place, population
-  and one line for the current view (bivariate class in words, a layer's score with its raw
-  value, or the priorities match with how many weighted dimensions are missing here); the legend
-  lights the matching cell. Slim low-zoom tiles carry no names, so the title says to zoom in.
-- Inspector (click a hex): country and admin1 name, population, a one-sentence plain-language
-  summary (what the colour means, hazard layers present, national wellbeing fallback, priorities
-  match with what is missing), the person's weighted priorities as thin bars (a missing
-  dimension is a hatched "no data here" row), each hazard's raw value and score with its `_ok`
-  state, wellbeing value with source and resolution in words, coverage "4 of 5 hazard layers",
-  bivariate class in words, each life dimension's value and resolution (or "no data here"), one
-  "Sources" disclosure listing the manifest entries, and "Compare with another place". The
-  numbers in the bars come from `web/src/lib/chart.ts`, a TypeScript twin of the §20.5
-  expression, tested against the real expression so what is read equals what is drawn.
+  and one line for the current view (the exposure rank, the bivariate class in words, a layer's
+  score with its raw value, or the priorities fit band with how many weighted dimensions are
+  missing here); the key lights the matching cell. Slim low-zoom tiles carry no names, so the
+  title says to zoom in.
+- Place panel (click a hex): country and admin1 name, population, then **at most five lead
+  lines**, each a finding with its figure, chosen by one fixed rule (`web/src/lib/lead.ts`):
+  1. *Climate in 2050*: combined exposure as a rank among inhabited places in words, the hazard
+     with the highest rank and its raw value, and how many hazard layers are present when not all;
+  2. *Fit with your priorities* (only when weights are set): the band, the weighted dimensions
+     that pull it up and down, and what was left out for lack of data;
+  3. *Wellbeing*: the value and its resolution, saying plainly when it is only a national figure;
+  4. *Today*: the present-day measure whose rank is furthest from the middle, with its raw value
+     and whether more of it is better or worse;
+  5. *Not measured here*: the dimensions with no data, named, "no data, which is not zero".
+  A line with nothing to say is left out. A place under 100 people, or one with no hazard data,
+  says that instead. Then one disclosure, **"All measures and their sources"**, holding every
+  hazard's raw value and score with its `_ok` state and caveat, wellbeing with source and
+  resolution, coverage "4 of 5 hazard layers", the bivariate class in words, each environment
+  and life dimension's value and resolution (or "no data here"), the person's weighted
+  priorities as bars (a missing dimension is a hatched "no data here" row), and the manifest
+  sources. Every bar there means one thing, the rank among inhabited places (or the match, in
+  the priorities list), in one ink colour; whether more is better or worse is said in words.
+  Then "Compare with another place". The numbers in the bars come from `web/src/lib/chart.ts`, a
+  TypeScript twin of the §20.5 expression, tested against the real expression so what is read
+  equals what is drawn.
 - Compare two places: after "Compare with another place", the next click or search landing
-  fills a second slot and a side-by-side table replaces the inspector; a dot marks the better
-  side on a row only when both sides have data and the dimension has a direction. Session-only,
-  not in the URL.
-- First visit: a three-step intro card (what the colours mean, make it yours, every number has a
-  source); dismissal is one localStorage flag, reopenable from the header. No cookies.
+  fills a second slot and a side-by-side table replaces the place panel; a dot marks the better
+  side on a row only when both sides have data and the dimension has a direction. The priorities
+  row shows each side's band. Session-only, not in the URL. The "pick a second place" banner and
+  other notices sit top centre of the map, clear of the zoom control.
+- First visit: one card with two doors, "Climate in 2050" and "What matters to you", one line
+  that says grey is no data, every number has a source and the map does not say where to live,
+  and Skip. Either door sets the view; dismissal is one localStorage flag, reopenable from the
+  header. No cookies.
 - Phones (under 640px): the panels live in one bottom sheet with Layers and Place tabs and three
-  snaps (peek, half, full); selecting a hex opens Place at half. Methodology and About links sit
-  at the bottom of the Layers tab because the header hides the nav there.
-- URL state: `?lat=&lng=&z=&view=&preset=&w=<csv weights>&conf=&inh=` so any view is
-  shareable. No server state. Theme and intro flags are localStorage, not URL.
+  snaps (peek, half, full); selecting a hex opens Place at half. The peek carries the two doors
+  and the one-line key, so "What matters to you" is one tap from the first view. Touch targets
+  are at least 44px. The page is exactly one screen tall (the sheet never makes the document
+  scroll). Methodology and About links sit at the bottom of the Layers tab because the header
+  hides the nav there.
+- Share (§13.50): "Share this map" copies the current link with `share=1`. A link opened with
+  that flag shows a dismissible card over the map: the preset's name (or "A custom set of
+  priorities"), the weights in words, the key, the year and pathway, a sources line from the
+  manifest, and "one person's priorities, not a ranking of places". It never lists places.
+- URL state: `?lat=&lng=&z=&view=&preset=&w=<csv weights>&conf=&inh=&share=` so any view is
+  shareable. No server state. Theme and intro flags are localStorage, not URL. `view=` is always
+  written. Reading follows one rule so old links keep their meaning (§13.50): `view=` wins; a
+  link with a position (`lat`, `lng` or `z`) but no `view=` is an old link and means `bivar`; a
+  bare address opens the default, `exp`. View ids and the `w=` order are append-only.
+- Type: a named scale (`--text-fine` 12px, `--text-small` 13px, `--text-body` 15px, serif
+  headings) with a 12px floor; nothing on the page is smaller.
 - `/methodology`: generated from `manifest.json` at build time.
 - `/about`: what this is and is not (§3 in plain language), including "does not recommend
   where to live", the non-commercial statement, and what the browser stores and fetches.
@@ -535,6 +595,9 @@ because that would hide exactly the within-region variation the map exists to sh
     packages; one 6px radius, hairlines rather than nested cards, no all-caps labels; the
     bivariate legend is the hero element (§9.3). Motion only answers an action (sheet snap,
     legend highlight) and respects `prefers-reduced-motion`.
+    Redesign of 2026-11-19 (§13.50): the identity is made visible on the map itself. A plate
+    title, a docked key, a scale bar, docked rails with hairlines in place of floating cards, and
+    our own quiet basemap style. The bivariate legend is no longer the hero; the plate is.
 11. **Flood rasters:** Aqueduct Floods via a one-time Google Earth Engine export on Saj's laptop
     (the public S3 copies are gone, §15.2). Recipe in `docs/gee-export.md`.
 12. **Life-dimension scope:** global core + US detail layers; the UI shows coverage per layer
@@ -952,6 +1015,40 @@ Decisions taken while building Sessions 2-7 (2026-09-22):
       memory; the loaders stop with what they found when names differ). Fixture world VERSION 18
       adds a 0.05° NO2 grid with a nodata hole, amenity points around the towns and a GEM stub.
 
+50. **Design redesign** (Saj, 2026-11-19, after the mockup in
+    `docs/mockups/2026-11-19-redesign/`; plan and review in `docs/design-redesign-plan.md`).
+    Saj's answers: "1 yes, 2 bands, 3 yes, 4 yes, invariant yes, links B".
+    - *One variable first.* The bivariate default painted whole countries one colour, because
+      wellbeing is a national figure almost everywhere while SHDI is absent: the ranking §3
+      refuses, delivered by colour. The default is now combined exposure (`exp`, a new view id
+      appended to the list). Invariant 6 was reworded for it.
+    - *Bivariate, honestly.* One step in, and a hex takes a wellbeing colour only where
+      `wb_res` is finer than `national`. The exposure tercile for the exposure-only colour is
+      read from `bivar` (`(bivar - 1) % 3`), so no tile attribute was added. The country outline
+      is the basemap's own border layer drawn above the hexes, not a pipeline polygon: with the
+      basemap blocked the outline is absent and the colour and the key carry the message.
+    - *Bands for the priorities fit.* Weak under 40, partial 40 to 60, strong over 60, fixed
+      cuts on the 0-100 weighted average of ranks (`fitBand` in `web/src/lib/chart.ts`). An
+      average of ranks clusters near the middle, so many places read "partial": that is what the
+      average knows. The figure stays one step in ("How this is worked out") and per-dimension
+      numbers are unchanged. The map still colours the fit on a continuous ramp.
+    - *Two doors.* "Climate in 2050" and "What matters to you" replace the eight-item list in
+      which My priorities came last.
+    - *Lead lines.* The place panel opens with at most five findings picked by the fixed rule in
+      §10; the full list sits behind "All measures and their sources". Sources are never more
+      than one step away (invariant 1).
+    - *Old links (rule B).* `serializeState` used to omit `view` at the default but always wrote
+      a position, so a link with a position and no `view=` is read as `bivar`; a bare address
+      opens `exp`; `view=` is now always written.
+    - *Basemap.* Our own style on OpenFreeMap's tiles and glyphs (§9.4): the stock dark style
+      drew roads and borders over the hexes.
+    - *Also fixed in the same build:* `viewport-fit=cover`, `theme-color` per scheme, a type
+      scale with a 12px floor, 44px touch targets on phones, `<main>` and a skip link, the phone
+      page no taller than the screen, notices clear of the zoom control, palette guard tests,
+      an axe scan in the e2e job.
+    - *Not proven here:* "no whole country reads as one colour" is shown on the fixture world's
+      national hexes only. The check on real data is manual-steps item 23.
+
 ## 14. VERIFY before code depends on it
 
 1. WB CCKP: indicator code, download format, license.
@@ -1044,7 +1141,7 @@ the live status per source.
 **v1.** Pipeline for 4 hazards + SHDI/WHR wellbeing + GHSL population at res 4 and 5; percentile
 scores; bivariate class; global life dimensions (GSAP, OECD, ILOSTAT) and US life dimensions
 (ACS, MEDSL, EPA SLD, Urban Institute, HRSA); manifest; PMTiles on R2; MapLibre map with
-bivariate default, per-layer views, My-priorities view with presets and sliders, confidence
+a one-variable default (combined exposure; bivariate one step in, §13.50), per-layer views, My-priorities view with presets and sliders, confidence
 rendering, inspector with sources, URL state; `/methodology` from manifest; `/about`.
 
 **v2.** Candidate new sources (FEMA NRI and CDC PLACES now wired, §13.38; the EU cities survey and the Opportunity Atlas wired, §13.48; Overture amenities, Climate TRACE / GEM facilities, NO2) are triaged in `docs/source-candidates-2026-11.md`. Scenario and horizon toggles; (place search and compare-two-places
@@ -1313,6 +1410,10 @@ denominator (invariant 3). Presets are named weight sets in `web/src/presets.ts`
 | Queer and looking for community | LGBTQ+ presence 3; politics (left lean), jobs 2 |
 | Retiring | healthcare 3; travel to care, heat, humid heat, wellbeing, cost of living 2; walking to care, air, the other three hazards 1 |
 | Climate first | the five hazards, 1 each |
+
+The 0-100 result colours the map on a continuous ramp and is named to the person as a band:
+weak fit under 40, partial fit 40 to 60, strong fit over 60 (§13.50). The figure itself is one
+step in; each weighted dimension's own match is always shown.
 
 Each life dimension in the panel shows a coverage chip (Global / OECD / US only) and greys out
 where the hovered or clicked hex has `_res = none`.

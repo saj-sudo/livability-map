@@ -22,7 +22,8 @@ describe("compare two places (SPEC §10)", () => {
     expect(row("heat").leans).toBe("a"); // 66 < 90: less heat is better
     expect(row("wb").leans).toBe("a");
     expect(row("jobs").leans).toBe("a"); // 73 > 40
-    expect(row("match").a).toBe("60/100"); // heat match 34 (w1) + jobs 73 (w2) -> (34 + 146) / 3
+    expect(row("match").a).toBe("partial fit"); // heat match 34 (w1) + jobs 73 (w2) -> (34 + 146) / 3 = 60
+    expect(row("match").b).toBe("weak fit");
     expect(row("match").leans).toBe("a");
   });
 

@@ -6,8 +6,10 @@
 // Columns = exposure (low -> high, left to right) in a warm red; rows = wellbeing (low -> high,
 // bottom to top) in a cool teal; both high is a dark mauve (light) / light mauve (dark).
 // Light grid: Joshua Stevens' red/blue scheme. Dark grid: derived in OKLCH (scripts/bivar_dark.mjs)
-// so lightness climbs with exposure + wellbeing; rows and columns validated monotone and the
-// corner cells validated separable under protan/deutan simulation (dataviz validator).
+// so lightness climbs with exposure + wellbeing. One rule in both themes: the end that stands out
+// most from the ground is "more". palette.test.ts measures the claims: rows, columns and ramps
+// lightness-monotone, the no-data grey a minimum distance from every cell and step, the corner
+// cells separable under protan / deutan simulation, exposure-only clear of the 3x3 grid.
 
 import type { Theme } from "./theme";
 
@@ -15,6 +17,12 @@ export interface Palette {
   bivar: Record<number, string>;
   /** no data (never 0; invariant 3) */
   grey: string;
+  /** combined exposure in five equal steps of the 0-100 score, least to most (§9.3) */
+  rampExposure: string[];
+  /** exposure alone, low to high, for hexes whose wellbeing is one national figure in the
+   *  bivariate view: an ochre used nowhere on the 3x3 grid, so it cannot be read as a wellbeing
+   *  class (§9.3, §13.50) */
+  exposureOnly: string[];
   /** sequential ramps as 3 stops at scores 0, 50, 100 */
   rampHazard: string[];
   rampGood: string[];
@@ -22,8 +30,8 @@ export interface Palette {
   rampPriority: string[];
   /** hex seam: paper-toned so the mesh recedes */
   outline: string;
-  /** dashed outline for national-fallback wellbeing */
-  national: string;
+  /** country borders drawn above the hexes in the bivariate view (§9.3) */
+  border: string;
   hover: string;
   selected: string;
   /** wide line under the selection so it reads on every fill colour */
@@ -45,12 +53,14 @@ export const PALETTES: Record<Theme, Palette> = {
       9: "#574249", // high exposure, high wellbeing
     },
     grey: "#cfd3cf",
+    rampExposure: ["#f6e7dc", "#ebc3ae", "#d98f7c", "#bf5552", "#7a2629"],
+    exposureOnly: ["#f0dc9a", "#d6a94a", "#7d5a12"],
     rampHazard: ["#f6e7dc", "#c85a5a", "#5a1d1d"],
     rampGood: ["#e6f0e4", "#63a95f", "#1f4d24"],
     rampWellbeing: ["#e3eef2", "#64acbe", "#1f4b5c"],
     rampPriority: ["#e6e6f2", "#7f76c2", "#2f2a66"],
     outline: "rgba(238,240,236,0.5)",
-    national: "rgba(27,35,32,0.35)",
+    border: "#1b2320",
     hover: "#1b2320",
     selected: "#1b2320",
     halo: "#fbfcfa",
@@ -69,12 +79,14 @@ export const PALETTES: Record<Theme, Palette> = {
       9: "#dfb4da",
     },
     grey: "#2c3437",
+    rampExposure: ["#3d2826", "#6f3a37", "#a94e4c", "#dc8274", "#f4c8b8"],
+    exposureOnly: ["#4a4024", "#a4832f", "#f0d588"],
     rampHazard: ["#4a2a28", "#c85a5a", "#f2c2b3"],
     rampGood: ["#22402a", "#57a05c", "#c6e6c4"],
     rampWellbeing: ["#1f3f4a", "#4a9fb5", "#bfe3ea"],
     rampPriority: ["#2c2a5a", "#7a72c4", "#d3d0ee"],
     outline: "rgba(20,26,28,0.55)",
-    national: "rgba(230,234,231,0.35)",
+    border: "#e6eae7",
     hover: "#e6eae7",
     selected: "#e6eae7",
     halo: "#141a1c",
@@ -102,15 +114,14 @@ export const BIVAR_WORDS: Record<number, string> = {
   9: "high exposure, high wellbeing",
 };
 
+/** The three exposure-only colours, indexed by exposure tercile (§9.3). */
+export const exposureOnly = (pal: Palette): string[] => pal.exposureOnly;
+
+/** Lower bounds of the five exposure steps on the 0-100 score. */
+export const EXPOSURE_STEPS = [20, 40, 60, 80] as const;
+
 /** Categorical colours for the composition shares (fixed order w, b, h, a, o; dataviz rule 1). */
 export const SHARE_COLORS: Record<Theme, string[]> = {
   light: ["#7f76c2", "#63a95f", "#d98a3d", "#3d7f93", "#9a9a9a"],
   dark: ["#a9a3dc", "#8cc78e", "#e5a86a", "#7fc5d6", "#8a9297"],
 };
-
-/** Colour of a score bar in the place panel. A score is a rank of the raw value, so a high score
- *  is good news only when more of the thing is better: housing cost burden 91/100 gets the hazard
- *  (bad) hue, tree cover 91/100 the good one. */
-export function scoreBarColor(pal: Palette, higherIs: "better" | "worse" | undefined): string {
-  return higherIs === "worse" ? pal.rampHazard[1] : pal.rampGood[1];
-}

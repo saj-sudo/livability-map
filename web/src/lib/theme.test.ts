@@ -29,9 +29,14 @@ describe("theme resolution (no cookies, no URL)", () => {
     expect(resolveTheme("garbage", true)).toBe("dark");
   });
 
-  it("maps each theme to an OpenFreeMap style URL", () => {
-    expect(basemapStyleFor("light")).toMatch(/openfreemap\.org\/styles\/positron$/);
-    expect(basemapStyleFor("dark")).toMatch(/openfreemap\.org\/styles\/dark$/);
+  it("maps each theme to our own style on OpenFreeMap's tiles and glyphs", () => {
+    for (const theme of ["light", "dark"] as const) {
+      const style = basemapStyleFor(theme);
+      expect(JSON.stringify(style.sources)).toMatch(/tiles\.openfreemap\.org\/planet/);
+      expect(style.glyphs).toMatch(/tiles\.openfreemap\.org\/fonts/);
+      expect(style.name).toContain(theme);
+    }
+    expect(JSON.stringify(basemapStyleFor("light").layers)).not.toBe(JSON.stringify(basemapStyleFor("dark").layers));
   });
 
   it("reads and writes localStorage defensively", () => {

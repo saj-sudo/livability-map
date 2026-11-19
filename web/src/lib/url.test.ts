@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from "./config";
-import { DEFAULT_STATE, parseState, serializeState, type AppState } from "./url";
+import { DEFAULT_STATE, parseState, serializeState, VIEWS, type AppState } from "./url";
 
 describe("url state", () => {
   it("round-trips a full priorities state", () => {
@@ -22,6 +22,7 @@ describe("url state", () => {
     expect(q).toContain("preset=queer");
     expect(q).not.toContain("&w=");
     expect(q).not.toContain("conf=");
+    expect(q).toContain("view=priorities");
     expect(q).not.toContain("pol="); // the preset's own pick is implied
     const back = parseState(q);
     expect(back.preset).toBe("queer");
@@ -33,7 +34,7 @@ describe("url state", () => {
     const back = parseState("?lat=abc&z=99&view=nope&preset=zzz&pol=up&w=x,9,-1&inh=maybe");
     expect(back.lat).toBe(DEFAULT_STATE.lat);
     expect(back.z).toBe(14); // clamped
-    expect(back.view).toBe("bivar");
+    expect(back.view).toBe("exp"); // an unknown view= is not an old link: today's default
     expect(back.preset).toBeNull();
     expect(back.weights).toEqual({ rflood: 5 }); // second slot is rflood, clamped to 5
     expect(back.pol).toBe("competitive");
@@ -75,5 +76,32 @@ describe("url state", () => {
     expect(parseState("?z=1.5").z).toBe(MAP_MIN_ZOOM);
     expect(parseState("?z=40").z).toBe(MAP_MAX_ZOOM);
     expect(parseState("?z=5.5").z).toBe(5.5);
+  });
+
+  it("keeps old links meaning what they meant: rule B (SPEC §13.50)", () => {
+    // written before the redesign: a position, no view= (bivariate was the default and was omitted)
+    expect(parseState("?lat=42.500&lng=13.000&z=6.00").view).toBe("bivar");
+    expect(parseState("?lat=42.5&lng=13&z=6&preset=early").view).toBe("bivar");
+    // a bare address is a first visit: today's default, one variable
+    expect(parseState("").view).toBe("exp");
+    expect(DEFAULT_STATE.view).toBe("exp");
+    // view= always wins, and is always written from now on
+    expect(parseState("?lat=1&lng=2&z=3&view=exp").view).toBe("exp");
+    expect(parseState("?view=wb").view).toBe("wb");
+    expect(serializeState(DEFAULT_STATE)).toContain("view=exp");
+    expect(serializeState({ ...DEFAULT_STATE, view: "bivar" })).toContain("view=bivar");
+    expect(parseState(serializeState(DEFAULT_STATE)).view).toBe("exp");
+  });
+
+  it("appends new view ids, never reorders them", () => {
+    expect(VIEWS.slice(0, 8)).toEqual(["bivar", "heat", "humid", "rflood", "cflood", "wstress", "wb", "priorities"]);
+    expect(VIEWS[8]).toBe("exp");
+  });
+
+  it("carries the share flag only when set", () => {
+    expect(parseState("?view=priorities&preset=early&share=1").share).toBe(true);
+    expect("share" in parseState("?view=priorities&preset=early")).toBe(false);
+    expect(serializeState({ ...DEFAULT_STATE, share: true })).toContain("share=1");
+    expect(serializeState(DEFAULT_STATE)).not.toContain("share");
   });
 });

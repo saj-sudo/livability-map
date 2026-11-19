@@ -3,12 +3,14 @@
 // resolution order. A layer that overzooms keeps drawing under the finer layers; its cells that a
 // finer layer replaced (`ref`) fade out from that layer's first zoom so colours never double up.
 // Each group has a fill per view, a hatch overlay for
-// reduced confidence, a dashed outline for national wellbeing fallback, a hover outline and a
-// haloed selection outline driven by feature-state. Colours come from the theme's palette.
+// reduced confidence, a hover outline and a haloed selection outline driven by feature-state.
+// The hex stack sits above every basemap line and below its labels; the basemap's country
+// borders are repeated above the hexes for the bivariate view (§9.3, lib/basemap.ts). Colours come from the theme's palette.
 
 import type { FilterSpecification, LayerSpecification, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import type { DimInfo } from "./dims";
-import { bivarColor, hatchFilter, inhabitedFilter, nationalFilter, priorityColor, rampFor, scoreColor, type Expr, type Picks, type Weights } from "./expressions";
+import { COUNTRY_TOP_ID } from "./basemap";
+import { bivarColor, exposureColor, hatchFilter, inhabitedFilter, priorityColor, rampFor, scoreColor, type Expr, type Picks, type Weights } from "./expressions";
 import { DEFAULT_TILE_LAYERS, type TileLayer } from "./layers";
 import { paletteFor, type Palette } from "./palette";
 import type { Theme } from "./theme";
@@ -16,7 +18,7 @@ import type { ViewId } from "./url";
 
 export const SOURCE_ID = "hexes";
 export const HATCH_IMAGE = "hatch";
-export const LAYER_KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"] as const;
+export const LAYER_KINDS = ["fill", "hatch", "hover", "halo", "selected"] as const;
 export type LayerKind = (typeof LAYER_KINDS)[number];
 
 export { DEFAULT_TILE_LAYERS, type TileLayer };
@@ -67,13 +69,15 @@ function refinedOpacity(base: number, from: number | undefined): number | Expr {
 
 export function fillColorFor(o: ViewOptions): Expr {
   const pal = paletteFor(o.theme);
+  if (o.view === "exp") return exposureColor(pal);
   if (o.view === "bivar") return bivarColor(pal);
   if (o.view === "priorities") return priorityColor(o.dims, o.weights, o.picks, pal);
   const dim = o.dims.find((d) => d.id === o.view);
   return scoreColor(o.view, dim ? rampFor(dim, pal) : pal.rampGood, pal.grey);
 }
 
-const showsNational = (view: ViewId) => view === "bivar" || view === "wb";
+/** The view in which country borders are drawn above the hexes (§9.3). */
+export const showsCountryBorders = (view: ViewId) => view === "bivar";
 const stateFlag = (flag: string): Expr => ["boolean", ["feature-state", flag], false] as unknown as Expr;
 
 export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: boolean, tileLayers: TileLayer[] = DEFAULT_TILE_LAYERS): LayerSpecification[] {
@@ -99,14 +103,6 @@ export function buildLayers(o: ViewOptions, showUninhabited: boolean, conf: bool
       filter: ["all", inhabitedFilter(showUninhabited), hatchFilter()] as unknown as FilterSpecification,
       layout: { visibility: conf ? "visible" : "none" },
       paint: { "fill-pattern": HATCH_IMAGE, "fill-opacity": refinedOpacity(0.5, from) },
-    } as LayerSpecification);
-    layers.push({
-      id: layerId("national", L),
-      type: "line",
-      ...base,
-      filter: ["all", inhabitedFilter(showUninhabited), nationalFilter()] as unknown as FilterSpecification,
-      layout: { visibility: showsNational(o.view) ? "visible" : "none" },
-      paint: { "line-color": pal.national, "line-width": 0.6, "line-dasharray": [1, 3], "line-opacity": line },
     } as LayerSpecification);
     layers.push({
       id: layerId("hover", L),
@@ -142,23 +138,31 @@ export function applyView(map: MapLibreMap, o: ViewOptions, showUninhabited: boo
     map.setFilter(layerId("fill", L), inhabitedFilter(showUninhabited));
     map.setFilter(layerId("hatch", L), ["all", inhabitedFilter(showUninhabited), hatchFilter()] as unknown as FilterSpecification);
     map.setLayoutProperty(layerId("hatch", L), "visibility", conf ? "visible" : "none");
-    map.setFilter(layerId("national", L), ["all", inhabitedFilter(showUninhabited), nationalFilter()] as unknown as FilterSpecification);
-    map.setLayoutProperty(layerId("national", L), "visibility", showsNational(o.view) ? "visible" : "none");
-    map.setPaintProperty(layerId("national", L), "line-color", pal.national);
     map.setPaintProperty(layerId("hover", L), "line-color", pal.hover);
     map.setPaintProperty(layerId("halo", L), "line-color", pal.halo);
     map.setPaintProperty(layerId("selected", L), "line-color", pal.selected);
   }
+  if (map.getLayer(COUNTRY_TOP_ID)) map.setLayoutProperty(COUNTRY_TOP_ID, "visibility", showsCountryBorders(o.view) ? "visible" : "none");
 }
 
-/** Insert the hex layers under the basemap's labels so place names stay readable. */
-export function firstSymbolLayerId(map: MapLibreMap): string | undefined {
-  return map.getStyle()?.layers?.find((l) => l.type === "symbol")?.id;
+/** Where the hex layers go in a style: under the country borders that are repeated above the
+ *  data, else under the first label, else on top (the plain-background fallback). */
+export function hexAnchorIndex(layers: { id: string; type: string }[]): number {
+  const top = layers.findIndex((l) => l.id === COUNTRY_TOP_ID);
+  if (top >= 0) return top;
+  const sym = layers.findIndex((l) => l.type === "symbol");
+  return sym < 0 ? layers.length : sym;
+}
+
+/** The layer id to insert the hex layers before (undefined = on top). */
+export function hexAnchorId(map: MapLibreMap): string | undefined {
+  const layers = map.getStyle()?.layers ?? [];
+  return layers[hexAnchorIndex(layers)]?.id;
 }
 
 /**
  * For map.setStyle(url, { transformStyle }): carry the hex source and layers from the previous
- * (themed) style into the next basemap, under its first symbol layer, so a theme change never
+ * (themed) style into the next basemap, at the same anchor, so a theme change never
  * re-adds the source or refetches tiles. Pure so it can be tested against the style spec.
  */
 export function mergeStyleOnThemeChange(prev: StyleSpecification | undefined, next: StyleSpecification): StyleSpecification {
@@ -168,8 +172,7 @@ export function mergeStyleOnThemeChange(prev: StyleSpecification | undefined, ne
   const hexSources = Object.fromEntries(ids.filter((id) => prev.sources?.[id]).map((id) => [id, prev.sources[id]]));
   if (!Object.keys(hexSources).length || !hexLayers.length) return next;
   const nextLayers = (next.layers ?? []).filter((l) => !isHexLayerId(l.id));
-  const at = nextLayers.findIndex((l) => l.type === "symbol");
-  const insertAt = at < 0 ? nextLayers.length : at;
+  const insertAt = hexAnchorIndex(nextLayers);
   return {
     ...next,
     sources: { ...next.sources, ...hexSources },

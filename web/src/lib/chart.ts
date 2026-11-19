@@ -77,3 +77,13 @@ export function missingNote(bars: Bar[]): string | null {
   const names = missing.map((b) => shortName(b.name)).join(", ");
   return missing.length === 1 ? `1 of your weighted layers has no data here: ${names}.` : `${missing.length} of your weighted layers have no data here: ${names}.`;
 }
+
+/** The priorities fit as a band in words (SPEC §20.5, §13.50). Fixed cuts on the 0-100 weighted
+ *  average of matches: an average of ranks clusters near the middle, so the bands are wide there. */
+export type FitBand = "weak" | "partial" | "strong";
+export const FIT_CUTS = { partial: 40, strong: 60 } as const;
+export function fitBand(c: number): FitBand {
+  return c < FIT_CUTS.partial ? "weak" : c <= FIT_CUTS.strong ? "partial" : "strong";
+}
+export const FIT_WORDS: Record<FitBand, string> = { weak: "weak fit", partial: "partial fit", strong: "strong fit" };
+export const FIT_BANDS: readonly FitBand[] = ["weak", "partial", "strong"];

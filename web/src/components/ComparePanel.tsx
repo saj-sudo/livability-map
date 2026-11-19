@@ -27,7 +27,7 @@ interface Props {
 
 const GROUP_TITLES: Record<RowGroup, string> = { summary: "", priorities: "Your priorities", hazard: "Climate hazards", wellbeing: "Wellbeing", env: "Environment today", life: "Life dimensions" };
 /** what the numbers in a group are, shown beside its title (as in the place panel) */
-const GROUP_SCALES: Partial<Record<RowGroup, string>> = { priorities: "match, 0-100", hazard: "value, rank among inhabited places", wellbeing: "value, score within its source", env: "observed today; value, rank", life: "value, rank among inhabited places" };
+const GROUP_SCALES: Partial<Record<RowGroup, string>> = { priorities: "weak, partial or strong", hazard: "value, rank among inhabited places", wellbeing: "value, score within its source", env: "observed today; value, rank", life: "value, rank among inhabited places" };
 const GROUPS: RowGroup[] = ["summary", "priorities", "hazard", "wellbeing", "env", "life"];
 
 export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRepick, onClose, embedded }: Props) {
@@ -39,7 +39,7 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
   const rows = useMemo(() => compareRows({ model: ma, props: a.props }, { model: mb, props: b.props }, dims, state.weights, picks), [ma, mb, a.props, b.props, dims, state.weights, picks]);
 
   const Cell = ({ value, lean }: { value: string | null; lean: boolean }) => (
-    <td className={`py-[3px] pr-2 align-top text-[12px] ${value === null ? "text-muted" : ""}`}>
+    <td className={`py-[3px] pr-2 align-top text-fine ${value === null ? "text-muted" : ""}`}>
       {lean && (
         <>
           <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden="true" />
@@ -51,17 +51,17 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
   );
 
   return (
-    <section className={embedded ? "text-[13px]" : "absolute bottom-3 right-3 z-10 max-h-[calc(100%-1.5rem)] w-[30rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel p-3 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"} aria-label="Compare two places">
+    <section className={embedded ? "text-small" : "h-full overflow-auto p-4 text-small"} aria-label="Compare two places">
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-serif text-[16px]">Side by side</h2>
         <div className="flex gap-1">
-          <button type="button" onClick={onSwap} className="rounded-panel px-2 py-0.5 text-[12px] text-muted hover:bg-rule hover:text-ink">
+          <button type="button" onClick={onSwap} className="min-h-[44px] rounded-panel px-2 text-fine text-muted hover:bg-rule hover:text-ink sm:min-h-8">
             Swap
           </button>
-          <button type="button" onClick={onRepick} className="rounded-panel px-2 py-0.5 text-[12px] text-muted hover:bg-rule hover:text-ink">
+          <button type="button" onClick={onRepick} className="min-h-[44px] rounded-panel px-2 text-fine text-muted hover:bg-rule hover:text-ink sm:min-h-8">
             Change second place
           </button>
-          <button type="button" onClick={onClose} className="grid h-7 w-7 place-items-center rounded-panel text-muted hover:bg-rule hover:text-ink" aria-label="Close comparison">
+          <button type="button" onClick={onClose} className="grid h-[44px] w-[44px] place-items-center rounded-panel text-muted hover:bg-rule hover:text-ink sm:h-8 sm:w-8" aria-label="Close comparison">
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
               <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" />
             </svg>
@@ -71,14 +71,14 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
       <table className="mt-2 w-full table-fixed border-collapse">
         <thead>
           <tr className="text-left align-top">
-            <th className="w-[30%] pb-1 pr-2 font-normal text-[11px] text-muted"></th>
+            <th className="w-[30%] pb-1 pr-2 font-normal text-fine text-muted"></th>
             <th className="pb-1 pr-2 font-serif text-[15px] font-normal leading-tight">
               {ha.title}
-              <div className="font-sans text-[11px] text-muted">{ha.subtitle}</div>
+              <div className="font-sans text-fine text-muted">{ha.subtitle}</div>
             </th>
             <th className="pb-1 font-serif text-[15px] font-normal leading-tight">
               {hb.title}
-              <div className="font-sans text-[11px] text-muted">{hb.subtitle}</div>
+              <div className="font-sans text-fine text-muted">{hb.subtitle}</div>
             </th>
           </tr>
         </thead>
@@ -90,15 +90,15 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
               GROUP_TITLES[g] ? (
                 <tr key={`${g}-title`}>
                   <td colSpan={3} className="border-t border-rule pt-2">
-                    <span className="font-serif text-[13px]">{GROUP_TITLES[g]}</span>
-                    {GROUP_SCALES[g] && <span className="ml-2 text-[11px] text-muted">{GROUP_SCALES[g]}</span>}
+                    <span className="font-serif text-small">{GROUP_TITLES[g]}</span>
+                    {GROUP_SCALES[g] && <span className="ml-2 text-fine text-muted">{GROUP_SCALES[g]}</span>}
                   </td>
                 </tr>
               ) : null,
               ...inGroup.map((r) => (
                 <Fragment key={r.id}>
                   <tr className="align-top">
-                    <td className="py-[3px] pr-2 text-[12px] text-muted" title={r.label}>
+                    <td className="py-[3px] pr-2 text-fine text-muted" title={r.label}>
                       {shortName(r.label)}
                     </td>
                     <Cell value={r.a} lean={r.leans === "a"} />
@@ -106,7 +106,7 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
                   </tr>
                   {r.note && (
                     <tr>
-                      <td colSpan={3} className="pb-[3px] text-[11px] leading-snug text-muted">
+                      <td colSpan={3} className="pb-[3px] text-fine leading-snug text-muted">
                         {r.note}
                       </td>
                     </tr>
@@ -117,7 +117,7 @@ export default function ComparePanel({ a, b, manifest, dims, state, onSwap, onRe
           })}
         </tbody>
       </table>
-      <p className="mt-2 text-[11px] text-muted">A dot marks the side that does better on a row; rows with a side missing, and how much hazard data each side has, are not judged.</p>
+      <p className="mt-2 text-fine text-muted">A dot marks the side that does better on a row; rows with a side missing, and how much hazard data each side has, are not judged.</p>
     </section>
   );
 }

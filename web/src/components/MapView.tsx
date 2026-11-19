@@ -17,7 +17,7 @@ import { classifyError, fallbackStyle, NO_PROBLEMS, noteProblem, OTHER_ERROR_HIN
 import { paletteFor } from "../lib/palette";
 import type { PlaceRef } from "../lib/place";
 import { diffOutlines, type OutlineKey } from "../lib/selection";
-import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, firstSymbolLayerId, HATCH_IMAGE, mergeStyleOnThemeChange, pickVisible, type TileLayer, type ViewOptions } from "../lib/style";
+import { applyView, buildLayers, DEFAULT_TILE_LAYERS, fillLayerIds, hexAnchorId, HATCH_IMAGE, mergeStyleOnThemeChange, pickVisible, type TileLayer, type ViewOptions } from "../lib/style";
 import { basemapStyleFor, THEME_EVENT, type Theme } from "../lib/theme";
 import type { AppState } from "../lib/url";
 import { getDomTheme } from "./useTheme";
@@ -130,8 +130,9 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       maxZoom: MAP_MAX_ZOOM,
       attributionControl: false,
     });
-    // the OpenFreeMap style carries its own attribution (the BASEMAP_ATTRIBUTION text)
+    // the basemap source carries the attribution (lib/basemap.ts); the scale bar sits beside it
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
     if (process.env.NODE_ENV !== "production") {
@@ -172,10 +173,11 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       window.clearTimeout(styleTimer);
       addHatch();
       for (const a of archives) map.addSource(a.id, { type: "vector", url: `pmtiles://${tilesUrl(a.key)}`, promoteId: "h3" });
-      const before = firstSymbolLayerId(map);
+      const before = hexAnchorId(map);
       const st = stateRef.current;
       for (const layer of buildLayers(options(st), st.inh, st.conf, tileLayers)) map.addLayer(layer, before);
       loadedRef.current = true;
+      applyView(map, options(st), st.inh, st.conf, tileLayers); // also shows or hides the country borders above the hexes
       syncOutlines(map, true);
       for (const id of fillLayerIds(tileLayers)) {
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
@@ -239,8 +241,11 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
       if (k.kind === "tiles") return report(k);
       if (k.kind === "basemap") {
         // before the data is up, a basemap failure means its style: switch to the plain
-        // background. Later, a missing basemap tile or glyph only leaves a gap behind the hexes.
+        // background. Our own style parses without a request, so its source (TileJSON) or glyphs
+        // usually fail after that: the ground stays the paper tone and a notice says the detail
+        // is missing. One missing basemap tile only leaves a gap behind the hexes.
         if (!loadedRef.current) switchToPlainBackground();
+        else if (!("tile" in e)) report(k);
         return;
       }
       // the raw MapLibre message is for developers: console only, plain words on screen
@@ -328,5 +333,5 @@ export default function MapView({ archives, tileLayers = DEFAULT_TILE_LAYERS, di
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.view, state.weights, state.pol, state.inh, state.conf, dims]);
 
-  return <div ref={container} className="h-full w-full" role="application" aria-label="Map of climate exposure and wellbeing" />;
+  return <div ref={container} className="h-full w-full" role="application" aria-label="Map: hexagons coloured by the layer named in the title above" />;
 }

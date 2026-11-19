@@ -22,6 +22,8 @@
   --accent-ink: #ffffff;
   --nodata: #cfd3cf;
   --header-h: 2.75rem;
+  --rail-w: 300px;
+  --place-w: 360px;
 }
 
 :root[data-theme="dark"] {
@@ -51,6 +53,10 @@
   --font-sans: "Source Sans 3 Variable", "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   --font-serif: "Newsreader Variable", "Newsreader", Georgia, "Times New Roman", serif;
   --radius-panel: 6px;
+  /* the type scale (SPEC §10): nothing on the page is smaller than 12px */
+  --text-fine: 12px;
+  --text-small: 13px;
+  --text-body: 15px;
 }
 
 html,
@@ -76,18 +82,73 @@ body {
   outline-offset: 2px;
 }
 
-/* the map fills the viewport below the header; panels float over it */
+/* a keyboard user's first stop: jump past the header to the page's main content */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 50;
+  background: var(--panel-solid);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink);
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* The map fills the viewport below the header. On a wide screen the controls and the place
+   panel are docked rails either side of it (SPEC §10, §13.50): hairlines, no floating cards. On
+   a phone the stage fills the shell and the panels live in the bottom sheet. `overflow: clip`
+   keeps the sheet (which is moved with a transform) from making the page scroll. */
 .map-shell {
   position: relative;
   height: calc(100dvh - var(--header-h));
   min-height: 420px;
   background: var(--paper);
+  overflow: clip;
+}
+.map-stage {
+  position: absolute;
+  inset: 0;
+}
+.rail {
+  background: var(--panel-solid);
+  min-height: 0;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .map-shell {
+    display: grid;
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+  .map-shell[data-place="open"] {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--place-w);
+  }
+  .map-shell[data-place="compare"] {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr) min(30rem, 40vw);
+  }
+  .map-stage {
+    position: relative;
+    inset: auto;
+    min-width: 0;
+  }
+  .rail-left {
+    border-right: 1px solid var(--rule);
+  }
+  .rail-right {
+    border-left: 1px solid var(--rule);
+  }
 }
 
 /* MapLibre controls follow the theme */
 .maplibregl-ctrl-group {
   background: var(--panel-solid);
   border: 1px solid var(--rule);
+  box-shadow: none;
+}
+.maplibregl-ctrl-group:not(:empty) {
   box-shadow: none;
 }
 .maplibregl-ctrl-group button + button {
@@ -103,10 +164,31 @@ body {
   background: var(--panel);
   color: var(--muted);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 .maplibregl-ctrl-attrib a {
   color: var(--muted);
+}
+/* the scale bar: a plain ruled line in the ink tone, like the one on an atlas plate */
+.maplibregl-ctrl-scale {
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-top: none;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+}
+/* 44px touch targets on a phone (SPEC §10) */
+@media (max-width: 639px) {
+  .maplibregl-ctrl-group button {
+    width: 44px;
+    height: 44px;
+  }
+  /* the sheet covers the bottom of the map: lift the attribution and scale above its peek */
+  .maplibregl-ctrl-bottom-right {
+    bottom: 196px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

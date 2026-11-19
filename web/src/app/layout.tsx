@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import ThemeToggle from "../components/ThemeToggle";
 import { THEME_BOOT_SCRIPT } from "../lib/theme";
@@ -10,6 +10,19 @@ export const metadata: Metadata = {
     "Projected climate hazard exposure beside present-day wellbeing and the life dimensions you choose, on open data. Shows evidence and gaps; does not recommend where to live.",
 };
 
+// viewport-fit=cover lets the phone sheet's safe-area padding resolve to the real inset; the
+// theme colour follows the system scheme (the page's own toggle cannot change a meta tag the
+// browser reads before paint, and the two panel tones are the right chrome for each scheme).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfcfa" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c2326" },
+  ],
+};
+
 // SPEC invariant 7: no trackers, no analytics, no accounts. The only script this layout adds
 // applies the stored/system theme before first paint (suppressHydrationWarning covers the
 // data-theme attribute it sets, which the server cannot know).
@@ -19,6 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <a href="#main" className="skip-link">
+          Skip to the main content
+        </a>
         <header className="flex h-[var(--header-h)] items-center gap-5 border-b border-rule bg-panel-solid px-4">
           <Link href="/" prefetch={false} className="flex shrink-0 items-center gap-2 font-serif text-[19px] font-medium text-ink">
             <HexMark />
@@ -28,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* the map page portals its search box here (components/Search.tsx) */}
           <div id="search-slot" className="min-w-0 flex-1" />
           {/* on a phone the links move to the About page's footer; search needs the room */}
-          <nav className="hidden shrink-0 gap-4 text-[13px] text-muted sm:flex">
+          <nav className="hidden shrink-0 gap-4 text-small text-muted sm:flex">
             <Link href="/" prefetch={false} className="hover:text-ink">
               Map
             </Link>

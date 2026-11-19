@@ -11,8 +11,13 @@ export const SNAP_FRACTIONS: Record<Snap, number> = { peek: 0.14, half: 0.5, ful
 /** px/ms above which a drag counts as a flick */
 export const FLICK_VELOCITY = 0.4;
 
+/** The peek holds the tabs, the two doors and the one-line key (SPEC §10), so it has a floor in
+ *  px; on a very short screen it never takes more than 40% of the container. */
+export const PEEK_MIN_PX = 190;
+
 export function snapHeight(snap: Snap, containerHeight: number): number {
-  return Math.round(SNAP_FRACTIONS[snap] * containerHeight);
+  const h = Math.round(SNAP_FRACTIONS[snap] * containerHeight);
+  return snap === "peek" ? Math.max(h, Math.min(PEEK_MIN_PX, Math.round(containerHeight * 0.4))) : h;
 }
 
 /** The snap whose height is closest to `height`. */

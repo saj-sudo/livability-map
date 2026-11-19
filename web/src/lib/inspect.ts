@@ -12,12 +12,10 @@ export type Props = Record<string, unknown>;
 export const SCORE_MEANING =
   "Scores out of 100 are ranks among inhabited places at this map scale (a percentile): 75 means higher than 75% of them. A rank is not an absolute risk level.";
 
-/** The note above the first scores in the place panel: with priorities set, the match is named
- *  first so it is not mistaken for a rank (the same place can show a match of 75 and a rank of 25). */
-export function scoreNoteFor(hasPriorities: boolean): string {
-  if (!hasPriorities) return SCORE_MEANING;
-  return "Your priorities show a match from 0 to 100: how well this place fits what you weighted. The other scores are ranks among inhabited places at this map scale (75 means higher than 75% of them), not an absolute risk level.";
-}
+/** What the priorities numbers are, shown beside them so a match is not mistaken for a rank
+ *  (the same place can show a match of 75 and a rank of 25). */
+export const MATCH_MEANING =
+  "Each bar is a match from 0 to 100: how well this place fits what you weighted for that measure. The fit is their weighted average, counting only measures with data here.";
 
 /** What the combined exposure number is (SPEC §8.3): shown beside it in the panel and in compare. */
 export const EXPOSURE_MEANING = "the average of the hazard ranks present";

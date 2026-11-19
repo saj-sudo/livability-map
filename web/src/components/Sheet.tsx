@@ -87,7 +87,7 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, peek, children }
   return (
     <div
       ref={root}
-      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-[10px] border border-b-0 border-rule bg-panel-solid shadow-[0_-8px_24px_-12px_rgba(0,0,0,.35)]"
+      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-[10px] border border-b-0 border-rule bg-panel-solid"
       style={{ height: fullH || undefined, transform: `translateY(${translate}px)`, transition: dragDy === null ? "transform 220ms cubic-bezier(.2,.8,.2,1)" : "none", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       role="region"
       aria-label="Map panels"
@@ -95,7 +95,7 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, peek, children }
       <div className="touch-none select-none px-3 pb-1 pt-2" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <button
           type="button"
-          className="mx-auto -mt-1.5 flex h-[28px] w-16 items-center justify-center"
+          className="mx-auto -mt-1.5 flex h-[28px] w-24 items-center justify-center"
           aria-label={snap === "full" ? "Collapse panels" : "Expand panels"}
           // keyboard and switch access (detail 0); a pointer tap is already handled by the drag
           // handlers on the parent, so it must not cycle twice
@@ -105,7 +105,7 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, peek, children }
         >
           <span className="block h-1.5 w-10 rounded-full bg-rule" aria-hidden="true" />
         </button>
-        <div className="mt-1 flex gap-1" role="tablist" aria-label="Map panels">
+        <div className="flex gap-1" role="tablist" aria-label="Map panels">
           {tabs.map((t, i) => (
             <button
               key={t.id}
@@ -123,7 +123,7 @@ export default function Sheet({ snap, onSnap, tabs, tab, onTab, peek, children }
                 onTab(t.id);
                 if (snap === "peek") onSnap("half");
               }}
-              className={`rounded-full px-3 py-1 text-[13px] ${t.id === tab ? "bg-rule font-medium text-ink" : "text-muted"}`}
+              className={`min-h-[44px] rounded-full px-3 text-small ${t.id === tab ? "bg-rule font-medium text-ink" : "text-muted"}`}
             >
               {t.label}
             </button>

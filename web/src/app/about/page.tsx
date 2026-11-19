@@ -3,14 +3,14 @@ export const metadata = { title: "About — livability-map" };
 // SPEC §3 in plain language (non-goals), the non-commercial statement (§13.13) and prior art (§18).
 export default function About() {
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-sm leading-relaxed">
+    <main id="main" tabIndex={-1} className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-sm leading-relaxed">
       <h1 className="font-serif text-3xl">About</h1>
       <p>
         This is a free, global map that puts projected climate hazard exposure (extreme heat, humid heat, riverine flood, coastal flood and water stress under one moderate scenario for 2050) beside present-day wellbeing and a set of life dimensions you can weight yourself: jobs, transit, schools, LGBTQ+ presence, political lean, income mix, housing cost and healthcare. It is built only from open-licensed data, on hexagons from a few tens of kilometres across down to about 5 km² inside cities.
       </p>
       <h2 className="font-serif text-xl">It does not recommend where to live</h2>
       <p>
-        The map shows evidence, shows its sources and shows its gaps. There is no ranking, no &ldquo;top ten places&rdquo; feed and no single livability number decided for you. The default view needs no weighting; the priorities view exposes every weight as a slider and computes the result in your browser. Where a layer is missing, the hex says so and is drawn differently; missing data is never treated as zero risk.
+        The map shows evidence, shows its sources and shows its gaps. There is no ranking, no &ldquo;top ten places&rdquo; feed and no single livability number decided for you. The default view shows one variable, projected climate exposure, and needs no weighting; the priorities view exposes every weight as a slider and computes the result in your browser. Where a layer is missing, the hex says so and is drawn differently; missing data is never treated as zero risk.
       </p>
       <p>
         Racial and ethnic composition (US census tracts) appears in the place panel as context, with its source. It is deliberately not something you can weight or filter by: ranking neighbourhoods by who lives there is steering, and this map does not do it.

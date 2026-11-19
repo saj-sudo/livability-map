@@ -138,7 +138,7 @@ export default async function Methodology() {
   const shdi = m.sources.find((s) => s.id === "gdl_shdi");
   const names = new Map([...m.hazards, ...m.dimensions].map((d) => [d.id, d.name]));
   return (
-    <main className="mx-auto max-w-4xl space-y-8 px-4 py-8 text-sm leading-relaxed">
+    <main id="main" tabIndex={-1} className="mx-auto max-w-4xl space-y-8 px-4 py-8 text-sm leading-relaxed">
       <h1 className="font-serif text-3xl">Methodology</h1>
       {!hasBuild && <Notice>This page was built without a pipeline manifest, so the tables below are empty. Run the pipeline and publish to fill them.</Notice>}
       {m.fixtures && <Notice>This build uses the synthetic fixture world, not real data.</Notice>}
@@ -147,7 +147,7 @@ export default async function Methodology() {
         <H2>How to read the map</H2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            <strong>Colours.</strong> In the default view each hexagon is coloured by two things at once: projected climate exposure in {m.horizon} (redder means more) and present-day wellbeing (bluer means higher). The colour key sits in the Layers panel, or in the Layers tab on a phone.
+            <strong>Colours.</strong> The first view shows one thing: projected climate exposure in {m.horizon}, the average of a place&rsquo;s ranks on the five hazards, in five steps (the end that stands out most from the background means more). &ldquo;Add wellbeing beside exposure&rdquo; colours each hexagon by two things at once (redder means more exposure, bluer means higher wellbeing), but only where the wellbeing figure is regional or finer. Where it is one figure for a whole country, the hexagon keeps an ochre exposure-only colour and the country is outlined, so a national number never paints a country. The colour key sits on the map, or at the bottom of the screen on a phone.
           </li>
           <li>
             <strong>Scores are ranks, not risk.</strong> A score of 80 means the place ranks above 80% of inhabited places on that layer. It does not mean an 80% chance of anything, and it is not twice as bad as 40.
@@ -156,7 +156,7 @@ export default async function Methodology() {
             <strong>Grey or hatched means missing data.</strong> Grey is no data at all, never zero risk. Hatching marks places where some of the five hazard layers are missing, so the picture is less complete.
           </li>
           <li>
-            <strong>Your priorities are yours.</strong> In My priorities the colour is a match from 0 to 100 with the weights you chose, worked out in your browser.
+            <strong>Your priorities are yours.</strong> Under &ldquo;What matters to you&rdquo; the colour is a match from 0 to 100 with the weights you chose, worked out in your browser. A place&rsquo;s overall fit is named as a band (weak under 40, partial 40 to 60, strong over 60), because an average of ranks does not deserve a precise-looking number; the figure and each measure&rsquo;s own match are one step in.
           </li>
           <li>
             <strong>It does not recommend where to live.</strong> The map shows evidence, its sources and its gaps; the decision stays with you.

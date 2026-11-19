@@ -2,7 +2,7 @@
 // value per side or null for "no data here", and `leans` names the side that is better for
 // that row only when both sides have data (invariant 3: a missing side never loses).
 
-import { compositeValue, type Props } from "./chart";
+import { compositeValue, FIT_BANDS, FIT_WORDS, fitBand, type Props } from "./chart";
 import { HAZARD_IDS, type DimInfo } from "./dims";
 import type { Picks, Weights } from "./expressions";
 import { formatScore } from "./format";
@@ -43,7 +43,9 @@ export function compareRows(a: Side, b: Side, dims: DimInfo[], weights: Weights,
   if (Object.values(weights).some((w) => w > 0)) {
     const ca = compositeValue(dims, weights, picks, a.props);
     const cb = compositeValue(dims, weights, picks, b.props);
-    rows.push({ id: "match", group: "priorities", label: "Match with your priorities", a: ca === null ? null : formatScore(ca), b: cb === null ? null : formatScore(cb), leans: lean(ca, cb, true) });
+    // the fit is named as a band (§13.50); a dot only when the bands differ, never on a few points
+    const order = (c: number | null) => (c === null ? null : FIT_BANDS.indexOf(fitBand(c)));
+    rows.push({ id: "match", group: "priorities", label: "Fit with your priorities", a: ca === null ? null : FIT_WORDS[fitBand(ca)], b: cb === null ? null : FIT_WORDS[fitBand(cb)], leans: lean(order(ca), order(cb), true) });
   }
 
   for (const [i, ha] of a.model.hazards.entries()) {

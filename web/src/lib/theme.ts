@@ -2,7 +2,8 @@
 // choice lives in localStorage only, never in the URL, so a shared link never forces a theme.
 // Pure functions here; the DOM side (data-theme attribute, event) is in components/useTheme.ts.
 
-import { BASEMAP_STYLES } from "./config";
+import type { StyleSpecification } from "maplibre-gl";
+import { basemapStyle } from "./basemap";
 
 export type Theme = "light" | "dark";
 export const THEME_KEY = "lm.theme";
@@ -17,8 +18,8 @@ export function resolveTheme(stored: string | null, prefersDark: boolean): Theme
   return prefersDark ? "dark" : "light";
 }
 
-export function basemapStyleFor(theme: Theme): string {
-  return BASEMAP_STYLES[theme];
+export function basemapStyleFor(theme: Theme): StyleSpecification {
+  return basemapStyle(theme);
 }
 
 /** localStorage can throw (private windows, blocked storage); a failure just means "no choice". */

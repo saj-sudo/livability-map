@@ -36,6 +36,14 @@ inhabited min-max bounds, `point_density` removed; Climate TRACE `industry` env 
 manual download, `verified: search`), NO2 `no2`, Overture `amen` and GEM plants in `industry`
 (§13.49, all manual and `verified: search`); web UX honesty fixes (match vs rank labels,
 selection reducer `lib/selection.ts`, compare picking banner, a11y, plain-language /methodology).
+Design redesign (2026-11-19, SPEC §13.50, `docs/design-redesign-plan.md`): the default view is one
+variable (`exp`, combined exposure); bivariate is one step in and gives no wellbeing colour to a
+hex whose wellbeing is a national figure (ochre exposure-only steps, basemap country borders drawn
+above the hexes); two doors ("Climate in 2050" / "What matters to you"); the place panel leads
+with at most five lines (`lib/lead.ts`) and names the priorities fit as a band (`fitBand`); docked
+rails, a plate title, a docked key, a scale bar and our own basemap style (`lib/basemap.ts`); a
+share card; old links keep their meaning (a position without `view=` is `bivar`). Not yet checked
+on real data (manual-steps item 23).
 Outstanding: the R2/Pages publish (needs `.env` credentials and the private raw bucket) and the
 manual downloads and first-hand checks in `docs/manual-steps.md` (GDL SHDI, MEDSL county returns, HUD
 FMR workbook, CDC PLACES, Climate TRACE, the CCKP hi35 check, the NO2 Earth Engine export, the
@@ -190,24 +198,31 @@ re-copied by `fetch` even when `_run/` has an older copy). Tests get a temp run 
 **Web** (`web/`, Next.js 16 static export): `src/lib/` holds pure, vitest-covered logic (URL
 state, MapLibre expressions incl. the §20.5 composite, layer stack, palette per theme, inspector
 model, `chart.ts` as the TypeScript twin of the match expression, tooltip, summary, compare,
-search ranking, sheet snaps, theme and intro flags); components are thin. `page.tsx` reads
+search ranking, sheet snaps, theme and intro flags, the place panel's lead lines `lead.ts`, the
+plate title `plate.ts`, the share card `share.ts`, the basemap style `basemap.ts` and its ground
+colours `ground.ts`; `colorMath.ts` is test support for the palette guards); components are thin.
+View ids (`VIEWS` in `lib/url.ts`) are append-only like the `w=` order, and `view=` is always written. `page.tsx` reads
 `public/data/manifest.json` at build time. MapLibre v6 needs `setWorkerUrl("/maplibre-gl-worker.mjs")`;
 `scripts/copy-worker.mjs` copies the worker and its shared chunk into `public/` before dev/build.
 The map container needs an explicit size (MapLibre's CSS overrides `position`). Design tokens are
 CSS variables in `globals.css` exposed to Tailwind via `@theme inline`; `data-theme` on `<html>`
 (set before paint by `THEME_BOOT_SCRIPT`, remembered in localStorage) swaps them, and the map swaps
-its OpenFreeMap style with `setStyle(url, { transformStyle })` so the hex source and layers survive
+between our two basemap styles with `setStyle(style, { transformStyle })` so the hex source and layers survive
+(hexes are inserted before the `country-top` layer: above every basemap line, below its labels)
 (the hatch image is re-added on `styleimagemissing`). Fonts come from `@fontsource-variable`
 packages, so no request leaves the origin. `MapView` registers map handlers once and reads state
 and callbacks through refs. Place search reads `public/gazetteer.json` (committed; rebuild with
 `uv run python web/scripts/build_gazetteer.py` after `python -m pipeline fetch --only
-natural_earth_places`). Below 640px the panels live in a bottom sheet. Composition dimensions
+natural_earth_places`). Below 640px the panels live in a bottom sheet whose peek carries the two doors and the one-line key.
+The root font size is 15px, so Tailwind's `h-11` is 41px: write `[44px]` for touch targets. Composition dimensions
 (race) are context only: no slider, never in the composite (`weightable()`, SPEC §13.40). Map
 failure states (no WebGL 2, basemap down -> plain background style, unreachable archive) live in
 `lib/mapHealth.ts`; hex layers go in on `style.load`, not `load` (§13.41). `scripts/headers.mjs`
 writes `out/_headers` with a per-page hash CSP (deploy runs it); `scripts/serve.mjs` serves `out/`
 with those headers and Range support for `web/e2e/` (Playwright 1.56.1; the CI `e2e` job installs
-its own browser). The cloud container's Chromium has moved on (1243 in Nov 2026), so run e2e there
+its own browser; `e2e/redesign.spec.ts` holds the redesign's measures of success and the axe scan,
+`@axe-core/playwright`). `scripts/serve.mjs` reads `out/_headers` once at start: restart it after a
+rebuild or every page fails its CSP. The cloud container's Chromium has moved on (1243 in Nov 2026), so run e2e there
 with `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`. Playwright screenshots go under
 `.playwright-mcp/` (ignored).
 

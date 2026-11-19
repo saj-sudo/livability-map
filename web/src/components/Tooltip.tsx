@@ -37,9 +37,9 @@ export default function Tooltip({ hover, dims, state }: Props) {
 
   return (
     <div ref={ref} className="pointer-events-none absolute z-20 max-w-[16rem] rounded-panel border border-rule bg-panel-solid px-2.5 py-1.5 shadow-[0_4px_14px_-6px_rgba(0,0,0,.35)]" style={{ left: pos.left, top: pos.top }} aria-hidden="true">
-      <div className={`text-[13px] leading-tight ${m.slim ? "text-muted" : "font-serif text-[14px]"}`}>{m.title}</div>
-      {m.subtitle && <div className="text-[11px] text-muted">{m.subtitle}</div>}
-      <div className="mt-0.5 text-[12px]">{m.line}</div>
+      <div className={`text-small leading-tight ${m.slim ? "text-muted" : "font-serif text-[14px]"}`}>{m.title}</div>
+      {m.subtitle && <div className="text-fine text-muted">{m.subtitle}</div>}
+      <div className="mt-0.5 text-fine">{m.line}</div>
     </div>
   );
 }

@@ -127,8 +127,8 @@ The only global hybrid, AlphaGeo, is proprietary and enterprise-priced. Details 
   |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
-  |  views: bivariate | per hazard |       |
-  |         wellbeing | my priorities      |
+  |  views: exposure | per hazard |        |
+  |   bivariate | wellbeing | priorities   |
   |  presets + sliders (§20.5), legend,    |
   |  click -> inspector (feature props)    |
   |  URL state  ?lat&lng&z&view&w=         |

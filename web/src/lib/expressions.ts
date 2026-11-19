@@ -6,16 +6,32 @@
 
 import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
 import { HAZARD_IDS, weightable, type DimInfo } from "./dims";
-import { PALETTES, type Palette } from "./palette";
+import { EXPOSURE_STEPS, exposureOnly, PALETTES, type Palette } from "./palette";
 import type { PolPick } from "../presets";
 
 export type Expr = ExpressionSpecification;
 
-/** Default bivariate view: classes 1-9, class 0 / missing grey (§8.4, §9.3). */
+/** Default view (§9.3, §13.50): combined exposure in five steps; grey when there is none. */
+export function exposureColor(pal: Palette = PALETTES.light): Expr {
+  const r = pal.rampExposure;
+  const steps: (number | string)[] = [r[0]];
+  EXPOSURE_STEPS.forEach((at, i) => steps.push(at, r[i + 1]));
+  return ["case", ["!", ["has", "exposure"]], pal.grey, ["step", ["get", "exposure"], ...steps]] as unknown as Expr;
+}
+
+/** Wellbeing is one figure for the whole country here (§9.3): the hex must not take a wellbeing colour. */
+export const nationalWellbeing = (): Expr => ["==", ["coalesce", ["get", "wb_res"], "none"], "national"] as unknown as Expr;
+
+/** Bivariate view: classes 1-9, class 0 / missing grey (§8.4). Where wellbeing is a national
+ *  figure the hex keeps an exposure-only colour, from the exposure tercile encoded in the class
+ *  (`(bivar - 1) % 3`), so a country never reads as one wellbeing colour (§9.3, §13.50). */
 export function bivarColor(pal: Palette = PALETTES.light): Expr {
   const stops: (number | string)[] = [];
   for (let k = 1; k <= 9; k++) stops.push(k, pal.bivar[k]);
-  return ["match", ["coalesce", ["get", "bivar"], 0], ...stops, pal.grey] as unknown as Expr;
+  const only = exposureOnly(pal);
+  const cls = ["coalesce", ["get", "bivar"], 0];
+  const exposureAlone = ["case", ["<", cls, 1], pal.grey, ["match", ["%", ["-", cls, 1], 3], 0, only[0], 1, only[1], 2, only[2], pal.grey]];
+  return ["case", nationalWellbeing(), exposureAlone, ["match", cls, ...stops, pal.grey]] as unknown as Expr;
 }
 
 /** A hazard or dimension has data on a hex exactly when its score attribute is present
@@ -47,9 +63,6 @@ export const inhabitedFilter = (showUninhabited: boolean): FilterSpecification =
 
 /** Reduced-confidence hatch: fewer than all hazard layers, five since §13.47 (§9.3, decision §13.4). */
 export const hatchFilter = (): FilterSpecification => ["<", ["coalesce", ["get", "coverage"], 0], HAZARD_IDS.length] as unknown as FilterSpecification;
-
-/** National-fallback wellbeing gets a dashed outline (§9.3). */
-export const nationalFilter = (): FilterSpecification => ["==", ["coalesce", ["get", "wb_res"], "none"], "national"] as unknown as FilterSpecification;
 
 export interface Picks {
   pol: PolPick;

@@ -5,13 +5,14 @@ import type { DimInfo } from "./dims";
 import { hatchImage } from "./hatch";
 import { TILES } from "./layers.test";
 import { tileLayersFrom } from "./layers";
-import { buildLayers, fillLayerIds, isHexLayerId, layerId, mergeStyleOnThemeChange, pickVisible, SOURCE_ID } from "./style";
+import { basemapStyle, COUNTRY_TOP_ID } from "./basemap";
+import { buildLayers, fillLayerIds, hexAnchorIndex, isHexLayerId, layerId, mergeStyleOnThemeChange, pickVisible, showsCountryBorders, SOURCE_ID } from "./style";
 
 const dim = (id: string, group: DimInfo["group"], higher_is: DimInfo["higher_is"] = "better"): DimInfo => ({ id, name: id, group, kind: "score", higher_is, chip: "", note: "", scale: "percentile", available: true });
 const DIMS = [dim("heat", "hazard", "worse"), dim("wb", "wellbeing"), dim("jobs", "life")];
 const LAYERS = tileLayersFrom({ hexes: { key: "hexes.pmtiles", sha256: "", bytes: 1, minzoom: 2, maxzoom: 7, layers: [{ name: "hex4", minzoom: 2, maxzoom: 4 }, { name: "hex5", minzoom: 5, maxzoom: 7 }] } });
 const PICKS = { pol: "competitive" } as const;
-const KINDS = ["fill", "hatch", "national", "hover", "halo", "selected"];
+const KINDS = ["fill", "hatch", "hover", "halo", "selected"];
 
 function styleWith(layers: ReturnType<typeof buildLayers>): StyleSpecification {
   const vector = { type: "vector" as const, tiles: ["https://example.org/{z}/{x}/{y}.pbf"] };
@@ -21,7 +22,7 @@ function styleWith(layers: ReturnType<typeof buildLayers>): StyleSpecification {
 describe("layer stack (SPEC §9.3)", () => {
   it("is a valid MapLibre style for every view and both themes", () => {
     for (const theme of ["light", "dark"] as const) {
-      for (const view of ["bivar", "heat", "wb", "priorities"] as const) {
+      for (const view of ["exp", "bivar", "heat", "wb", "priorities"] as const) {
         const layers = buildLayers({ view, dims: DIMS, weights: { heat: 2, jobs: 1 }, picks: PICKS, theme }, false, true, LAYERS);
         const errors = validateStyleMin(styleWith(layers) as never);
         expect(errors.map((e) => e.message)).toEqual([]);
@@ -68,12 +69,16 @@ describe("layer stack (SPEC §9.3)", () => {
     expect(pickVisible([child], 9, L)).toBe(child);
   });
 
-  it("hides the hatch when confidence is off and the national outline outside wellbeing views", () => {
+  it("hides the hatch when confidence is off, and has no per-hex national outline (§13.50)", () => {
     const layers = buildLayers({ view: "heat", dims: DIMS, weights: {}, picks: PICKS }, true, false, LAYERS);
     const hatch = layers.find((l) => l.id === "hatch-hex4")!;
-    const national = layers.find((l) => l.id === "national-hex4")!;
     expect((hatch as { layout?: { visibility?: string } }).layout?.visibility).toBe("none");
-    expect((national as { layout?: { visibility?: string } }).layout?.visibility).toBe("none");
+    expect(layers.some((l) => l.id.startsWith("national-"))).toBe(false);
+  });
+
+  it("draws country borders above the hexes only in the bivariate view", () => {
+    expect(showsCountryBorders("bivar")).toBe(true);
+    for (const v of ["exp", "heat", "wb", "priorities"] as const) expect(showsCountryBorders(v)).toBe(false);
   });
 
   it("builds a seamless hatch image", () => {
@@ -102,13 +107,31 @@ describe("theme change keeps the hex stack (setStyle transformStyle)", () => {
     ],
   };
 
-  it("carries the hex source and layers over, under the first symbol layer", () => {
+  it("carries the hex source and layers over, under the first symbol layer of a stock style", () => {
     const merged = mergeStyleOnThemeChange(prev, next);
     expect(Object.keys(merged.sources)).toEqual(["basemap", SOURCE_ID]);
     expect(merged.layers.map((l) => l.id)).toEqual(["water", "roads", ...KINDS.map((k) => `${k}-hex4`), "labels"]);
     expect(validateStyleMin(merged as never).map((e) => e.message)).toEqual([]);
     expect(isHexLayerId("fill-hex4")).toBe(true);
     expect(isHexLayerId("water")).toBe(false);
+  });
+
+  it("puts the hexes above every line of our own basemap and under its repeated country borders", () => {
+    for (const theme of ["light", "dark"] as const) {
+      const base = basemapStyle(theme);
+      expect(validateStyleMin(base as never).map((e) => e.message)).toEqual([]);
+      const merged = mergeStyleOnThemeChange(prev, base);
+      const ids = merged.layers.map((l) => l.id);
+      const firstHex = ids.indexOf("fill-hex4");
+      const lastHex = ids.indexOf("selected-hex4");
+      for (const below of ["background", "water", "region-line", "country-line"]) expect(ids.indexOf(below)).toBeLessThan(firstHex);
+      expect(ids.indexOf(COUNTRY_TOP_ID)).toBe(lastHex + 1);
+      for (const l of merged.layers.filter((x) => x.type === "symbol")) expect(ids.indexOf(l.id)).toBeGreaterThan(lastHex);
+      // a quiet ground: no roads, no buildings
+      expect(base.layers.some((l) => /road|transport|building/.test(JSON.stringify(l)))).toBe(false);
+      expect(hexAnchorIndex(base.layers)).toBe(base.layers.findIndex((l) => l.id === COUNTRY_TOP_ID));
+    }
+    expect(hexAnchorIndex([{ id: "background", type: "background" }])).toBe(1); // the plain fallback: on top
   });
 
   it("carries every hex source when layers come from two archives", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { dismissIntro, INTRO_KEY, INTRO_STEPS, introSteps, nextStep, shouldShowIntro } from "./intro";
+import { dismissIntro, INTRO_DOORS, INTRO_FINE, INTRO_KEY, INTRO_TITLE, shouldShowIntro } from "./intro";
+import { VIEWS } from "./url";
 
 function fakeStorage(initial: Record<string, string> = {}, throws = false): Storage {
   const data = { ...initial };
@@ -10,9 +11,19 @@ function fakeStorage(initial: Record<string, string> = {}, throws = false): Stor
 }
 
 describe("first-visit intro (localStorage only)", () => {
-  it("has three short steps", () => {
-    expect(INTRO_STEPS).toHaveLength(3);
-    for (const s of INTRO_STEPS) expect(s.body.length).toBeLessThan(320);
+  it("is one question with two doors: the default view, then My priorities (SPEC §13.50)", () => {
+    expect(INTRO_TITLE).toMatch(/\?$/);
+    expect(INTRO_DOORS.map((d) => d.view)).toEqual(["exp", "priorities"]);
+    for (const d of INTRO_DOORS) {
+      expect(VIEWS).toContain(d.view);
+      expect(d.body.length).toBeLessThan(120);
+    }
+  });
+
+  it("says the three things a newcomer must know", () => {
+    expect(INTRO_FINE).toMatch(/no data, never zero risk/);
+    expect(INTRO_FINE).toMatch(/source/);
+    expect(INTRO_FINE).toMatch(/does not tell you where to live/);
   });
 
   it("shows once, then remembers the dismissal", () => {
@@ -28,19 +39,5 @@ describe("first-visit intro (localStorage only)", () => {
     expect(shouldShowIntro(blocked)).toBe(true);
     expect(() => dismissIntro(blocked)).not.toThrow();
     expect(shouldShowIntro(null)).toBe(true);
-  });
-
-  it("steps forward and closes after the last", () => {
-    expect(nextStep(0)).toBe(1);
-    expect(nextStep(2)).toBeNull();
-  });
-
-  it("says where the key is on a phone and on a wide screen", () => {
-    expect(introSteps(false)[0].body).toContain("panel on the left");
-    expect(introSteps(true)[0].body).toContain("Layers tab");
-    expect(introSteps(true)[0].body).not.toContain("left");
-    expect(introSteps(true)[2].body).toMatch(/^Tap/);
-    for (const s of introSteps(true)) expect(s.body.length).toBeLessThan(320);
-    for (const s of introSteps(true)) expect(s.body).not.toContain("\u2014"); // no em dashes
   });
 });

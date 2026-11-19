@@ -1,26 +1,33 @@
 "use client";
 
-// Left panel (SPEC §10): view selector, the My-priorities controls (SPEC §20.5), scenario line,
-// confidence and inhabited toggles, and the legend (SPEC §9.3). One surface; hierarchy comes
-// from type and hairlines, not nested boxes.
+// The controls (SPEC §10, §13.50): the two doors, then either the climate layers or the
+// My-priorities controls (SPEC §20.5), the confidence and inhabited toggles, and scenario and
+// horizon as a static line. A docked rail on a wide screen, the Layers tab of the sheet on a
+// phone. One surface; hierarchy comes from type and hairlines, not nested boxes. The key is on
+// the map (components/Legend.tsx), not in here.
 
-import { useState } from "react";
+import Doors from "./Doors";
 import { useTheme } from "./useTheme";
-import Legend from "./Legend";
 import PrioritiesPanel from "./PrioritiesPanel";
 import { SCENARIO_LABELS, type ClientManifest } from "../lib/clientManifest";
 import type { DimInfo } from "../lib/dims";
 import { paletteFor, type Palette } from "../lib/palette";
-import { VIEWS, type AppState, type ViewId } from "../lib/url";
+import type { AppState, ViewId } from "../lib/url";
 
-const VIEW_LABELS: Record<ViewId, string> = {
-  bivar: "Climate exposure × wellbeing",
+/** The layers behind the "Climate in 2050" door, in list order. */
+export const CLIMATE_VIEWS: readonly ViewId[] = ["exp", "heat", "humid", "rflood", "cflood", "wstress"];
+/** One step in: wellbeing beside exposure, or on its own. */
+export const WELLBEING_VIEWS: readonly ViewId[] = ["bivar", "wb"];
+
+export const VIEW_LABELS: Record<ViewId, string> = {
+  exp: "All five hazards together",
   heat: "Extreme heat",
   humid: "Humid heat",
   rflood: "Riverine flood",
   cflood: "Coastal flood",
   wstress: "Water stress",
-  wb: "Wellbeing",
+  bivar: "Add wellbeing beside exposure",
+  wb: "Wellbeing today alone",
   priorities: "My priorities",
 };
 
@@ -29,9 +36,9 @@ interface Props {
   dims: DimInfo[];
   state: AppState;
   onChange: (patch: Partial<AppState>) => void;
-  /** bivariate class of the hovered hex, passed through to the legend */
-  highlight?: number | null;
-  /** rendered inside the phone bottom sheet: no floating chrome, always open */
+  onDoor: (view: ViewId) => void;
+  onShare?: () => void;
+  /** rendered inside the phone bottom sheet: no rail chrome */
   embedded?: boolean;
 }
 
@@ -47,85 +54,79 @@ function ViewKey({ view, pal }: { view: ViewId; pal: Palette }) {
       </span>
     );
   }
-  const ramp = view === "priorities" ? pal.rampPriority : view === "wb" ? pal.rampWellbeing : pal.rampHazard;
+  const ramp = view === "wb" ? pal.rampWellbeing : pal.rampHazard;
   return <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ background: `linear-gradient(135deg, ${ramp[0]}, ${ramp[2]})` }} aria-hidden="true" />;
 }
 
 export function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2 text-[13px]">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-[3px] h-3.5 w-3.5 shrink-0 accent-accent" />
+    <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-small sm:min-h-0">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-6 w-6 shrink-0 accent-accent" />
       <span>{children}</span>
     </label>
   );
 }
 
-export default function Panel({ manifest, dims, state, onChange, highlight, embedded }: Props) {
-  const [open, setOpen] = useState(true);
+function ViewList({ views, state, pal, onChange }: { views: readonly ViewId[]; state: AppState; pal: Palette; onChange: (patch: Partial<AppState>) => void }) {
+  return (
+    <div className="-mx-1 space-y-px">
+      {views.map((v) => {
+        const active = state.view === v;
+        return (
+          <label key={v} className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-[4px] px-2 text-small has-focus-visible:outline-2 has-focus-visible:outline-accent sm:min-h-[30px] ${active ? "bg-rule/70 font-medium" : "hover:bg-rule/40"}`}>
+            <input type="radio" name="view" value={v} checked={active} onChange={() => onChange({ view: v })} className="sr-only" />
+            <ViewKey view={v} pal={pal} />
+            <span>{VIEW_LABELS[v]}</span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function Panel({ manifest, dims, state, onChange, onDoor, onShare, embedded }: Props) {
   const [theme] = useTheme();
   const pal = paletteFor(theme);
-  const shown = embedded || open;
   return (
-    <aside className={embedded ? "" : "absolute left-3 top-3 z-10 max-h-[calc(100%-1.5rem)] w-[19rem] max-w-[calc(100%-1.5rem)] overflow-auto rounded-panel border border-rule bg-panel shadow-[0_1px_2px_rgba(0,0,0,.06),0_8px_24px_-12px_rgba(0,0,0,.25)] backdrop-blur-sm"}>
-      {!embedded && (
-        <button type="button" className="flex w-full items-center justify-between px-3 py-2 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          <span className="font-serif text-[16px]">Layers</span>
-          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" className={`text-muted transition-transform ${open ? "" : "-rotate-90"}`}>
-            <path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
-        </button>
+    <div className={embedded ? "space-y-3" : "flex h-full flex-col gap-3 overflow-auto p-3"}>
+      <Doors view={state.view} onDoor={onDoor} />
+
+      {state.view === "priorities" ? (
+        <PrioritiesPanel dims={dims} state={state} onChange={onChange} onShare={onShare} />
+      ) : (
+        <fieldset className="space-y-2">
+          <legend className="sr-only">Map layer</legend>
+          <ViewList views={CLIMATE_VIEWS} state={state} pal={pal} onChange={onChange} />
+          <div className="border-t border-rule pt-2 font-serif text-[14px] text-muted">With wellbeing</div>
+          <ViewList views={WELLBEING_VIEWS} state={state} pal={pal} onChange={onChange} />
+        </fieldset>
       )}
-      {shown && (
-        <div className={embedded ? "space-y-3" : "space-y-3 px-3 pb-3"}>
-          <fieldset>
-            <legend className="sr-only">Map view</legend>
-            <div className="-mx-1 space-y-px">
-              {VIEWS.map((v) => {
-                const active = state.view === v;
-                return (
-                  <label key={v} className={`flex cursor-pointer items-center gap-2 rounded-[4px] px-2 py-[5px] text-[13px] has-focus-visible:outline-2 has-focus-visible:outline-accent ${active ? "bg-rule/70 font-medium" : "hover:bg-rule/40"}`}>
-                    <input type="radio" name="view" value={v} checked={active} onChange={() => onChange({ view: v })} className="sr-only" />
-                    <ViewKey view={v} pal={pal} />
-                    <span>{VIEW_LABELS[v]}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
 
-          {state.view === "priorities" && <PrioritiesPanel dims={dims} state={state} onChange={onChange} />}
+      <div className="space-y-1.5 border-t border-rule pt-2">
+        <Toggle checked={state.conf} onChange={(v) => onChange({ conf: v })}>
+          Mark places missing some hazard data
+        </Toggle>
+        <Toggle checked={state.inh} onChange={(v) => onChange({ inh: v })}>
+          Show places where almost no one lives (under 100 people)
+        </Toggle>
+      </div>
 
-          <p className="border-t border-rule pt-2 font-serif text-[13px] italic text-muted">
-            Hazards are projections for {manifest.horizon} under a {SCENARIO_LABELS[manifest.scenario] ?? manifest.scenario}; wellbeing and life dimensions are present-day.
-          </p>
-
-          <div className="space-y-1.5">
-            <Toggle checked={state.conf} onChange={(v) => onChange({ conf: v })}>
-              Mark places missing some hazard data
-            </Toggle>
-            <Toggle checked={state.inh} onChange={(v) => onChange({ inh: v })}>
-              Show places where almost no one lives (under 100 people)
-            </Toggle>
-          </div>
-
-          <div className="border-t border-rule pt-2">
-            <Legend view={state.view} dims={dims} conf={state.conf} theme={theme} highlight={highlight} />
-          </div>
-          {manifest.fixtures && <p className="text-[12px] text-muted">Synthetic fixture data, not the real world.</p>}
-          {embedded && (
-            <p className="border-t border-rule pt-2 text-[12px] text-muted">
-              <a href="/methodology/" className="underline decoration-rule underline-offset-2 hover:text-ink">
-                Methodology
-              </a>
-              {" and "}
-              <a href="/about/" className="underline decoration-rule underline-offset-2 hover:text-ink">
-                About
-              </a>
-              , including what this map does not do.
-            </p>
-          )}
-        </div>
+      <p className={`border-t border-rule pt-2 font-serif text-small italic text-muted ${embedded ? "" : "mt-auto"}`}>
+        Hazards are projections for {manifest.horizon} under a {SCENARIO_LABELS[manifest.scenario] ?? manifest.scenario}; wellbeing and life dimensions are present-day.
+      </p>
+      {manifest.fixtures && <p className="text-fine text-muted">Synthetic fixture data, not the real world.</p>}
+      {embedded && (
+        <p className="border-t border-rule pt-2 text-fine text-muted">
+          <a href="/methodology/" className="underline decoration-rule underline-offset-2 hover:text-ink">
+            Methodology
+          </a>
+          {" and "}
+          <a href="/about/" className="underline decoration-rule underline-offset-2 hover:text-ink">
+            About
+          </a>
+          , including what this map does not do.
+        </p>
       )}
-    </aside>
+    </div>
   );
 }

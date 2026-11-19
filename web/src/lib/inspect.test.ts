@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ClientManifest } from "./clientManifest";
 import type { DimInfo } from "./dims";
-import { describeHex, HEAT_CAVEAT, HUMID_NOTE, SCORE_MEANING, scoreNoteFor } from "./inspect";
+import { describeHex, HEAT_CAVEAT, HUMID_NOTE, MATCH_MEANING, SCORE_MEANING } from "./inspect";
 
 // units as pipeline/dimensions.yaml states them for the ids whose wording comes from the registry
 const UNITS: Record<string, Record<string, { unit: string; multiply: number; decimals: number }>> = {
@@ -167,9 +167,9 @@ describe("honesty notes in the place panel (SPEC §16 Next steps)", () => {
   });
 
   it("tells a priorities match apart from a rank", () => {
-    expect(scoreNoteFor(false)).toBe(SCORE_MEANING);
-    expect(scoreNoteFor(true)).toMatch(/^Your priorities show a match/);
-    expect(scoreNoteFor(true)).toMatch(/other scores are ranks/);
+    expect(SCORE_MEANING).toMatch(/ranks among inhabited places/);
+    expect(MATCH_MEANING).toMatch(/match from 0 to 100/);
+    expect(MATCH_MEANING).not.toMatch(/rank/);
   });
 
   it("keeps the heat caveat when the heat layer has no data", () => {

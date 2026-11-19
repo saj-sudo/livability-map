@@ -5,7 +5,7 @@ credentials, and permissions that need a person to ask. Each item says what to d
 goes, and what to run (or ask Claude to run) afterwards. Keep this page current: add an item when
 a session hits a wall, and move it to **Done** with the date once it is handled.
 
-Last updated: 2026-11-14.
+Last updated: 2026-11-19.
 
 ## Open
 
@@ -30,6 +30,7 @@ Last updated: 2026-11-14.
 | 19 | [Overture everyday-amenities extract](#19-overture-everyday-amenities-extract) | the `amen` layer (everyday amenities nearby) | 20 min, one command |
 | 20 | [Global Energy Monitor trackers (optional)](#20-global-energy-monitor-trackers-optional) | adds smaller plants to `industry` | 15 min, four forms |
 | 21 | [EU cities survey and GISCO city boundaries](#21-eu-cities-survey-and-gisco-city-boundaries) | `immig`, `safe` and LGBTQ+ presence in about 83 European cities; lets publish include them | 20 min |
+| 23 | [Look at the redesign on real data](#23-look-at-the-redesign-on-real-data) | closes the last measure of success of the design redesign | 10 min |
 | 22 | [Opportunity Atlas tract outcomes](#22-opportunity-atlas-tract-outcomes) | US `opp` and `opp25` (kids' adult income, all families and low-income families); lets publish include them | 10 min + read terms |
 
 Items 2-4, 6 and 15-17 only need a file saved in the right place. After any of them, run
@@ -366,6 +367,22 @@ memory.
 Then: `uv run python -m pipeline --res 5 dims --only opp --only opp25` and the usual score /
 export / tiles. Check the printed count of 2020 tracts without a polygon (Connecticut is the
 likely gap).
+
+### 23. Look at the redesign on real data
+
+The redesign (SPEC §13.50) was built and checked on the fixture world, which is too small to show
+whether a whole country still reads as one colour. On the laptop, with a real build in
+`web/public/data/` (`uv run python -m pipeline --res 4 publish --target local`, or the existing
+one):
+
+1. `cd web && npm run dev`, open http://localhost:3000/.
+2. Default view at zoom 2: one rust ramp, no blue. Note anything that looks wrong.
+3. "Add wellbeing beside exposure": countries whose wellbeing is a national figure should be
+   ochre with a dashed border, not blue or red. With no SHDI file that is nearly every country,
+   so the map will be mostly ochre: that is the honest picture until manual step 2 (Global Data
+   Lab) is done. Say if it reads badly; the alternative is to hide this view until SHDI is in.
+4. Check the basemap labels and borders at zooms 2, 5 and 8 in both themes.
+5. Tick the last box in SPEC §17 "design redesign", or tell Claude what to change.
 ---
 
 ## Done

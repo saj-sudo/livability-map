@@ -17,6 +17,14 @@ describe("hover readout (SPEC §10)", () => {
     expect(t.slim).toBe(false);
   });
 
+  it("reads combined exposure in the default view, and exposure alone where wellbeing is national", () => {
+    expect(tooltipModel({ ...FULL, exposure: 65 }, "exp", DIMS, {}, PICKS).line).toBe("fairly high combined exposure, 65 of 100");
+    expect(tooltipModel(FULL, "exp", DIMS, {}, PICKS).line).toBe("no hazard data");
+    const nat = tooltipModel({ ...FULL, wb_res: "national" }, "bivar", DIMS, {}, PICKS);
+    expect(nat.line).toBe("high exposure; wellbeing is a national figure");
+    expect(nat.bivar).toBe(-1); // the key lights its exposure-only row, not a cell of the grid
+  });
+
   it("says to zoom in on slim tiles and never invents a value", () => {
     const t = tooltipModel({ bivar: 3 }, "bivar", DIMS, {}, PICKS);
     expect(t.slim).toBe(true);
@@ -34,7 +42,7 @@ describe("hover readout (SPEC §10)", () => {
   it("reads the priorities match and counts what is missing", () => {
     expect(tooltipModel(FULL, "priorities", DIMS, {}, PICKS).line).toBe("no priorities set yet");
     // heat 66 -> match 34 (w1); jobs 40 (w1); wb missing -> (34 + 40) / 2 = 37
-    expect(tooltipModel(FULL, "priorities", DIMS, { heat: 1, jobs: 1, wb: 1 }, PICKS).line).toBe("matches your priorities 37/100 (1 of 3 missing here)");
+    expect(tooltipModel(FULL, "priorities", DIMS, { heat: 1, jobs: 1, wb: 1 }, PICKS).line).toBe("a weak fit with your priorities (1 of 3 missing here)");
     expect(tooltipModel({ iso_a2: "BD" }, "priorities", DIMS, { jobs: 2 }, PICKS).line).toBe("no data for any of your priorities");
   });
 });

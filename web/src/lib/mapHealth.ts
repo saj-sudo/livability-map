@@ -8,13 +8,14 @@
 //   to the browser console only; the notice is plain words.
 
 import type { StyleSpecification } from "maplibre-gl";
-import { BASEMAP_STYLES } from "./config";
+import { BASEMAP_HOST } from "./config";
+import { GROUND } from "./ground";
 import type { Theme } from "./theme";
 
 /** How long the basemap style may take before the map switches to the plain background. */
 export const STYLE_TIMEOUT_MS = 8000;
 
-export const BASEMAP_HOSTS: readonly string[] = [...new Set(Object.values(BASEMAP_STYLES).map((u) => new URL(u).host))];
+export const BASEMAP_HOSTS: readonly string[] = [BASEMAP_HOST];
 
 interface CanvasLike {
   getContext(kind: string): unknown;
@@ -35,7 +36,7 @@ export function fallbackStyle(theme: Theme): StyleSpecification {
     version: 8,
     name: "plain background (basemap unavailable)",
     sources: {},
-    layers: [{ id: "background", type: "background", paint: { "background-color": theme === "dark" ? "#1c1f24" : "#eceae4" } }],
+    layers: [{ id: "background", type: "background", paint: { "background-color": GROUND[theme].land } }],
   };
 }
 

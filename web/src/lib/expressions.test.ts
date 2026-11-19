@@ -1,7 +1,7 @@
 import { createExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 import { HAZARD_IDS, type DimInfo } from "./dims";
-import { bivarColor, compositeExpression, hatchFilter, inhabitedFilter, matchExpr, priorityColor, scoreColor } from "./expressions";
+import { bivarColor, compositeExpression, exposureColor, hatchFilter, inhabitedFilter, matchExpr, priorityColor, scoreColor } from "./expressions";
 import { GREY, PALETTES, RAMP_HAZARD } from "./palette";
 
 const dim = (id: string, kind: DimInfo["kind"] = "score", higher_is: DimInfo["higher_is"] = "better", group: DimInfo["group"] = "life"): DimInfo => ({ id, name: id, group, kind, higher_is, chip: "", note: "", scale: "percentile", available: true });
@@ -59,6 +59,31 @@ describe("layer expressions (SPEC §9.3)", () => {
     expect(evaluate(bivarColor(), { bivar: 0 }, FILL_COLOR)).toEqual(grey);
     expect(evaluate(bivarColor(), {}, FILL_COLOR)).toEqual(grey);
     expect(evaluate(bivarColor(), { bivar: 9 }, FILL_COLOR)).toEqual(evaluate(["to-color", PALETTES.light.bivar[9]], {}, FILL_COLOR));
+  });
+
+  it("the default view steps combined exposure in five classes and greys a hex with none (§13.50)", () => {
+    const col = (hex: string) => evaluate(["to-color", hex], {}, FILL_COLOR);
+    for (const theme of ["light", "dark"] as const) {
+      const pal = PALETTES[theme];
+      const e = exposureColor(pal);
+      expect(evaluate(e, {}, FILL_COLOR)).toEqual(col(pal.grey)); // missing is never the lowest class
+      expect([0, 19.9, 20, 45, 60, 79, 80, 100].map((v) => evaluate(e, { exposure: v }, FILL_COLOR))).toEqual([0, 0, 1, 2, 3, 3, 4, 4].map((i) => col(pal.rampExposure[i])));
+    }
+  });
+
+  it("the bivariate view gives no wellbeing colour to a hex whose wellbeing is a national figure", () => {
+    const col = (hex: string) => evaluate(["to-color", hex], {}, FILL_COLOR);
+    for (const theme of ["light", "dark"] as const) {
+      const pal = PALETTES[theme];
+      const e = bivarColor(pal);
+      // classes 3, 6 and 9 share the highest exposure tercile: one colour, whatever the national figure says
+      for (const k of [3, 6, 9]) expect(evaluate(e, { bivar: k, wb_res: "national" }, FILL_COLOR)).toEqual(col(pal.exposureOnly[2]));
+      for (const k of [1, 4, 7]) expect(evaluate(e, { bivar: k, wb_res: "national" }, FILL_COLOR)).toEqual(col(pal.exposureOnly[0]));
+      expect(evaluate(e, { bivar: 5, wb_res: "national" }, FILL_COLOR)).toEqual(col(pal.exposureOnly[1]));
+      expect(evaluate(e, { bivar: 0, wb_res: "national" }, FILL_COLOR)).toEqual(col(pal.grey));
+      // a regional figure still takes its class colour
+      for (const k of [1, 5, 9]) expect(evaluate(e, { bivar: k, wb_res: "admin1" }, FILL_COLOR)).toEqual(col(pal.bivar[k]));
+    }
   });
 
   it("score ramp greys missing data and reads flags", () => {

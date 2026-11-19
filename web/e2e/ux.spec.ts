@@ -46,7 +46,7 @@ test("search keeps the searched place name in the panel", async ({ page }) => {
   await expect(panel).toContainText(/B-Mid/);
   await expect(panel).toContainText(/people in this ~[\d,.]+ km² area/);
   await expect(panel).not.toContainText(/res \d|in a res/);
-  await expect(panel).toContainText(/This area in B-Mid/);
+  await expect(panel).toContainText("Climate in 2050");
   expect(await outlined(page)).toHaveLength(1);
   expect(seen.violations).toEqual([]);
   expect(seen.errors).toEqual([]);
@@ -63,6 +63,10 @@ test("compare: a banner while picking, Escape cancels, outlines follow the panel
   expect(await outlined(page)).toHaveLength(1);
   const a = (await outlined(page))[0];
 
+  // the place panel is a docked rail, so the map is narrower now: aim at where it is
+  const open = (await page.getByRole("application").boundingBox())!;
+  const ox = open.x + open.width / 2;
+
   // start picking: a persistent banner; Escape cancels and keeps place A
   await page.getByRole("button", { name: "Compare with another place" }).click();
   const banner = page.getByTestId("pick-banner");
@@ -76,13 +80,13 @@ test("compare: a banner while picking, Escape cancels, outlines follow the panel
 
   // pick again; an empty click (east of the fixture world) does nothing to place A
   await page.getByRole("button", { name: "Compare with another place" }).click();
-  await page.mouse.click(box.x + box.width - 40, cy);
+  await page.mouse.click(open.x + open.width - 40, cy);
   await expect(banner).toBeVisible();
   await expect(placeA).toBeVisible();
   expect(await outlined(page)).toEqual([a]);
 
   // a second place: the comparison opens and both are outlined
-  await page.mouse.click(cx - 80, cy + 10);
+  await page.mouse.click(ox - 80, cy + 10);
   await expect(page.getByRole("heading", { name: "Side by side" })).toBeVisible();
   await expect(banner).toBeHidden();
   await expect.poll(() => outlined(page)).toHaveLength(2);
@@ -113,20 +117,20 @@ test.describe("phone", () => {
     const seen = await watch(page);
     await page.goto(CEDAR);
     const intro = page.getByRole("dialog");
-    await expect(intro).toContainText("Layers tab");
+    await expect(intro).toContainText("Where do you want to start?");
     await intro.getByRole("button", { name: "Skip" }).click();
     await expect(page.getByRole("button", { name: "How to read this map" })).toBeFocused();
 
     const legend = page.getByTestId("compact-legend");
     await expect(legend).toBeVisible();
-    await expect(legend).toContainText("more climate exposure");
+    await expect(legend).toContainText("more climate exposure"); // CEDAR is an old link: bivariate
     await expect(legend).toBeInViewport();
 
     const layers = page.getByRole("tab", { name: "Layers" });
     const placeTab = page.getByRole("tab", { name: /Place/ });
     await expect(layers).toHaveAttribute("aria-selected", "true");
     await layers.click();
-    await expect(page.getByRole("tabpanel")).toContainText("Climate exposure × wellbeing");
+    await expect(page.getByRole("tabpanel")).toContainText("All five hazards together");
     await expect(page.getByRole("tabpanel")).toContainText("Mark places missing some hazard data");
 
     // arrow keys move between tabs

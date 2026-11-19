@@ -1,23 +1,20 @@
 "use client";
 
-// The three-step first-visit card (SPEC §10). Bottom-centre so the map and the legend stay
-// visible while it is read; Escape or Skip closes it; Done marks it seen in localStorage.
+// The first-visit card (SPEC §10, §13.50): one question, two doors. Either door sets the view
+// and marks the card seen in localStorage; Escape or Skip closes it without changing the view.
 
-import { useEffect, useRef, useState } from "react";
-import { dismissIntro, introSteps, nextStep } from "../lib/intro";
+import { useEffect, useRef } from "react";
+import { dismissIntro, INTRO_DOORS, INTRO_FINE, INTRO_TITLE } from "../lib/intro";
+import type { ViewId } from "../lib/url";
 
 interface Props {
   onClose: () => void;
-  /** phone layout: the key lives in the sheet's Layers tab, not on the left */
-  phone?: boolean;
+  /** a door was chosen: open that view */
+  onDoor: (view: ViewId) => void;
 }
 
-export default function Intro({ onClose, phone = false }: Props) {
-  const [step, setStep] = useState(0);
-  const nextRef = useRef<HTMLButtonElement>(null);
-  const INTRO_STEPS = introSteps(phone);
-  const s = INTRO_STEPS[step];
-  const last = nextStep(step) === null;
+export default function Intro({ onClose, onDoor }: Props) {
+  const first = useRef<HTMLButtonElement>(null);
 
   const finish = () => {
     dismissIntro(window.localStorage);
@@ -25,7 +22,7 @@ export default function Intro({ onClose, phone = false }: Props) {
   };
 
   useEffect(() => {
-    nextRef.current?.focus();
+    first.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       // Escape while typing (the search box) belongs to that field, not to the intro
       const t = e.target as HTMLElement | null;
@@ -38,38 +35,31 @@ export default function Intro({ onClose, phone = false }: Props) {
   }, []);
 
   return (
-    <div role="dialog" aria-labelledby="intro-title" aria-describedby="intro-body" className="absolute bottom-6 left-1/2 z-30 w-[24rem] max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-panel border border-rule bg-panel-solid p-4 shadow-[0_1px_2px_rgba(0,0,0,.06),0_12px_32px_-12px_rgba(0,0,0,.35)]">
-      <div className="flex items-center gap-1.5" aria-hidden="true">
-        {INTRO_STEPS.map((_, i) => (
-          <span key={i} className={`h-1.5 rounded-full transition-[width,background-color] ${i === step ? "w-5 bg-accent" : "w-1.5 bg-rule"}`} />
-        ))}
-        <span className="ml-auto text-[11px] text-muted">
-          {step + 1} of {INTRO_STEPS.length}
-        </span>
-      </div>
-      <h2 id="intro-title" className="mt-2 font-serif text-[18px] leading-tight">
-        {s.title}
+    <div role="dialog" aria-labelledby="intro-title" aria-describedby="intro-fine" className="absolute bottom-5 left-1/2 z-30 flex w-[24rem] max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col gap-2.5 rounded-panel border border-rule bg-panel-solid p-4">
+      <h2 id="intro-title" className="font-serif text-[21px] leading-tight">
+        {INTRO_TITLE}
       </h2>
-      <p id="intro-body" className="mt-1.5 text-[13px] leading-snug">
-        {s.body}
-      </p>
-      <div className="mt-3 flex items-center justify-between">
-        <button type="button" onClick={finish} className="rounded-panel px-2 py-1 text-[12px] text-muted hover:bg-rule hover:text-ink">
-          Skip
-        </button>
+      {INTRO_DOORS.map((d, i) => (
         <button
-          ref={nextRef}
+          key={d.view}
+          ref={i === 0 ? first : undefined}
           type="button"
           onClick={() => {
-            const n = nextStep(step);
-            if (n === null) finish();
-            else setStep(n);
+            onDoor(d.view);
+            finish();
           }}
-          className="rounded-panel bg-accent px-3 py-1 text-[13px] text-accent-ink hover:opacity-90"
+          className={`flex min-h-16 flex-col justify-center gap-0.5 rounded-panel border border-ink px-3.5 py-2.5 text-left ${i === 0 ? "bg-ink text-panel-solid" : "hover:bg-rule/50"}`}
         >
-          {last ? "Start exploring" : "Next"}
+          <span className="font-serif text-[18px] leading-tight">{d.title}</span>
+          <span className={`text-small leading-snug ${i === 0 ? "opacity-85" : "text-muted"}`}>{d.body}</span>
         </button>
-      </div>
+      ))}
+      <p id="intro-fine" className="text-small leading-snug text-muted">
+        {INTRO_FINE}
+      </p>
+      <button type="button" onClick={finish} className="-mb-1 flex min-h-[44px] items-center self-start rounded-panel px-2 text-small text-muted hover:bg-rule hover:text-ink">
+        Skip
+      </button>
     </div>
   );
 }

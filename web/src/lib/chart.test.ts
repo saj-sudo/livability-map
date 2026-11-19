@@ -1,6 +1,6 @@
 import { createExpression } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
-import { compositeValue, matchValue, missingCount, missingNote, priorityBars, type Bar } from "./chart";
+import { FIT_CUTS, FIT_WORDS, fitBand, compositeValue, matchValue, missingCount, missingNote, priorityBars, type Bar } from "./chart";
 import type { DimInfo } from "./dims";
 import { compositeExpression, type Picks } from "./expressions";
 
@@ -68,5 +68,13 @@ describe("missing weighted layers note", () => {
     expect(missingNote([bar("Jobs", 50)])).toBeNull();
     expect(missingNote([bar("Jobs", null)])).toBeNull();
     expect(missingNote([])).toBeNull();
+  });
+});
+
+describe("priorities fit as a band (SPEC §20.5, §13.50)", () => {
+  it("cuts at 40 and 60: weak below, strong above, partial between", () => {
+    expect(FIT_CUTS).toEqual({ partial: 40, strong: 60 });
+    expect([0, 39.9, 40, 50, 60, 60.1, 100].map(fitBand)).toEqual(["weak", "weak", "partial", "partial", "partial", "strong", "strong"]);
+    expect(FIT_WORDS[fitBand(54)]).toBe("partial fit");
   });
 });

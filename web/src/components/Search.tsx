@@ -123,14 +123,14 @@ export default function Search({ onPick, placeholder = "Search a city or region"
             setOpen(true);
           }}
           onKeyDown={onKey}
-          className="h-8 w-full rounded-panel border border-rule bg-panel-solid pl-7 pr-2 text-[13px] text-ink placeholder:text-muted focus:border-accent focus:outline-none"
+          className="h-8 w-full rounded-panel border border-rule bg-panel-solid pl-7 pr-2 text-small text-ink placeholder:text-muted"
         />
       </div>
       {showList && (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-panel border border-rule bg-panel-solid shadow-[0_8px_24px_-12px_rgba(0,0,0,.35)]">
-          {status === "failed" && <p className="px-3 py-2 text-[12px] text-muted">The place list could not be loaded. Check the connection and try again.</p>}
-          {status === "loading" && <p className="px-3 py-2 text-[12px] text-muted">Loading place names…</p>}
-          {status === "idle" && places && results.length === 0 && <p className="px-3 py-2 text-[12px] text-muted">No city or region matches &ldquo;{query.trim()}&rdquo;. Try another spelling or a larger place nearby.</p>}
+          {status === "failed" && <p className="px-3 py-2 text-fine text-muted">The place list could not be loaded. Check the connection and try again.</p>}
+          {status === "loading" && <p className="px-3 py-2 text-fine text-muted">Loading place names…</p>}
+          {status === "idle" && places && results.length === 0 && <p className="px-3 py-2 text-fine text-muted">No city or region matches &ldquo;{query.trim()}&rdquo;. Try another spelling or a larger place nearby.</p>}
           {results.length > 0 && (
             <ul id={listId} role="listbox" aria-label="Places" className="max-h-80 overflow-auto py-1">
               {results.map((p, i) => (
@@ -142,17 +142,17 @@ export default function Search({ onPick, placeholder = "Search a city or region"
                   onPointerDown={(e) => e.preventDefault()}
                   onClick={() => pick(p)}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex cursor-pointer items-baseline justify-between gap-3 px-3 py-1.5 text-[13px] ${i === active ? "bg-rule/70" : ""}`}
+                  className={`flex cursor-pointer items-baseline justify-between gap-3 px-3 py-1.5 text-small ${i === active ? "bg-rule/70" : ""}`}
                 >
                   <span className="truncate">{p.name}</span>
-                  <span className="shrink-0 text-[12px] text-muted">
+                  <span className="shrink-0 text-fine text-muted">
                     {p.kind === "city" ? "City" : "Region"} in {countryName(p.iso2 || null)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-          <p className="border-t border-rule px-3 py-1 text-[11px] text-muted">Names from Natural Earth and geoBoundaries; nothing leaves this page.</p>
+          <p className="border-t border-rule px-3 py-1 text-fine text-muted">Names from Natural Earth and geoBoundaries; nothing leaves this page.</p>
         </div>
       )}
     </div>

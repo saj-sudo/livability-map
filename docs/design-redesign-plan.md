@@ -136,7 +136,7 @@ From the code audit of 2026-11-18:
 | Run the fixture world and capture real screens | Done: 32 captures (8 screens, 390x844 and 1440x900, both themes) | `docs/mockups/2026-11-19-redesign/shots/` | 2026-11-19 |
 | Mockup | Done: today beside proposed, with the decisions list | https://claude.ai/artifact/EQ5RpTqgA7DpQS2SHCmkE5 (source: `docs/mockups/2026-11-19-redesign/index.html`) | 2026-11-19 |
 | Saj picks a direction | Done: "1 yes, 2 bands, 3 yes, 4 yes, invariant yes, links B" | SPEC §13.50 | 2026-11-19 |
-| Build and pull request | Built; pull request open, waiting on review | PR_LINK (after screenshots: `docs/mockups/2026-11-19-redesign/after/`) | 2026-11-19 |
+| Build and pull request | Built; pull request open, waiting on review | https://github.com/saj-sudo/livability-map/pull/16 (after screenshots: `docs/mockups/2026-11-19-redesign/after/`) | 2026-11-19 |
 | Check on real data | Not started: manual-steps item 23 (Saj's laptop) | `docs/manual-steps.md` | |
 
 ### What the build did against the measures of success (2026-11-19)

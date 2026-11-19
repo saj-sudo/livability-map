@@ -135,8 +135,27 @@ From the code audit of 2026-11-18:
 | Review from screenshots and code | Done | this file | 2026-11-18 |
 | Run the fixture world and capture real screens | Done: 32 captures (8 screens, 390x844 and 1440x900, both themes) | `docs/mockups/2026-11-19-redesign/shots/` | 2026-11-19 |
 | Mockup | Done: today beside proposed, with the decisions list | https://claude.ai/artifact/EQ5RpTqgA7DpQS2SHCmkE5 (source: `docs/mockups/2026-11-19-redesign/index.html`) | 2026-11-19 |
-| Saj picks a direction | Waiting on Saj: four moves and two flags, listed under "Decisions" in the mockup | | |
-| Build and pull request | Not started | | |
+| Saj picks a direction | Done: "1 yes, 2 bands, 3 yes, 4 yes, invariant yes, links B" | SPEC §13.50 | 2026-11-19 |
+| Build and pull request | Built; pull request open, waiting on review | PR_LINK (after screenshots: `docs/mockups/2026-11-19-redesign/after/`) | 2026-11-19 |
+| Check on real data | Not started: manual-steps item 23 (Saj's laptop) | `docs/manual-steps.md` | |
+
+### What the build did against the measures of success (2026-11-19)
+
+- The default key shows one variable: **passed** (e2e: one ramp, no wellbeing, no verdict words).
+- "My priorities" is one tap from the first view on a phone: **passed** (e2e: the "What matters
+  to you" door in the sheet's peek, 44px tall).
+- No whole country reads as one colour because of a national figure: **passed on the fixture
+  world, not proven on real data** (manual-steps item 23). National hexes take an ochre
+  exposure-only colour; the mockup's rust steps failed the new palette test and were replaced.
+- The e2e suite passes with the basemap blocked, plus an axe scan with no violations: **passed**
+  (18 tests; axe in both themes, on a phone and with the place panel open).
+
+Differences from the mockup, all recorded in SPEC §13.50: the exposure-only colour is ochre, not
+rust; the climate lead line states combined exposure as an average of hazard ranks (it is not
+itself a rank, so "more exposed than two thirds of places" would have been wrong); the country
+outline is the basemap's own border, so it is absent when the basemap is blocked.
+
+Still queued: selecting a hex from the keyboard, and a table view that is never a sorted ranking.
 
 ## Starting a session on this build
 

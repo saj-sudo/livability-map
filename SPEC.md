@@ -161,8 +161,8 @@ CORS). No database in the web app.
   |  MapLibre GL JS v6 + pmtiles protocol  |               |  manifest.json (no-cache, switched last) |
   |  one source per archive; refined       |               |  (basemap: OpenFreeMap, §13.5)           |
   |  parents (ref) hidden under finer hexes|               +------------------------------------------+
-  |  views: bivariate | per hazard |       |
-  |         wellbeing | my priorities      |
+  |  views: exposure | per hazard |        |
+  |   bivariate | wellbeing | priorities   |
   |  presets + sliders (§20.5), legend,    |
   |  click -> inspector (feature props)    |
   |  URL state  ?lat&lng&z&view&w=         |
@@ -380,7 +380,8 @@ app reads the PMTiles via HTTP range requests.
   neutral grey. The dark theme uses a grid derived in OKLCH (`web/scripts/bivar_dark.mjs`).
   **A hex only takes a wellbeing colour where `wb_res` is finer than `national`.** Where
   wellbeing is one figure for a whole country, the hex keeps an exposure-only colour (three steps
-  of the exposure ramp, from the exposure tercile already encoded in `bivar`), and the basemap's
+  of an ochre used nowhere on the 3x3 grid, from the exposure tercile already encoded in
+  `bivar`; the mockup's rust steps failed the palette test against the low-wellbeing row), and the basemap's
   country borders are drawn above the hexes in this view, so a country never reads as one
   wellbeing colour. The key has a row for it and the place panel states the national figure once
   in words. The per-hex dashed outline is gone.
@@ -412,8 +413,8 @@ app reads the PMTiles via HTTP range requests.
 OpenFreeMap (free vector tiles, no key, no signup): its `planet` vector tiles and its glyphs,
 drawn with our own small style (`web/src/lib/basemap.ts`, §13.50), not its stock `positron` /
 `dark` styles. The style is a quiet atlas ground: paper-toned land, a slightly different sea,
-country and region borders as hairlines, a handful of labels (countries, larger cities, seas in
-italic serif), no roads, no buildings. Colours come from the same tokens as the page, one set per
+country and region borders as hairlines, a handful of labels in English where the tile has an
+English name (countries, larger cities, seas in italic), no roads, no buildings. Colours come from the same tokens as the page, one set per
 theme, so the plain-background fallback (§13.41) is the same ground without the detail. The hex
 layers sit above every basemap line and below its labels; the country borders are repeated above
 the hexes in the bivariate view (§9.3). The theme follows the system preference, can be toggled
@@ -1237,13 +1238,17 @@ From the 2026-11-14 review pass (§13.45):
   (`opp`, `opp25`, 2010 -> 2020 tract crosswalk), §13.48; first-hand checks are manual-steps items 21 and 22.
 - [ ] England-only IoD values share `GB` with Wales and Scotland, so the country filter does not
   stop an English LSOA reaching a Welsh border hex; an admin1 filter would.
-- [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and an
-  automated accessibility scan (axe) in the e2e job.
-- [ ] Web: the design redesign in `docs/design-redesign-plan.md` (logged 2026-11-18). A review found the
-  bivariate default reads as a ranking of countries, because wellbeing is mostly a national figure, and
-  that "My priorities" is hidden as the seventh layer. Proposed: a one-variable default, priorities up
-  front, a place panel that leads with a few plain lines, an atlas look. Mockup first; each change lands
-  in §9, §10 and §13.10 before code.
+- [ ] Web: select a hex from the keyboard (today search is the only non-pointer route), and a
+  table view of the data that is never a sorted ranking (both queued behind the redesign).
+- [x] Web: an automated accessibility scan (axe, WCAG 2.x A and AA) in the e2e job, on the map in
+  both themes, on a phone, with the place panel open, and on /about and /methodology
+  (`web/e2e/redesign.spec.ts`, 2026-11-19).
+- [x] Web: the design redesign in `docs/design-redesign-plan.md` (logged 2026-11-18, built
+  2026-11-19, §13.50): a one-variable default, two doors with My priorities up front, a place
+  panel that leads with at most five lines, bands for the priorities fit, an atlas look (plate
+  title, docked key and rails, scale bar, our own basemap style), a share card, and old links
+  keeping their meaning. Checked on the fixture world; "no whole country reads as one colour" on
+  real data is manual-steps item 23.
 
 | Session | Mode | Lang | Scope | Kickoff prompt |
 |---|---|---|---|---|
@@ -1284,7 +1289,14 @@ From the 2026-11-14 review pass (§13.45):
   source and resolution badge, coverage count, life dimensions with resolution badges, and a
   sources list matching the manifest. (fixture build in the browser, 2026-09-22)
 - [x] The bivariate legend, the per-layer ramps, the confidence key and the coverage chips are
-  present and match what is drawn. (2026-09-22)
+  present and match what is drawn. (2026-09-22; since 2026-11-19 the key is docked on the map,
+  the default is one exposure ramp and the bivariate key has an exposure-only row, §13.50)
+- [x] The default key shows one variable; "What matters to you" is one tap from the first view on
+  a phone; an old link without `view=` still opens the bivariate view; the phone page is one
+  screen tall; touch targets are 44px; axe finds nothing. (`web/e2e/redesign.spec.ts` on the
+  fixture build with the basemap blocked, 2026-11-19)
+- [ ] On real data, no whole country reads as one wellbeing colour in the bivariate view
+  (manual-steps item 23).
 - [x] Moving a priorities slider or picking a preset recolors the map client-side without a
   network request, and dimensions missing on a hex drop out of the composite. (measured in the
   browser on the res-4 build, 2026-09-22: a slider change added no tile or data requests;

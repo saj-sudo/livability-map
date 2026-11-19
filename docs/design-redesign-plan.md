@@ -42,6 +42,28 @@ first step of the mockup sitting is to run the fixture world and look at the rea
 - **A number that brushes the no-single-number rule.** "My priorities" shows a 0 to 100 match per
   place ("69/100").
 
+### What the real screens added (2026-11-19)
+
+Seen on the fixture build with the real OpenFreeMap basemap (it loads in the cloud container):
+
+- **Dark theme: basemap roads and borders draw over the hexes** as thick black lines, and labels
+  switch to capitals.
+- **Phone: the document is taller than the screen** (1,471px on an 844px viewport): the bottom
+  sheet hangs below `.map-shell`, so the whole page can scroll.
+- **Phone place panel: two hazard rows and their caveats fill the sheet at half height.**
+- **The key itself ranks:** the desktop grid captions two corners "safe and thriving" and "exposed
+  and struggling".
+- "My priorities" is now eighth of eight layers (humid heat was added after the review).
+- The "pick a second place" banner covers the zoom control on a phone; the intro card covers the
+  key it describes; the dashed outline for national wellbeing is nearly invisible at z6.
+- Correction to the review: the single-layer ramps do not change meaning between themes (the end
+  that stands out from the ground is "more" in both). The bivariate grid's hues do change identity.
+- There is no combined-exposure view today (hazards are separate views), so proposal 1 needs a new
+  view id appended to `VIEWS`.
+- Old links: `serializeState` omits `view` when it is the default but always writes `lat`, `lng`
+  and `z`. So a bare address can open the new default while a link with a position and no `view=`
+  keeps meaning bivariate (option B in the mockup).
+
 ## Proposal (what the mockup will show)
 
 1. **A simpler default.** One variable first ("Climate exposure in 2050"), with the two-variable
@@ -111,9 +133,9 @@ From the code audit of 2026-11-18:
 | Stage | State | Link | Date |
 |---|---|---|---|
 | Review from screenshots and code | Done | this file | 2026-11-18 |
-| Run the fixture world and capture real screens | Not started (first step of the mockup sitting) | | |
-| Mockup | Not started. The map is sixth in the order | | |
-| Saj picks a direction | Waiting on the mockup | | |
+| Run the fixture world and capture real screens | Done: 32 captures (8 screens, 390x844 and 1440x900, both themes) | `docs/mockups/2026-11-19-redesign/shots/` | 2026-11-19 |
+| Mockup | Done: today beside proposed, with the decisions list | https://claude.ai/artifact/EQ5RpTqgA7DpQS2SHCmkE5 (source: `docs/mockups/2026-11-19-redesign/index.html`) | 2026-11-19 |
+| Saj picks a direction | Waiting on Saj: four moves and two flags, listed under "Decisions" in the mockup | | |
 | Build and pull request | Not started | | |
 
 ## Starting a session on this build

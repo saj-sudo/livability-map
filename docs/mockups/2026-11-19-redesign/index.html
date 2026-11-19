@@ -1,0 +1,785 @@
+<title>Livability map redesign mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Source+Sans+3:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column of decisions; each proposal is a "today / proposed" pair of
+   artboards drawn at real app size (390x844, 1440x900) and scaled to fit. Tokens are the app's
+   own "Atlas" set from web/src/app/globals.css plus the map ramps from web/src/lib/palette.ts. */
+:root {
+  --paper: #eef0ec; --panel: #fbfcfa; --ink: #1b2320; --muted: #5f6b67; --rule: #d7dcd7;
+  --accent: #2e5c8a; --accent-ink: #ffffff; --nodata: #cfd3cf; --frame: #c3c9c4;
+  --yes: #2f6b3f; --warn: #8a5a12;
+  --sea: #dfe4e1; --land: #f3f4f0; --grat: #cfd6d2; --seam: rgba(251,252,250,.55);
+  --e1: #f6e7dc; --e2: #ebc3ae; --e3: #d98f7c; --e4: #bf5552; --e5: #7a2629;
+  --p1: #e6e6f2; --p2: #c0bce0; --p3: #9a93cf; --p4: #6a61b0; --p5: #2f2a66;
+  --b1: #e8e8e8; --b2: #e4acac; --b3: #c85a5a; --b4: #b0d5df; --b5: #ad9ea5; --b6: #985356; --b7: #64acbe; --b8: #627f8c; --b9: #574249;
+  --show-light: block; --show-dark: none;
+  --sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141a1c; --panel: #1c2326; --ink: #e6eae7; --muted: #9aa6a1; --rule: #2b3538;
+    --accent: #8fb6dd; --accent-ink: #10171a; --nodata: #3a4346; --frame: #3a4548;
+    --yes: #8cc78e; --warn: #e5b56a;
+    --sea: #0f1517; --land: #1b2326; --grat: #1e272a; --seam: rgba(20,26,28,.6);
+    --e1: #3d2826; --e2: #6f3a37; --e3: #a94e4c; --e4: #dc8274; --e5: #f4c8b8;
+    --p1: #2c2a5a; --p2: #4a468a; --p3: #6f68b8; --p4: #a29ddb; --p5: #d8d5f1;
+    --b1: #494e4e; --b2: #99605e; --b3: #df6768; --b4: #457b88; --b5: #9d8c9b; --b6: #e39385; --b7: #21a3bc; --b8: #80b4c5; --b9: #dfb4da;
+    --show-light: none; --show-dark: block; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141a1c; --panel: #1c2326; --ink: #e6eae7; --muted: #9aa6a1; --rule: #2b3538;
+  --accent: #8fb6dd; --accent-ink: #10171a; --nodata: #3a4346; --frame: #3a4548;
+  --yes: #8cc78e; --warn: #e5b56a;
+  --sea: #0f1517; --land: #1b2326; --grat: #1e272a; --seam: rgba(20,26,28,.6);
+  --e1: #3d2826; --e2: #6f3a37; --e3: #a94e4c; --e4: #dc8274; --e5: #f4c8b8;
+  --p1: #2c2a5a; --p2: #4a468a; --p3: #6f68b8; --p4: #a29ddb; --p5: #d8d5f1;
+  --b1: #494e4e; --b2: #99605e; --b3: #df6768; --b4: #457b88; --b5: #9d8c9b; --b6: #e39385; --b7: #21a3bc; --b8: #80b4c5; --b9: #dfb4da;
+  --show-light: none; --show-dark: block; color-scheme: dark;
+}
+
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.5; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 500; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: clamp(28px, 4vw, 40px); }
+h2 { font-size: 26px; }
+h3 { font-size: 19px; }
+p { margin: 0; }
+.prose { max-width: 66ch; display: flex; flex-direction: column; gap: 10px; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-size: .9em; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 0 4px; }
+
+.top { display: flex; flex-direction: column; gap: 14px; }
+.kicker { font-size: 14px; color: var(--muted); }
+.answer { border: 1px solid var(--accent); border-radius: 6px; background: var(--panel); padding: 12px 14px; max-width: 66ch; }
+.answer b { font-weight: 600; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; }
+
+section { display: flex; flex-direction: column; gap: 18px; }
+.sec-head { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--ink); padding-top: 12px; }
+.sec-head .letter { font-size: 14px; color: var(--muted); }
+
+.pair { display: grid; gap: 18px; grid-template-columns: 1fr; }
+.pair.desk { max-width: 980px; }
+.pair.phones { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 640px; }
+.pair.three { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 640px; }
+@media (max-width: 520px) { .pair.phones, .pair.three { grid-template-columns: 1fr; max-width: 340px; } }
+@media (min-width: 900px) {
+  .pair.three { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 960px; }
+}
+figure { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+figcaption { font-size: 14px; color: var(--muted); }
+figcaption b { color: var(--ink); font-weight: 600; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .02em; border-radius: 3px; padding: 0 6px; margin-right: 6px; border: 1px solid var(--rule); color: var(--muted); }
+.tag.new { border-color: var(--accent); color: var(--accent); }
+.shot { border: 1px solid var(--frame); border-radius: 6px; overflow: hidden; background: var(--panel); }
+.shot img { width: 100%; height: auto; }
+.shot img.l { display: var(--show-light); }
+.shot img.d { display: var(--show-dark); }
+
+/* artboards: drawn at app pixel size, scaled by --s (set in script; aspect-ratio reserves the space) */
+.board { border: 1px solid var(--frame); border-radius: 6px; overflow: hidden; position: relative; background: var(--sea); }
+.art { position: absolute; left: 0; top: 0; transform-origin: 0 0; transform: scale(var(--s, .25)); font-family: var(--sans); font-size: 14px; line-height: 1.35; color: var(--ink); }
+.art * { box-sizing: border-box; }
+
+/* --- mock app parts --- */
+.m-head { position: absolute; inset: 0 0 auto 0; height: 44px; background: var(--panel); border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 14px; padding: 0 14px; z-index: 3; }
+.m-logo { width: 16px; height: 18px; background: var(--e4); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); flex: none; }
+.m-word { font-family: var(--serif); font-size: 19px; }
+.m-search { flex: 1; max-width: 420px; margin: 0 auto; height: 30px; border: 1px solid var(--rule); border-radius: 6px; display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-size: 14px; background: var(--paper); }
+.m-nav { display: flex; gap: 16px; color: var(--muted); font-size: 14px; }
+.m-map { position: absolute; background: var(--sea); overflow: hidden; }
+.m-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.grat { stroke: var(--grat); stroke-width: 1; fill: none; }
+.land { fill: var(--land); stroke: var(--land); stroke-width: 2; }
+.hx { stroke: var(--seam); stroke-width: 1; }
+.f-e1 { fill: var(--e1); } .f-e2 { fill: var(--e2); } .f-e3 { fill: var(--e3); } .f-e4 { fill: var(--e4); } .f-e5 { fill: var(--e5); }
+.f-p1 { fill: var(--p1); } .f-p2 { fill: var(--p2); } .f-p3 { fill: var(--p3); } .f-p4 { fill: var(--p4); } .f-p5 { fill: var(--p5); }
+.f-b1 { fill: var(--b1); } .f-b2 { fill: var(--b2); } .f-b3 { fill: var(--b3); } .f-b4 { fill: var(--b4); } .f-b5 { fill: var(--b5); } .f-b6 { fill: var(--b6); } .f-b7 { fill: var(--b7); } .f-b8 { fill: var(--b8); } .f-b9 { fill: var(--b9); }
+.f-nd { fill: var(--nodata); }
+.hatch { stroke: var(--ink); stroke-width: 1.2; opacity: .45; fill: none; }
+.natl { stroke: var(--ink); stroke-width: 2.2; stroke-dasharray: 7 5; fill: none; stroke-linecap: round; }
+.sel { stroke: var(--ink); stroke-width: 3; fill: none; }
+.sel-halo { stroke: var(--panel); stroke-width: 7; fill: none; }
+.lbl { position: absolute; font-size: 13px; color: var(--ink); text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel); white-space: nowrap; }
+.lbl.sea { font-family: var(--serif); font-style: italic; color: var(--muted); text-shadow: none; font-size: 15px; }
+.lbl.note { font-family: var(--serif); font-style: italic; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 4px 8px; text-shadow: none; white-space: normal; width: 210px; font-size: 14px; }
+.plate { position: absolute; z-index: 2; }
+.plate .t { font-family: var(--serif); font-size: 30px; line-height: 1.1; }
+.plate .s { font-size: 14px; color: var(--muted); margin-top: 4px; max-width: 520px; }
+.key { position: absolute; z-index: 2; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.key .kt { font-family: var(--serif); font-size: 15px; }
+.ramp { display: grid; grid-template-columns: repeat(5, 1fr); height: 14px; width: 250px; }
+.ramp.w3 { grid-template-columns: repeat(3, 1fr); }
+.ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.krow { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.sw { width: 18px; height: 12px; flex: none; border-radius: 2px; }
+.sw.nd { background: var(--nodata); }
+.sw.ht { background: repeating-linear-gradient(45deg, var(--ink) 0 1.5px, transparent 1.5px 5px); opacity: .55; }
+.sw.nt { border: 2px dashed var(--ink); background: none; }
+.scale { position: absolute; z-index: 2; font-size: 12px; color: var(--muted); }
+.scale i { display: block; width: 120px; height: 5px; border: 1px solid var(--ink); border-top: none; margin-bottom: 2px; }
+.attr { position: absolute; z-index: 2; font-size: 12px; color: var(--muted); }
+.zoom { position: absolute; z-index: 2; display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); overflow: hidden; }
+.zoom b { width: 44px; height: 44px; display: grid; place-items: center; font-size: 22px; font-weight: 400; }
+.zoom b + b { border-top: 1px solid var(--rule); }
+
+.rail { position: absolute; background: var(--panel); z-index: 2; padding: 14px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.seg span { min-height: 44px; display: grid; place-items: center; text-align: center; padding: 4px 8px; font-size: 14px; line-height: 1.2; }
+.seg span.on { background: var(--ink); color: var(--panel); font-weight: 600; }
+.grp { font-family: var(--serif); font-size: 15px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 10px; }
+.opt { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 4px; font-size: 14px; }
+.opt.on { background: var(--rule); font-weight: 600; }
+.opt .dot { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+.opts { display: flex; flex-direction: column; gap: 1px; }
+.fine { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--muted); }
+.chk { display: flex; gap: 8px; font-size: 13px; align-items: flex-start; }
+.chk i { width: 14px; height: 14px; border: 1.5px solid var(--muted); border-radius: 3px; flex: none; margin-top: 2px; }
+.chk i.on { background: var(--accent); border-color: var(--accent); }
+
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--rule); border-radius: 12px 12px 0 0; z-index: 3; padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sheet::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: var(--rule); align-self: center; }
+.card { position: absolute; z-index: 4; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.door { border: 1px solid var(--ink); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-height: 64px; }
+.door b { font-family: var(--serif); font-weight: 500; font-size: 18px; }
+.door span { font-size: 13px; color: var(--muted); }
+.door.primary { background: var(--ink); color: var(--panel); }
+.door.primary span { color: var(--panel); opacity: .8; }
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pre { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; min-height: 58px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.pre b { color: var(--ink); font-weight: 600; font-size: 14px; line-height: 1.2; }
+.pre.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.fold { display: flex; justify-content: space-between; align-items: center; min-height: 44px; border-top: 1px solid var(--rule); font-size: 14px; }
+.fold span { color: var(--muted); font-size: 13px; }
+
+.place { display: flex; flex-direction: column; gap: 10px; }
+.place h4 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; line-height: 1.15; }
+.place .pop { color: var(--muted); font-size: 13px; }
+.lead { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
+.lead li { padding: 9px 0; border-top: 1px solid var(--rule); font-family: var(--serif); font-size: 16px; line-height: 1.35; }
+.lead li b { font-family: var(--sans); font-weight: 600; font-size: 13px; display: block; color: var(--muted); }
+.btn { min-height: 44px; border: 1px solid var(--ink); border-radius: 6px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 14px; font-weight: 600; }
+.btn.ghost { border-color: var(--rule); font-weight: 400; }
+.mrow { display: grid; grid-template-columns: 1fr 96px; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 13px; align-items: center; }
+.mrow .n { font-weight: 600; }
+.mrow .w { grid-column: 1 / -1; color: var(--muted); }
+.bar { height: 8px; background: var(--rule); border-radius: 2px; position: relative; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); border-radius: 2px; }
+.bar.none { background: repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 6px); }
+.band { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.band i { height: 10px; background: var(--rule); border-radius: 2px; }
+.band i.on { background: var(--p4); }
+.band-l { display: grid; grid-template-columns: repeat(3, 1fr); font-size: 12px; color: var(--muted); text-align: center; }
+.band-l .on { color: var(--ink); font-weight: 600; }
+
+/* decisions */
+.decisions { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .decisions { grid-template-columns: 1fr 1fr; } }
+.dec { border: 1px solid var(--rule); background: var(--panel); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.dec .num { font-size: 14px; color: var(--muted); }
+.dec dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 15px; }
+.dec dt { color: var(--muted); }
+.dec dd { margin: 0; }
+.rec { color: var(--yes); font-weight: 600; }
+.flag { border-color: var(--warn); }
+.flag .num { color: var(--warn); font-weight: 600; }
+ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+.cols { display: grid; gap: 24px; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .cols { grid-template-columns: 1fr 1fr; } }
+.gallery { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.gallery.wide { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.gallery figcaption { font-size: 12px; }
+details > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Livability map · design redesign · mockup sitting, 19 November 2026</p>
+  <h1>Today's map beside the proposed one</h1>
+  <div class="prose">
+    <p>Every "Today" image is a real capture of the app on the fixture world (synthetic data laid over central Italy), taken at 390 by 844 and 1440 by 900 in both themes. Every "Proposed" frame is a drawing, built from the app's own tokens and ramps. Nothing in the app has changed. This page follows your light or dark setting, and so do the captures.</p>
+    <p class="answer"><b>What I need from you:</b> a yes, no or change on the four moves and two flags in <a href="#decisions">Decisions</a>. A one-line reply works, for example: "1 yes, 2 bands, 3 yes, 4 yes, invariant yes, links B".</p>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#a">A. Default view</a><a href="#b">B. First run and My priorities</a><a href="#c">C. Place panel</a><a href="#d">D. The match number</a><a href="#e">E. Atlas look</a><a href="#f">F. Shareable "my map"</a><a href="#decisions">Decisions</a><a href="#found">What the real screens added</a><a href="#bar">The bar for the build</a><a href="#all">All 32 captures</a>
+  </nav>
+</header>
+
+<!-- ============================ A ============================ -->
+<section id="a">
+  <div class="sec-head">
+    <span class="letter">A</span>
+    <h2>A simpler default: one variable first</h2>
+    <div class="prose">
+      <p>Today the first thing a newcomer meets is a nine-colour key, and on real data it paints whole countries one colour because wellbeing is mostly a national figure. The proposal opens on climate exposure alone, with a five-step key that reads in one glance. Wellbeing moves one step in.</p>
+    </div>
+  </div>
+
+  <div class="pair desk">
+    <figure>
+      <div class="shot"><img class="l" src="shots/2-default-desktop-light.jpg" alt="Today's default view on desktop, light theme: bivariate hexes with a nine-colour key in a floating Layers panel"><img class="d" src="shots/2-default-desktop-dark.jpg" alt="Today's default view on desktop, dark theme"></div>
+      <figcaption><span class="tag">Today</span>Bivariate by default. The key is a 3 by 3 grid plus three more symbols.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="1440" data-h="900" style="aspect-ratio:1440/900"><div class="art" style="width:1440px;height:900px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-word">Livability map</span><span class="m-search">Search a city or region</span><span class="m-nav"><span>Map</span><span>Methodology</span><span>About</span></span></div>
+        <div class="rail" style="left:0;top:44px;bottom:0;width:300px;border-right:1px solid var(--rule)">
+          <div class="seg"><span class="on">Climate in 2050</span><span>What matters to you</span></div>
+          <div class="opts">
+            <div class="opt on"><i class="dot" style="background:var(--e4)"></i>All five hazards together</div>
+            <div class="opt"><i class="dot" style="background:var(--e3)"></i>Extreme heat</div>
+            <div class="opt"><i class="dot" style="background:var(--e3)"></i>Humid heat</div>
+            <div class="opt"><i class="dot" style="background:var(--e3)"></i>River flooding</div>
+            <div class="opt"><i class="dot" style="background:var(--e3)"></i>Coastal flooding</div>
+            <div class="opt"><i class="dot" style="background:var(--e3)"></i>Water stress</div>
+          </div>
+          <div class="grp">Add a second variable</div>
+          <div class="chk"><i></i><span>Wellbeing today, beside exposure</span></div>
+          <div class="grp">Show</div>
+          <div class="chk"><i class="on"></i><span>Mark places missing some hazard data</span></div>
+          <div class="chk"><i></i><span>Places where almost no one lives (under 100 people)</span></div>
+          <p class="fine" style="margin-top:auto">Hazards are projections for 2050 under a moderate pathway (RCP4.5 / SSP2-4.5). Synthetic fixture data, not the real world.</p>
+        </div>
+        <div class="m-map" style="left:300px;top:44px;right:0;bottom:0">
+          <svg class="hexmap" data-mode="exp" viewBox="0 0 1140 856" preserveAspectRatio="none"></svg>
+          <div class="plate" style="left:28px;top:24px"><div class="t">Climate exposure, 2050</div><div class="s">Five hazards combined, heat counted twice (dry and humid). Rank among inhabited places.</div></div>
+          <span class="lbl" style="left:520px;top:250px">Alder</span><span class="lbl" style="left:650px;top:470px">Cedaria</span><span class="lbl sea" style="left:170px;top:520px">Western Sea</span><span class="lbl sea" style="left:900px;top:300px">Eastern Sea</span>
+          <div class="key" style="left:28px;bottom:28px">
+            <span class="kt">Projected exposure</span>
+            <div class="ramp"><i style="background:var(--e1)"></i><i style="background:var(--e2)"></i><i style="background:var(--e3)"></i><i style="background:var(--e4)"></i><i style="background:var(--e5)"></i></div>
+            <div class="ends"><span>less exposed</span><span>more exposed</span></div>
+            <div class="krow"><i class="sw nd"></i>no data, never shown as zero</div>
+            <div class="krow"><i class="sw ht"></i>some hazard layers missing</div>
+          </div>
+          <div class="zoom" style="right:20px;top:20px"><b>+</b><b>−</b></div>
+          <div class="scale" style="right:28px;bottom:44px"><i></i>0 · 50 · 100 km</div>
+          <div class="attr" style="right:28px;bottom:16px">OpenFreeMap © OpenMapTiles · Data from OpenStreetMap</div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>One ramp, a plate title that carries the year, a docked key, a scale bar. The panel is a docked rail, so it stops covering the map.</figcaption>
+    </figure>
+  </div>
+
+  <div class="pair phones">
+    <figure>
+      <div class="shot"><img class="l" src="shots/2-default-phone-light.jpg" alt="Today's default view on a phone, light theme"><img class="d" src="shots/2-default-phone-dark.jpg" alt="Today's default view on a phone, dark theme"></div>
+      <figcaption><span class="tag">Today</span>The two-line phone key is the clearest thing in the app.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="844" style="aspect-ratio:390/844"><div class="art" style="width:390px;height:844px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-search">Search a city or region</span></div>
+        <div class="m-map" style="left:0;top:44px;right:0;bottom:0">
+          <svg class="hexmap" data-mode="exp" data-r="24" viewBox="0 0 390 800" preserveAspectRatio="none"></svg>
+          <div class="plate" style="left:14px;top:12px"><div class="t" style="font-size:22px">Climate exposure, 2050</div><div class="s" style="font-size:13px;max-width:290px">Five hazards combined. Moderate pathway.</div></div>
+          <div class="zoom" style="right:10px;top:76px"><b>+</b><b>−</b></div>
+          <span class="lbl" style="left:150px;top:300px">Alder</span><span class="lbl" style="left:210px;top:440px">Cedaria</span>
+        </div>
+        <div class="sheet">
+          <div class="seg"><span class="on">Climate in 2050</span><span>What matters to you</span></div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div class="ramp" style="width:100%"><i style="background:var(--e1)"></i><i style="background:var(--e2)"></i><i style="background:var(--e3)"></i><i style="background:var(--e4)"></i><i style="background:var(--e5)"></i></div>
+            <div class="ends"><span>less exposed</span><span>more exposed</span></div>
+            <div style="display:flex;gap:16px"><div class="krow"><i class="sw nd"></i>no data</div><div class="krow"><i class="sw ht"></i>some layers missing</div></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>"What matters to you" is one tap from the first view, at 44px tall.</figcaption>
+    </figure>
+  </div>
+
+  <div class="sec-head" style="border-top-color:var(--rule)">
+    <h3>One step in: exposure beside wellbeing, without painting countries</h3>
+    <div class="prose"><p>The left image is the September build on real data: Europe blue, Africa and the Middle East red, and the blue axis is a national figure almost everywhere. In the proposal a hex only takes a wellbeing colour where the figure is regional or finer. Where it is one number for a whole country, the hexes keep their exposure colour, the country gets a dashed outline, and the figure is stated once in words.</p></div>
+  </div>
+  <div class="pair desk">
+    <figure>
+      <div class="shot"><img src="shots/0-real-data-september-light.jpg" alt="The September real-data build: a world map where Europe is blue and Africa and the Middle East are red"></div>
+      <figcaption><span class="tag">Today, real data</span>From <code>docs/screenshots/session-9</code>. It predates humid heat; the pattern has not changed.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="1140" data-h="712" style="aspect-ratio:1140/712"><div class="art" style="width:1140px;height:712px">
+        <div class="m-map" style="inset:0">
+          <svg class="hexmap" data-mode="bivar" data-r="30" viewBox="0 0 1140 712" preserveAspectRatio="none"></svg>
+          <div class="plate" style="left:28px;top:24px"><div class="t">Exposure in 2050 beside wellbeing today</div><div class="s">Wellbeing colours appear only where the figure is regional or finer.</div></div>
+          <span class="lbl note" style="left:800px;top:330px">Country B: wellbeing is one national figure, 5.1 of 10. It is not drawn per hexagon.</span>
+          <span class="lbl" style="left:330px;top:300px">Country A</span>
+          <div class="key" style="left:28px;bottom:24px;flex-direction:row;gap:18px;align-items:flex-end">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span class="kt">Both known</span>
+              <div style="display:grid;grid-template-columns:repeat(3,26px);grid-auto-rows:26px">
+                <i style="background:var(--b7)"></i><i style="background:var(--b8)"></i><i style="background:var(--b9)"></i>
+                <i style="background:var(--b4)"></i><i style="background:var(--b5)"></i><i style="background:var(--b6)"></i>
+                <i style="background:var(--b1)"></i><i style="background:var(--b2)"></i><i style="background:var(--b3)"></i>
+              </div>
+              <div class="ends" style="width:78px"><span>more exposed →</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <span class="kt">Exposure only</span>
+              <div class="ramp w3" style="width:120px"><i style="background:var(--e1)"></i><i style="background:var(--e3)"></i><i style="background:var(--e5)"></i></div>
+              <div class="krow"><i class="sw nt"></i>national wellbeing figure</div>
+              <div class="krow"><i class="sw nd"></i>no data</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>Country B reads as "exposure known, wellbeing not local", not as "struggling". This needs a palette test in the build: the exposure-only ramp must not be confused with the low-wellbeing row.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ B ============================ -->
+<section id="b">
+  <div class="sec-head">
+    <span class="letter">B</span>
+    <h2>First run offers two doors, and My priorities starts with presets</h2>
+    <div class="prose"><p>My priorities is the thing no other map does, and today it is the eighth of eight layers (humid heat pushed it down one since the review). The intro card explains colours before the reader has a reason to care. The proposal asks one question first and makes the second door the product's own idea.</p></div>
+  </div>
+  <div class="pair three">
+    <figure>
+      <div class="shot"><img class="l" src="shots/1-intro-phone-light.jpg" alt="Today's first-visit card on a phone: step 1 of 3, What the colours mean"><img class="d" src="shots/1-intro-phone-dark.jpg" alt="Today's first-visit card on a phone, dark"></div>
+      <figcaption><span class="tag">Today</span>Three steps of reading. The card covers the key it describes.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="844" style="aspect-ratio:390/844"><div class="art" style="width:390px;height:844px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-search">Search a city or region</span></div>
+        <div class="m-map" style="left:0;top:44px;right:0;bottom:0"><svg class="hexmap" data-mode="exp" data-r="24" viewBox="0 0 390 800" preserveAspectRatio="none"></svg></div>
+        <div class="card" style="left:14px;right:14px;bottom:20px">
+          <div style="font-family:var(--serif);font-size:22px;line-height:1.2">Where do you want to start?</div>
+          <div class="door primary"><b>Climate in 2050</b><span>Projected heat, flooding and water stress, place by place.</span></div>
+          <div class="door"><b>What matters to you</b><span>Pick a starting point such as Early career or Raising kids, then adjust it.</span></div>
+          <div style="font-size:13px;color:var(--muted)">Grey means no data, never zero risk. Every number has a source. This map does not tell you where to live.</div>
+          <div style="font-size:14px;min-height:44px;display:flex;align-items:center;color:var(--muted)">Skip</div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>One card, one choice. Either door lands on a working map.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="844" style="aspect-ratio:390/844"><div class="art" style="width:390px;height:844px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-search">Search a city or region</span></div>
+        <div class="m-map" style="left:0;top:44px;right:0;bottom:0"><svg class="hexmap" data-mode="match" data-r="24" data-oy="-190" viewBox="0 0 390 800" preserveAspectRatio="none"></svg>
+          <div class="plate" style="left:14px;top:12px"><div class="t" style="font-size:22px">Fit with Early career</div></div>
+        </div>
+        <div class="sheet" style="top:330px;gap:10px">
+          <div class="seg"><span>Climate in 2050</span><span class="on">What matters to you</span></div>
+          <div class="presets">
+            <div class="pre on"><b>Early career</b>jobs, transit, housing cost</div>
+            <div class="pre"><b>Raising kids</b>schools, clean air, safety</div>
+            <div class="pre"><b>Queer and looking for community</b></div>
+            <div class="pre"><b>Retiring</b>healthcare, heat, cost</div>
+            <div class="pre"><b>Climate first</b>the five hazards only</div>
+            <div class="pre"><b>Start from scratch</b>nothing weighted yet</div>
+          </div>
+          <div>
+            <div class="fold">Work and money <span>4 weighted ›</span></div>
+            <div class="fold">Getting around <span>2 weighted ›</span></div>
+            <div class="fold">Climate hazards, 2050 <span>5 weighted ›</span></div>
+            <div class="fold">Environment today <span>none ›</span></div>
+            <div class="fold">Community and politics <span>none ›</span></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>Presets as the first thing; the 28 sliders fold away by group.</figcaption>
+    </figure>
+  </div>
+  <div class="pair phones">
+    <figure>
+      <div class="shot"><img class="l" src="shots/5-priorities-phone-light.jpg" alt="Today's My priorities on a phone: the eight-item layer list, then preset chips"><img class="d" src="shots/5-priorities-phone-dark.jpg" alt="Today's My priorities on a phone, dark"></div>
+      <figcaption><span class="tag">Today</span>On a phone you scroll past eight layers to reach the presets, and the sliders start below the fold.</figcaption>
+    </figure>
+    <figure>
+      <div class="shot"><img class="l" src="shots/5-priorities-desktop-light.jpg" alt="Today's My priorities on desktop: the panel runs the full height with sliders"><img class="d" src="shots/5-priorities-desktop-dark.jpg" alt="Today's My priorities on desktop, dark"></div>
+      <figcaption><span class="tag">Today</span>Desktop: the same list, with every slider open at once.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ C ============================ -->
+<section id="c">
+  <div class="sec-head">
+    <span class="letter">C</span>
+    <h2>A place panel that leads with a few plain lines</h2>
+    <div class="prose"><p>Today's panel opens with a good sentence and then becomes 30 or more rows. On a phone at half height, two hazards and their caveat paragraphs fill the whole sheet. Bar colour changes meaning row by row. The proposal puts three to five lines first, each one a finding with its number, and keeps every measure one tap away.</p></div>
+  </div>
+  <div class="pair three">
+    <figure>
+      <div class="shot"><img class="l" src="shots/6-place-phone-light.jpg" alt="Today's place panel on a phone: a summary, then hazard rows with long caveats"><img class="d" src="shots/6-place-phone-dark.jpg" alt="Today's place panel on a phone, dark"></div>
+      <figcaption><span class="tag">Today</span>Half the sheet holds two rows.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="844" style="aspect-ratio:390/844"><div class="art" style="width:390px;height:844px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-search">Search a city or region</span></div>
+        <div class="m-map" style="left:0;top:44px;right:0;bottom:0"><svg class="hexmap" data-mode="exp" data-r="24" data-oy="-250" data-sel="1" viewBox="0 0 390 800" preserveAspectRatio="none"></svg></div>
+        <div class="sheet" style="top:230px;gap:8px">
+          <div class="place">
+            <div><h4>B-Mid</h4><div class="pop">Country B · about 871,000 people in this 1,770 km² area</div></div>
+            <ul class="lead">
+              <li><b>Climate in 2050</b>More exposed than about two thirds of inhabited places. River flooding is the main reason: 21.5% of this area.</li>
+              <li><b>Heat</b>30 days a year above 35 °C, close to the middle of the range. Humid heat adds 13 days.</li>
+              <li><b>Wellbeing</b>Only a national figure exists here (5.1 of 10). It says nothing about this area in particular.</li>
+              <li><b>Air today</b>Dirtier than in almost every other place: 34.7 µg/m³ of PM2.5, against a WHO guideline of 5.</li>
+              <li><b>Not measured here</b>Public transit and schools. No data, which is not the same as zero.</li>
+            </ul>
+            <div class="btn">All 31 measures and their sources <span>›</span></div>
+            <div class="btn ghost">Compare with another place <span>›</span></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>Five findings, each with its figure. Numbers taken from today's panel for the same hexagon.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="844" style="aspect-ratio:390/844;background:var(--panel)"><div class="art" style="width:390px;height:844px;background:var(--panel);padding:18px 14px">
+        <div style="font-family:var(--serif);font-size:20px">All measures</div>
+        <div style="font-size:13px;color:var(--muted);margin:4px 0 10px">Every bar means the same thing: this place's rank among inhabited places, 0 to 100. Whether a high rank is good is said in words.</div>
+        <div class="grp" style="padding-bottom:4px">Climate hazards, 2050</div>
+        <div class="mrow"><span class="n">River flooding</span><span class="bar"><i style="width:89%"></i></span><span class="w">21.5% of the area · higher than 89% of places · more is worse</span></div>
+        <div class="mrow"><span class="n">Extreme heat</span><span class="bar"><i style="width:48%"></i></span><span class="w">30 days a year above 35 °C · higher than 48% · more is worse</span></div>
+        <div class="mrow"><span class="n">Water stress</span><span class="bar"><i style="width:73%"></i></span><span class="w">high · higher than 73% · more is worse</span></div>
+        <div class="grp" style="padding-bottom:4px;margin-top:8px">Work and money</div>
+        <div class="mrow"><span class="n">Early-career job market</span><span class="bar"><i style="width:98%"></i></span><span class="w">82% employed · higher than 98% · more is better</span></div>
+        <div class="mrow"><span class="n">Housing cost burden</span><span class="bar"><i style="width:2%"></i></span><span class="w">higher than 2% of places · more is worse</span></div>
+        <div class="grp" style="padding-bottom:4px;margin-top:8px">Getting around</div>
+        <div class="mrow"><span class="n">Public transit</span><span class="bar none"></span><span class="w">No data here. Not counted, not zero.</span></div>
+        <div class="mrow"><span class="n">Internet speed</span><span class="bar"><i style="width:90%"></i></span><span class="w">higher than 90% · more is better</span></div>
+        <div class="grp" style="padding-bottom:4px;margin-top:8px">Context, no better or worse</div>
+        <div class="mrow"><span class="n">Who lives here</span><span></span><span class="w">Shown as shares. Never ranked, never weighted.</span></div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>"All measures" open. One bar colour; red and green stop carrying meaning.</figcaption>
+    </figure>
+  </div>
+  <figure>
+    <div class="shot" style="max-width:820px"><img class="l" src="shots/6-place-desktop-light.jpg" alt="Today's place panel on desktop, light: Layers on the left, place details on the right, the map between"><img class="d" src="shots/6-place-desktop-dark.jpg" alt="Today's place panel on desktop, dark"></div>
+    <figcaption><span class="tag">Today</span>Desktop at 1440 wide: the two floating panels take about 630px, and the place panel scrolls for several screens.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================ D ============================ -->
+<section id="d">
+  <div class="sec-head">
+    <span class="letter">D</span>
+    <h2>The match number: words, or the number?</h2>
+    <div class="prose">
+      <p>My priorities shows "matches your priorities 54/100". The review said this brushes the no-single-number rule. Reading the spec again, invariant 6 allows a single number as long as its weights are exposed as sliders, so the number is legal today. The question is whether "54" claims more precision than a weighted average of ranks deserves.</p>
+      <p>My recommendation is the left option: bands in words on the map key and in the summary, the per-dimension numbers kept, and the exact figure one tap away under "how this is worked out". Honest tradeoff: a band is still a single judgement, only a coarser one, and someone comparing two "partial fit" places loses the tiebreak.</p>
+    </div>
+  </div>
+  <div class="pair three">
+    <figure>
+      <div class="shot"><img class="l" src="shots/7-place-priorities-phone-light.jpg" alt="Today's place panel in My priorities on a phone, showing 52/100"><img class="d" src="shots/7-place-priorities-phone-dark.jpg" alt="Today's place panel in My priorities, dark"></div>
+      <figcaption><span class="tag">Today</span>"It matches your priorities 52/100, with 1 of 12 missing here."</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="520" style="aspect-ratio:390/520;background:var(--panel)"><div class="art" style="width:390px;height:520px;background:var(--panel);padding:18px 14px"><div class="place">
+        <div><h4>B-Mid</h4><div class="pop">Country B · about 871,000 people</div></div>
+        <div style="font-family:var(--serif);font-size:19px;line-height:1.3">A partial fit with Early career.</div>
+        <div><div class="band"><i></i><i class="on"></i><i></i></div><div class="band-l"><span>weak fit</span><span class="on">partial fit</span><span>strong fit</span></div></div>
+        <ul class="lead">
+          <li><b>Pulls it up</b>Jobs (higher than 98% of places) and internet speed (90%).</li>
+          <li><b>Pulls it down</b>Housing cost burden and cost of living, both among the highest.</li>
+          <li><b>Left out</b>Public transit has no data here, so it is not counted.</li>
+        </ul>
+        <div class="btn ghost">How this is worked out (54 of 100) <span>›</span></div>
+      </div></div></div>
+      <figcaption><span class="tag new">Option 1, recommended</span>Bands in words. The number is kept, one tap in.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="390" data-h="520" style="aspect-ratio:390/520;background:var(--panel)"><div class="art" style="width:390px;height:520px;background:var(--panel);padding:18px 14px"><div class="place">
+        <div><h4>B-Mid</h4><div class="pop">Country B · about 871,000 people</div></div>
+        <div style="font-family:var(--serif);font-size:19px;line-height:1.3">Matches Early career 54 of 100.</div>
+        <div class="bar" style="height:10px"><i style="width:54%;background:var(--p4)"></i></div>
+        <ul class="lead">
+          <li><b>Pulls it up</b>Jobs (higher than 98% of places) and internet speed (90%).</li>
+          <li><b>Pulls it down</b>Housing cost burden and cost of living, both among the highest.</li>
+          <li><b>Left out</b>Public transit has no data here, so it is not counted.</li>
+        </ul>
+        <div class="btn ghost">How this is worked out <span>›</span></div>
+      </div></div></div>
+      <figcaption><span class="tag new">Option 2</span>Keep the number up front. No spec change needed.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ E ============================ -->
+<section id="e">
+  <div class="sec-head">
+    <span class="letter">E</span>
+    <h2>An atlas look</h2>
+    <div class="prose"><p>The Newsreader wordmark and the hairlines are the only atlas cues today. The basemap is the stock one, with labels in several scripts, and in dark its roads and borders draw over the hexes as heavy black lines. Proposed: a quiet ground with a handful of labels, hexes above every basemap line, docked panels with hairlines and no shadows, a plate title, a key and a scale bar.</p></div>
+  </div>
+  <div class="pair desk">
+    <figure>
+      <div class="shot"><img class="l" src="shots/7-place-priorities-desktop-light.jpg" alt="Today on desktop, My priorities with the place panel open, light"><img class="d" src="shots/7-place-priorities-desktop-dark.jpg" alt="Today on desktop, My priorities with the place panel open, dark: black road lines cross the hexes"></div>
+      <figcaption><span class="tag">Today</span>Floating shadowed cards over a busy basemap. Switch this page to dark to see the road lines.</figcaption>
+    </figure>
+    <figure>
+      <div class="board" data-w="1440" data-h="900" style="aspect-ratio:1440/900"><div class="art" style="width:1440px;height:900px">
+        <div class="m-head"><i class="m-logo"></i><span class="m-word">Livability map</span><span class="m-search">Search a city or region</span><span class="m-nav"><span>Map</span><span>Methodology</span><span>About</span></span></div>
+        <div class="rail" style="left:0;top:44px;bottom:0;width:300px;border-right:1px solid var(--rule);gap:10px">
+          <div class="seg"><span>Climate in 2050</span><span class="on">What matters to you</span></div>
+          <div class="presets">
+            <div class="pre on"><b>Early career</b></div><div class="pre"><b>Raising kids</b></div>
+            <div class="pre"><b>Queer and looking for community</b></div><div class="pre"><b>Retiring</b></div>
+            <div class="pre"><b>Climate first</b></div><div class="pre"><b>Start from scratch</b></div>
+          </div>
+          <div>
+            <div class="fold">Work and money <span>4 weighted ›</span></div>
+            <div class="fold">Getting around <span>2 weighted ›</span></div>
+            <div class="fold">Climate hazards, 2050 <span>5 weighted ›</span></div>
+            <div class="fold">Environment today <span>none ›</span></div>
+            <div class="fold">Community and politics <span>none ›</span></div>
+          </div>
+          <div class="btn ghost" style="margin-top:6px">Share this map <span>›</span></div>
+          <p class="fine" style="margin-top:auto">Hazards are projections for 2050 under a moderate pathway (RCP4.5 / SSP2-4.5); everything else is present-day.</p>
+        </div>
+        <div class="m-map" style="left:300px;top:44px;right:360px;bottom:0">
+          <svg class="hexmap" data-mode="match" data-sel="1" viewBox="0 0 780 856" preserveAspectRatio="none"></svg>
+          <div class="plate" style="left:24px;top:22px"><div class="t">Fit with Early career</div><div class="s" style="max-width:380px">Your weights, applied to every place. Not a ranking.</div></div>
+          <span class="lbl" style="left:330px;top:250px">Alder</span><span class="lbl" style="left:450px;top:470px">Cedaria</span><span class="lbl sea" style="left:60px;top:560px">Western Sea</span>
+          <div class="key" style="left:24px;bottom:24px">
+            <span class="kt">Fit with your weights</span>
+            <div class="ramp" style="width:220px"><i style="background:var(--p1)"></i><i style="background:var(--p2)"></i><i style="background:var(--p3)"></i><i style="background:var(--p4)"></i><i style="background:var(--p5)"></i></div>
+            <div class="ends"><span>weaker fit</span><span>stronger fit</span></div>
+            <div class="krow"><i class="sw nd"></i>no data for anything you weighted</div>
+          </div>
+          <div class="zoom" style="right:16px;top:16px"><b>+</b><b>−</b></div>
+          <div class="scale" style="right:20px;bottom:40px"><i></i>0 · 50 · 100 km</div>
+          <div class="attr" style="right:20px;bottom:14px">OpenFreeMap © OpenMapTiles</div>
+        </div>
+        <div class="rail" style="right:0;top:44px;bottom:0;width:360px;border-left:1px solid var(--rule)">
+          <div class="place">
+            <div><h4>B-Mid</h4><div class="pop">Country B · about 871,000 people in this 1,770 km² area</div></div>
+            <div style="font-family:var(--serif);font-size:19px;line-height:1.3">A partial fit with Early career.</div>
+            <div><div class="band"><i></i><i class="on"></i><i></i></div><div class="band-l"><span>weak fit</span><span class="on">partial fit</span><span>strong fit</span></div></div>
+            <ul class="lead">
+              <li><b>Pulls it up</b>Jobs (higher than 98% of places) and internet speed (90%).</li>
+              <li><b>Pulls it down</b>Housing cost burden and cost of living, both among the highest.</li>
+              <li><b>Climate in 2050</b>More exposed than about two thirds of places, mostly river flooding.</li>
+              <li><b>Left out</b>Public transit has no data here, so it is not counted.</li>
+            </ul>
+            <div class="btn">All 31 measures and their sources <span>›</span></div>
+            <div class="btn ghost">Compare with another place <span>›</span></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><span class="tag new">Proposed</span>Docked rails, hairlines, plate title, key, scale bar. Still OpenFreeMap, with a trimmed style served from our own origin.</figcaption>
+    </figure>
+  </div>
+  <div class="prose small muted">
+    <p>The key across themes: the single-layer ramps already follow one rule in both themes (the end that stands out most from the ground is "more"). The bivariate grid follows it too, but its hues change identity: "both high" is dark plum in light and pale pink in dark, so what you learned in one theme does not carry over. With the bivariate grid off the default, the first key anyone sees is a plain ramp with the same words under it in both themes. The grid gets fixed with the palette tests in the build.</p>
+  </div>
+</section>
+
+<!-- ============================ F ============================ -->
+<section id="f">
+  <div class="sec-head">
+    <span class="letter">F</span>
+    <h2>A shareable "my map"</h2>
+    <div class="prose"><p>New, so there is no "today". A shared link opens the map with a card that says whose weights these are, what they were, and where the data comes from. It never lists places. It is the same URL state the app already writes, plus a title.</p></div>
+  </div>
+  <figure style="max-width:820px">
+    <div class="board" data-w="1200" data-h="630" style="aspect-ratio:1200/630"><div class="art" style="width:1200px;height:630px">
+      <div class="m-map" style="left:440px;top:0;right:0;bottom:0"><svg class="hexmap" data-mode="match" data-r="26" viewBox="0 0 760 630" preserveAspectRatio="none"></svg></div>
+      <div class="rail" style="left:0;top:0;bottom:0;width:440px;border-right:1px solid var(--rule);padding:36px 32px;gap:16px">
+        <div style="display:flex;align-items:center;gap:10px"><i class="m-logo"></i><span class="m-word">Livability map</span></div>
+        <div style="font-family:var(--serif);font-size:44px;line-height:1.05">My map: Early career</div>
+        <div style="font-size:16px;color:var(--muted)">What I weighted: jobs ×3, transit ×2, housing cost ×2, cost of living ×2, rent ×2, access to a city, internet, and the five climate hazards.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <div class="ramp" style="width:260px"><i style="background:var(--p1)"></i><i style="background:var(--p2)"></i><i style="background:var(--p3)"></i><i style="background:var(--p4)"></i><i style="background:var(--p5)"></i></div>
+          <div class="ends" style="width:260px"><span>weaker fit</span><span>stronger fit</span></div>
+          <div class="krow"><i class="sw nd"></i>no data, never shown as zero</div>
+        </div>
+        <p class="fine" style="margin-top:auto;font-size:14px">Hazards: 2050, moderate pathway (RCP4.5 / SSP2-4.5). Sources: World Bank CCKP, WRI Aqueduct, GHSL and 20 more, listed in full under Methodology. A view of one person's priorities, not a ranking of places.</p>
+      </div>
+    </div></div>
+    <figcaption><span class="tag new">Proposed</span>Preset name, the weights in words, the key, a sources line. Scenario and horizon stay on it.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================ decisions ============================ -->
+<section id="decisions">
+  <div class="sec-head">
+    <h2>Decisions: what would move</h2>
+    <div class="prose"><p>Four moves from the plan, then two things the mockup turned up that need your call before any code. Sections B, E and F need no rule change, so they ride along unless you say otherwise.</p></div>
+  </div>
+  <div class="decisions">
+    <div class="dec">
+      <span class="num">Move 1 · section A</span>
+      <h3>The bivariate view: from the default to one step in</h3>
+      <dl><dt>My take</dt><dd class="rec">Yes</dd><dt>Gain</dt><dd>The first key has one variable. No country reads as one colour because of a national figure.</dd><dt>Cost</dt><dd>Needs a new combined-exposure view (none exists today; the hazards are separate views). The two-variable story is no longer the first impression.</dd></dl>
+    </div>
+    <div class="dec">
+      <span class="num">Move 2 · section D</span>
+      <h3>The 0 to 100 match: to words or bands</h3>
+      <dl><dt>My take</dt><dd class="rec">Bands, number one tap in</dd><dt>Gain</dt><dd>Stops implying precision the average does not have.</dd><dt>Cost</dt><dd>Loses the tiebreak between two similar places. The spec does not require this change; it is a taste call.</dd></dl>
+    </div>
+    <div class="dec">
+      <span class="num">Move 3 · sections A and B</span>
+      <h3>The Layers list: regrouped into two doors</h3>
+      <dl><dt>My take</dt><dd class="rec">Yes</dd><dt>Gain</dt><dd>"What matters to you" is one tap from the first view on a phone, instead of eighth in a list.</dd><dt>Cost</dt><dd>Wellbeing loses its own entry in the list and becomes "add a second variable". Existing <code>view=wb</code> links must keep working.</dd></dl>
+    </div>
+    <div class="dec">
+      <span class="num">Move 4 · section C</span>
+      <h3>The full list of measures: behind "All measures"</h3>
+      <dl><dt>My take</dt><dd class="rec">Yes</dd><dt>Gain</dt><dd>The panel answers "what is this place like" in five lines.</dd><dt>Cost</dt><dd>Someone has to choose which five lines lead, by rule, for every hexagon. That rule goes in the spec and gets tests. Sources stay one tap away, never further.</dd></dl>
+    </div>
+    <div class="dec flag">
+      <span class="num">Flag · SPEC invariant 6</span>
+      <h3>Move 1 changes an invariant, not a setting</h3>
+      <p>Invariant 6 reads "The default view is a bivariate choropleth that needs no weighting." A single-variable default needs that sentence rewritten, along with §9.3 and §10. The intent survives (the default still needs no weighting). I recommend the change; it is yours to make.</p>
+    </div>
+    <div class="dec flag">
+      <span class="num">Flag · old links</span>
+      <h3>A new default must not change what an old link shows</h3>
+      <p>Links only carry <code>view=</code> when it differs from the default, so today's bivariate links have none. But every link the app writes carries <code>lat</code>, <code>lng</code> and <code>z</code>.</p>
+      <dl><dt>Option A</dt><dd>Accept that old links change. Simple, and nothing is deployed yet.</dd><dt>Option B</dt><dd class="rec">A bare address opens the new default; a link with a position but no <code>view=</code> still means bivariate; new links always write <code>view=</code>. Old links keep their meaning. About ten lines and three tests.</dd></dl>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ findings ============================ -->
+<section id="found">
+  <div class="sec-head">
+    <h2>What the real screens added to the review</h2>
+    <div class="prose"><p>The review was written from old screenshots. Running the app turned up these, none of them in the plan yet.</p></div>
+  </div>
+  <div class="cols">
+    <ul class="plain">
+      <li><b>Dark theme: basemap lines draw over the hexes.</b> Motorways and borders cross the data as thick black strokes, and labels switch to capitals. See any dark capture below.</li>
+      <li><b>Phone: the page is taller than the screen.</b> The document measures 1,471px on an 844px viewport because the bottom sheet hangs below the map, so the whole page can scroll under your thumb.</li>
+      <li><b>Phone: two rows fill the place panel.</b> The heat caveats are right to keep, but they sit inline and push everything else away.</li>
+      <li><b>The key itself ranks.</b> The desktop grid captions two corners "safe and thriving" and "exposed and struggling". That is the verdict the spec refuses to give, printed on the key.</li>
+    </ul>
+    <ul class="plain">
+      <li><b>My priorities is eighth of eight</b> now that humid heat is a layer (the plan says seventh of seven).</li>
+      <li><b>The "pick a second place" banner covers the zoom control</b> on a phone, and the intro card covers the key it is describing.</li>
+      <li><b>The dashed outline for national wellbeing is nearly invisible</b> at this zoom, so the one cue that says "this is not local" does not land.</li>
+      <li><b>The basemap does load here.</b> These captures show the real OpenFreeMap style, so "today" is a fair picture.</li>
+    </ul>
+  </div>
+  <figure style="max-width:300px">
+    <div class="shot"><img src="shots/9-picking-phone-light.jpg" alt="Phone capture while picking a second place: the banner sits on top of the zoom buttons" loading="lazy"></div>
+    <figcaption><span class="tag">Today</span>The picking banner over the zoom control.</figcaption>
+  </figure>
+</section>
+
+<!-- ============================ bar ============================ -->
+<section id="bar">
+  <div class="sec-head">
+    <h2>The bar the build will be held to</h2>
+    <div class="prose"><p>No decisions here. These come from the plan and go into the pull request as a checklist.</p></div>
+  </div>
+  <div class="cols">
+    <div class="prose">
+      <h3>Measures of success</h3>
+      <ul class="plain">
+        <li>The default key shows one variable.</li>
+        <li>"My priorities" is one tap from the first view on a phone.</li>
+        <li>No whole country reads as one colour because of a national figure. The fixture world is too small to prove this, so it gets checked on the real build on your laptop.</li>
+        <li>The e2e suite passes with the basemap blocked, plus an axe scan with no violations.</li>
+      </ul>
+    </div>
+    <div class="prose">
+      <h3>Finish items folded into the same build</h3>
+      <ul class="plain">
+        <li><code>viewport-fit=cover</code>, <code>theme-color</code> per scheme, notices off the zoom control, fallback basemap colours matched to the paper tone.</li>
+        <li>A named type scale with a 12px floor.</li>
+        <li>Palette tests that measure what the comments claim, including the new exposure-only ramp.</li>
+        <li>44px touch targets on phones.</li>
+        <li><code>&lt;main&gt;</code> and a skip link, the legend no longer a live region, the standard focus ring on search.</li>
+        <li>New from this sitting: hexes above basemap lines in dark, and the phone page no taller than the screen.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ gallery ============================ -->
+<section id="all">
+  <div class="sec-head">
+    <h2>All 32 captures of today's app</h2>
+    <div class="prose"><p class="small muted">Eight screens, two sizes, two themes, taken 19 November 2026 from the fixture build. Files are in <code>docs/mockups/2026-11-19-redesign/shots/</code>.</p></div>
+  </div>
+  <details open><summary>Phone, 390 by 844</summary><div class="gallery" id="g-phone"></div></details>
+  <details><summary>Desktop, 1440 by 900</summary><div class="gallery wide" id="g-desktop"></div></details>
+</section>
+
+</div>
+
+<script>
+// Artboard scaling: each .board holds an .art drawn at data-w px wide.
+function fit() {
+  document.querySelectorAll(".board").forEach(function (b) {
+    b.style.setProperty("--s", b.clientWidth / Number(b.dataset.w));
+  });
+}
+if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
+window.addEventListener("resize", fit);
+fit();
+
+// A small deterministic hex world for the proposed frames (pointy-top, odd-row offset).
+function hash(c, r, k) { var x = Math.sin(c * 127.1 + r * 311.7 + k * 74.7) * 43758.5453; return x - Math.floor(x); }
+function clamp(v) { return Math.max(0, Math.min(1, v)); }
+function drawHexmap(svg) {
+  var vb = svg.viewBox.baseVal, W = vb.width, H = vb.height;
+  var R = Number(svg.dataset.r || 34), mode = svg.dataset.mode, oy = Number(svg.dataset.oy || 0);
+  var w = Math.sqrt(3) * R, cols = 11, rows = 13;
+  var x0 = W / 2 - (cols * w) / 2, y0 = H / 2 - (rows * 1.5 * R) / 2 + oy + R;
+  var NS = "http://www.w3.org/2000/svg", out = "";
+  // graticule: the quiet ground of an atlas plate
+  for (var gx = (W % 140) / 2; gx < W; gx += 140) out += '<path class="grat" d="M' + gx + " 0V" + H + '"/>';
+  for (var gy = 60; gy < H; gy += 140) out += '<path class="grat" d="M0 ' + gy + "H" + W + '"/>';
+  var cells = {};
+  function key(c, r) { return c + "," + r; }
+  for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+    var u = (c + 0.5 * (r & 1)) / (cols - 1), v = r / (rows - 1);
+    var d = Math.pow((u - 0.5) / 0.46, 2) + Math.pow((v - 0.5) / 0.52, 2);
+    if (d > 0.92 + 0.22 * Math.sin(c * 1.7 + r * 0.9)) continue;
+    if (u > 0.62 && v > 0.42 && v < 0.56) continue; // a bay on the east coast
+    var e = clamp(0.1 + 0.8 * v + 0.2 * (u - 0.5) + 0.16 * (hash(c, r, 1) - 0.5));
+    var B = u + 0.1 * Math.sin(v * 6) > 0.56;
+    var wb = clamp(0.95 - 0.9 * v + 0.3 * (hash(c, r, 2) - 0.5));
+    var m = clamp(0.95 - 1.1 * Math.abs(u - 0.38) - 0.55 * Math.abs(v - 0.35) + 0.2 * (hash(c, r, 3) - 0.5));
+    cells[key(c, r)] = { c: c, r: r, x: x0 + w * (c + 0.5 * (r & 1)) + w / 2, y: y0 + 1.5 * R * r, e: e, B: B, wb: wb, m: m, nd: hash(c, r, 4) < 0.035, ht: hash(c, r, 5) < 0.07 && v > 0.5 };
+  }
+  function corners(x, y) { var p = []; for (var i = 0; i < 6; i++) { var a = (Math.PI / 180) * (60 * i - 30); p.push([x + R * Math.cos(a), y + R * Math.sin(a)]); } return p; }
+  function nb(c, r, i) { var o = r & 1; return [[c + 1, r], [c + o, r + 1], [c - 1 + o, r + 1], [c - 1, r], [c - 1 + o, r - 1], [c + o, r - 1]][i]; }
+  function pts(p) { return p.map(function (q) { return q[0].toFixed(1) + "," + q[1].toFixed(1); }).join(" "); }
+  var over = "", sel = null, land = "";
+  Object.keys(cells).forEach(function (k) { var h = cells[k], q = corners(h.x, h.y).map(function (p) { return [h.x + (p[0] - h.x) * 2.1, h.y + (p[1] - h.y) * 2.1]; }); land += '<polygon class="land" points="' + pts(q) + '"/>'; });
+  out += land;
+  Object.keys(cells).forEach(function (k) {
+    var h = cells[k], p = corners(h.x, h.y), cls;
+    var t3 = function (z) { return z < 0.34 ? 0 : z < 0.67 ? 1 : 2; };
+    if (h.nd) cls = "f-nd";
+    else if (mode === "match") cls = "f-p" + (1 + Math.min(4, Math.floor(h.m * 5)));
+    else if (mode === "bivar" && !h.B) cls = "f-b" + (1 + t3(h.e) + 3 * t3(h.wb));
+    else if (mode === "bivar") cls = "f-e" + [1, 3, 5][t3(h.e)];
+    else cls = "f-e" + (1 + Math.min(4, Math.floor(h.e * 5)));
+    out += '<polygon class="hx ' + cls + '" points="' + pts(p) + '"/>';
+    if (h.ht && !h.nd && mode !== "match") for (var j = -1; j <= 1; j++) over += '<path class="hatch" d="M' + (h.x - R * 0.6 + j * 9).toFixed(1) + " " + (h.y + R * 0.5).toFixed(1) + "L" + (h.x + R * 0.6 + j * 9).toFixed(1) + " " + (h.y - R * 0.5).toFixed(1) + '"/>';
+    if (mode === "bivar" && h.B) for (var i = 0; i < 6; i++) { var n = cells[key.apply(null, nb(h.c, h.r, i))]; if (!n || !n.B) { var a = p[i], b = p[(i + 1) % 6]; over += '<path class="natl" d="M' + a[0].toFixed(1) + " " + a[1].toFixed(1) + "L" + b[0].toFixed(1) + " " + b[1].toFixed(1) + '"/>'; } }
+    if (svg.dataset.sel && h.c === 7 && h.r === 7) sel = p;
+  });
+  if (sel) over += '<polygon class="sel-halo" points="' + pts(sel) + '"/><polygon class="sel" points="' + pts(sel) + '"/>';
+  svg.innerHTML = out + over;
+}
+document.querySelectorAll("svg.hexmap").forEach(drawHexmap);
+
+// Gallery of every capture.
+var SCREENS = [["1-intro", "First visit"], ["2-default", "Default view"], ["3-layers", "Layers open"], ["4-heat", "Extreme heat"], ["5-priorities", "My priorities, Early career"], ["6-place", "Place panel"], ["7-place-priorities", "Place panel, My priorities"], ["8-compare", "Compare two places"]];
+["phone", "desktop"].forEach(function (dev) {
+  var g = document.getElementById("g-" + dev), html = "";
+  ["light", "dark"].forEach(function (th) {
+    SCREENS.forEach(function (s) {
+      var f = "shots/" + s[0] + "-" + dev + "-" + th + ".jpg";
+      html += '<figure><div class="shot"><img loading="lazy" src="' + f + '" alt="Today: ' + s[1] + ", " + dev + ", " + th + ' theme"></div><figcaption>' + s[1] + " · " + th + "</figcaption></figure>";
+    });
+  });
+  g.innerHTML = html;
+});
+</script>

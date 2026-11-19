@@ -31,6 +31,9 @@ async function openSeen(page: Page, url: string) {
   await page.waitForTimeout(1500);
 }
 
+/** A measured length in CSS px, to a hundredth: some Chromium builds report a 44px box as 43.99997. */
+const px = (v: number): number => Math.round(v * 100) / 100;
+
 const clean = (seen: { violations: string[]; errors: string[] }) => {
   expect(seen.violations).toEqual([]);
   expect(seen.errors).toEqual([]);
@@ -147,7 +150,7 @@ test.describe("phone", () => {
     expect(doc).toBe(view); // the sheet never makes the document scroll
     const door = page.getByRole("button", { name: "What matters to you" });
     await expect(door).toBeInViewport();
-    expect((await door.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect(px((await door.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
     await door.tap(); // the one tap
     await expect(page.getByRole("group", { name: "Presets" }).getByRole("button", { name: "Early career" })).toBeInViewport();
     await expect(page.getByTestId("plate").getByRole("heading", { level: 1 })).toHaveText("Fit with your priorities");
@@ -155,7 +158,7 @@ test.describe("phone", () => {
     expect(doc).toBe(view);
     // 44px touch targets: tabs, doors, presets
     for (const target of [page.getByRole("tab", { name: "Layers" }), page.getByRole("button", { name: "Climate in 2050" }), page.getByRole("button", { name: "Early career" })]) {
-      expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect(px((await target.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
     }
     expect(await scan(page)).toEqual([]);
     clean(seen);
@@ -168,6 +171,6 @@ test.describe("phone", () => {
     const zoom = (await page.getByRole("button", { name: "Zoom in" }).boundingBox())!;
     const overlap = notice.x < zoom.x + zoom.width && zoom.x < notice.x + notice.width && notice.y < zoom.y + zoom.height && zoom.y < notice.y + notice.height;
     expect(overlap).toBe(false);
-    expect(zoom.height).toBeGreaterThanOrEqual(44);
+    expect(px(zoom.height)).toBeGreaterThanOrEqual(44);
   });
 });
